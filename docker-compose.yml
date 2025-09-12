@@ -1,0 +1,53 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: antevus_postgres
+    environment:
+      POSTGRES_USER: antevus
+      POSTGRES_PASSWORD: antevus_dev_password
+      POSTGRES_DB: antevus_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U antevus"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: antevus_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  timescaledb:
+    image: timescale/timescaledb:latest-pg16
+    container_name: antevus_timescale
+    environment:
+      POSTGRES_USER: antevus
+      POSTGRES_PASSWORD: antevus_timescale_password
+      POSTGRES_DB: antevus_telemetry
+    ports:
+      - "5433:5432"
+    volumes:
+      - timescale_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
+  redis_data:
+  timescale_data:
+
+networks:
+  default:
+    name: antevus_network
