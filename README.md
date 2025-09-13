@@ -1,19 +1,27 @@
-# Antevus App - Product Dashboard
+# Antevus Product Application
 
-B2B dashboard for laboratory instrument control and API management.
+The core product dashboard for Antevus - Universal Laboratory Instrument API Platform.
 
 ## Overview
 
-This repository contains the product dashboard for Antevus, deployed at [app.antevus.com](https://app.antevus.com).
+This is the main product application for Antevus customers, providing a comprehensive dashboard for managing laboratory instruments, viewing real-time data, and controlling API integrations. Deployed at [app.antevus.com](https://app.antevus.com).
 
-## Features
+## Key Features
 
-- 🔐 Password-protected access for B2B customers
-- 🔬 Laboratory instrument control interface
-- 📊 Usage analytics and monitoring
-- 🔑 API key management
-- 📈 Real-time data visualization
-- 🏢 Multi-tenant organization support
+### Phase 1 - Demo-Ready Frontend MVP
+- 🔬 **Instrument Dashboard**: Real-time grid view of all connected instruments
+- 📊 **Run History**: Searchable log of all instrument runs with data preview
+- 🔑 **API Management**: Generate and manage API keys for integrations
+- 📈 **Real-time Monitoring**: Live status updates and telemetry charts
+- 🏢 **Organization Management**: Multi-tenant support with team collaboration
+- 🔐 **Secure Access**: Enterprise-grade authentication and authorization
+
+### Coming Soon (Phase 2)
+- 🤖 Remote instrument control capabilities
+- 📅 Scheduling and queue management
+- 🔄 Webhook configuration
+- 📋 Compliance audit logs
+- 🔗 One-click ELN/LIMS integrations
 
 ## Tech Stack
 
