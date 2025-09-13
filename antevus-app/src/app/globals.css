@@ -82,4 +82,37 @@
   /* Gray colors for icon */
   --color-gray-400: #9CA3AF;
   --color-gray-600: #4B5563;
+
+  /* Status colors */
+  --color-green-100: hsl(142 76% 94%);
+  --color-green-400: hsl(142 71% 45%);
+  --color-green-500: hsl(142 71% 40%);
+  --color-green-600: hsl(142 76% 36%);
+  --color-green-900: hsl(143 64% 20%);
+
+  --color-red-100: hsl(0 86% 94%);
+  --color-red-400: hsl(0 73% 50%);
+  --color-red-500: hsl(0 84% 60%);
+  --color-red-600: hsl(0 72% 50%);
+  --color-red-900: hsl(0 63% 20%);
+
+  --color-yellow-100: hsl(55 92% 95%);
+  --color-yellow-400: hsl(47 92% 50%);
+  --color-yellow-500: hsl(48 96% 53%);
+  --color-yellow-600: hsl(45 93% 47%);
+  --color-yellow-900: hsl(28 73% 20%);
+
+  --color-gray-100: hsl(210 20% 94%);
+  --color-gray-300: hsl(212 12% 70%);
+  --color-gray-900: hsl(215 14% 20%);
+}
+
+/* Custom animations */
+@keyframes pulse-dot {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
 }
