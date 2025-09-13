@@ -98,4 +98,4 @@ This app is deployed on Vercel at app.antevus.com with password protection enabl
 
 ## License
 
-Copyright © 2024 Antevus. All rights reserved.
+Copyright © 2025 Antevus. All rights reserved.

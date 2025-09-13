@@ -243,5 +243,5 @@ npm run dev  # Runs at http://localhost:3000
 
 - **GitHub**: github.com/gabeviggers/antevus
 - **Email**: gabeviggers@gmail.com
-- **Documentation**: docs.antevus.io (coming soon)
-- **API Status**: status.antevus.io (coming soon)
+- **Documentation**: docs.antevus.com
+- **API Status**: status.antevus.com (coming soon)
