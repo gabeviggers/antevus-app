@@ -63,7 +63,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           ...user,
           lastLogin: new Date().toISOString()
         },
-        token: `token_${Math.random().toString(36).substr(2, 9)}`, // Mock token
+        token: `token_${crypto.randomUUID()}`, // Mock token
         expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() // 7 days
       }
 
