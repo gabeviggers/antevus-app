@@ -67,9 +67,11 @@ class AuditLogger {
       userAgent: typeof window !== 'undefined' ? window.navigator.userAgent : 'unknown'
     }
 
+    Object.freeze(event)
+    if (event.details && typeof event.details === 'object') Object.freeze(event.details)
+
     // Store locally (in production, send to server)
     this.events.push(event)
-
     // Also log to console for debugging
     console.log('[AUDIT]', {
       type: eventType,
