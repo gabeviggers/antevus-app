@@ -1,13 +1,13 @@
-import { createHash } from 'crypto'
 import { User } from './types'
 
 // Mock user database
-// In production, this would be stored in a secure database with hashed passwords
+// IMPORTANT: Using plaintext passwords for demo/dev only
+// In production, passwords must be hashed server-side with bcrypt/argon2
 export const mockUsers = [
   {
     id: 'usr_1',
     email: 'admin@antevus.com',
-    password: hashPassword('admin123'), // In production, use bcrypt
+    password: 'admin123', // Dev-only: plaintext for demo builds
     name: 'Admin User',
     role: 'admin' as const,
     organization: 'Antevus Labs',
@@ -17,7 +17,7 @@ export const mockUsers = [
   {
     id: 'usr_2',
     email: 'john.doe@lab.com',
-    password: hashPassword('scientist123'),
+    password: 'scientist123', // Dev-only: plaintext for demo builds
     name: 'John Doe',
     role: 'scientist' as const,
     organization: 'Research Lab Inc',
@@ -27,7 +27,7 @@ export const mockUsers = [
   {
     id: 'usr_3',
     email: 'sarah.manager@lab.com',
-    password: hashPassword('manager123'),
+    password: 'manager123', // Dev-only: plaintext for demo builds
     name: 'Sarah Johnson',
     role: 'lab_manager' as const,
     organization: 'Research Lab Inc',
@@ -37,7 +37,7 @@ export const mockUsers = [
   {
     id: 'usr_4',
     email: 'viewer@lab.com',
-    password: hashPassword('viewer123'),
+    password: 'viewer123', // Dev-only: plaintext for demo builds
     name: 'Viewer Account',
     role: 'viewer' as const,
     organization: 'Research Lab Inc',
@@ -46,18 +46,13 @@ export const mockUsers = [
   }
 ]
 
-// Simple hash function for demo purposes
-// In production, use bcrypt or argon2
-function hashPassword(password: string): string {
-  return createHash('sha256').update(password).digest('hex')
-}
-
 export function validateCredentials(email: string, password: string): User | null {
   const user = mockUsers.find(u => u.email === email)
   if (!user) return null
 
-  const hashedInput = hashPassword(password)
-  if (user.password !== hashedInput) return null
+  // Dev-only: plaintext comparison for demo builds
+  // In production, use proper password hashing server-side
+  if (user.password !== password) return null
 
   // Return user without password
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
