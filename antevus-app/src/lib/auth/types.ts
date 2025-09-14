@@ -57,4 +57,4 @@ export const ROLE_PERMISSIONS = {
   ]
 } as const
 
-export type Permission = typeof ROLE_PERMISSIONS[UserRole][number]
+export type Permission = (typeof ROLE_PERMISSIONS)[keyof typeof ROLE_PERMISSIONS][number]

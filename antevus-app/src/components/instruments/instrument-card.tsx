@@ -1,6 +1,5 @@
 'use client'
 
-import { useState } from 'react'
 import { MoreVertical, Activity, Clock, Thermometer, Wrench } from 'lucide-react'
 import { Instrument, getStatusColor } from '@/lib/mock-data/instruments'
 
