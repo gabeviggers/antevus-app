@@ -21,12 +21,25 @@ export function InstrumentCard({ instrument, onClick }: InstrumentCardProps) {
     ? 'bg-green-500 dark:bg-green-400'
     : 'bg-gray-300 dark:bg-gray-600'
 
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault() // Prevent default space scrolling
+      if (onClick) {
+        onClick()
+      }
+    }
+  }
+
   return (
     <div
-      className="bg-card rounded-lg border border-border p-6 hover:shadow-lg transition-all duration-300 cursor-pointer relative overflow-hidden group"
+      className="bg-card rounded-lg border border-border p-6 hover:shadow-lg transition-all duration-300 cursor-pointer relative overflow-hidden group focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       onClick={onClick}
+      onKeyDown={handleKeyDown}
+      role="button"
+      tabIndex={0}
+      aria-label={`View details for ${instrument.name} - Status: ${instrument.status}, Location: ${instrument.location}`}
     >
       {/* Status indicator ribbon */}
       <div className={`absolute top-0 left-0 right-0 h-1 ${
@@ -107,7 +120,7 @@ export function InstrumentCard({ instrument, onClick }: InstrumentCardProps) {
             <p className="text-sm font-medium">{instrument.metrics.avgRunTime}</p>
           </div>
         </div>
-        {instrument.temperature && (
+        {instrument.temperature != null && (
           <div className="flex items-center gap-2">
             <Thermometer className="h-4 w-4 text-muted-foreground" />
             <div>
@@ -136,10 +149,15 @@ export function InstrumentCard({ instrument, onClick }: InstrumentCardProps) {
         <div className="text-right">
           <p className="text-xs text-muted-foreground">Next Maintenance</p>
           <p className="text-sm font-medium">
-            {new Date(instrument.nextMaintenance).toLocaleDateString('en-US', {
-              month: 'short',
-              day: 'numeric'
-            })}
+            {(() => {
+              // Parse YYYY-MM-DD as local date to avoid timezone issues
+              const [year, month, day] = instrument.nextMaintenance.split('-').map(Number)
+              const localDate = new Date(year, month - 1, day)
+              return localDate.toLocaleDateString('en-US', {
+                month: 'short',
+                day: 'numeric'
+              })
+            })()}
           </p>
         </div>
       </div>

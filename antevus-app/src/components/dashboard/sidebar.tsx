@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { useAuth } from '@/contexts/auth-context'
 import {
   LayoutDashboard,
   Activity,
@@ -33,6 +34,14 @@ interface SidebarProps {
 
 export function Sidebar({ sidebarOpen, setSidebarOpen, collapsed, setCollapsed }: SidebarProps) {
   const pathname = usePathname()
+  const { user, logout } = useAuth()
+
+  // Get user initials for avatar
+  const userInitials = user?.name
+    ?.split(' ')
+    .map(n => n[0])
+    .join('')
+    .toUpperCase() || 'U'
 
   return (
     <>
@@ -158,14 +167,18 @@ export function Sidebar({ sidebarOpen, setSidebarOpen, collapsed, setCollapsed }
               <>
                 <div className="flex items-center gap-2 mb-2">
                   <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                    <span className="text-xs font-medium">JD</span>
+                    <span className="text-xs font-medium">{userInitials}</span>
                   </div>
                   <div className="min-w-0">
-                    <p className="text-sm font-medium truncate">John Doe</p>
-                    <p className="text-xs text-muted-foreground truncate">john@lab.com</p>
+                    <p className="text-sm font-medium truncate">{user?.name || 'User'}</p>
+                    <p className="text-xs text-muted-foreground truncate">{user?.email || 'email@example.com'}</p>
+                    <p className="text-xs text-muted-foreground capitalize">{user?.role?.replace('_', ' ') || 'role'}</p>
                   </div>
                 </div>
-                <button className="flex items-center gap-2 w-full px-2 py-1.5 rounded-md hover:bg-accent hover:text-accent-foreground transition-colors">
+                <button
+                  onClick={logout}
+                  className="flex items-center gap-2 w-full px-2 py-1.5 rounded-md hover:bg-accent hover:text-accent-foreground transition-colors"
+                >
                   <LogOut className="h-4 w-4 flex-shrink-0" />
                   <span className="text-sm">Sign out</span>
                 </button>
@@ -173,9 +186,10 @@ export function Sidebar({ sidebarOpen, setSidebarOpen, collapsed, setCollapsed }
             ) : (
               <>
                 <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
-                  <span className="text-xs font-medium">JD</span>
+                  <span className="text-xs font-medium">{userInitials}</span>
                 </div>
                 <button
+                  onClick={logout}
                   className="p-2 rounded-md hover:bg-accent hover:text-accent-foreground transition-colors group relative"
                   title="Sign out"
                 >

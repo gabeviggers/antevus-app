@@ -16,9 +16,9 @@ export function InstrumentDetailModal({ instrument, onClose }: InstrumentDetailM
   const statusText = instrument.status.charAt(0).toUpperCase() + instrument.status.slice(1)
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="instrument-modal-title">
       {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/50" onClick={onClose} aria-hidden="true" />
 
       {/* Modal */}
       <div className="relative bg-card rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-hidden">
@@ -26,7 +26,7 @@ export function InstrumentDetailModal({ instrument, onClose }: InstrumentDetailM
         <div className="border-b border-border p-6">
           <div className="flex items-start justify-between">
             <div>
-              <h2 className="text-2xl font-bold">{instrument.name}</h2>
+              <h2 id="instrument-modal-title" className="text-2xl font-bold">{instrument.name}</h2>
               <p className="text-muted-foreground mt-1">
                 {instrument.manufacturer} • {instrument.model}
               </p>
@@ -48,8 +48,9 @@ export function InstrumentDetailModal({ instrument, onClose }: InstrumentDetailM
             <button
               onClick={onClose}
               className="p-2 rounded-md hover:bg-accent transition-colors"
+              aria-label="Close dialog"
             >
-              <X className="h-5 w-5" />
+              <X className="h-5 w-5" aria-hidden="true" />
             </button>
           </div>
         </div>
@@ -162,13 +163,31 @@ export function InstrumentDetailModal({ instrument, onClose }: InstrumentDetailM
                 <div className="flex justify-between py-1">
                   <dt className="text-sm text-muted-foreground">Next Scheduled</dt>
                   <dd className="text-sm font-medium">
-                    {new Date(instrument.nextMaintenance).toLocaleDateString()}
+                    {(() => {
+                      // Parse YYYY-MM-DD as local date
+                      const [year, month, day] = instrument.nextMaintenance.split('-').map(Number)
+                      const localDate = new Date(year, month - 1, day)
+                      return localDate.toLocaleDateString()
+                    })()}
                   </dd>
                 </div>
                 <div className="flex justify-between py-1">
                   <dt className="text-sm text-muted-foreground">Days Until</dt>
                   <dd className="text-sm font-medium">
-                    {Math.ceil((new Date(instrument.nextMaintenance).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))} days
+                    {(() => {
+                      // Parse YYYY-MM-DD as local date
+                      const [year, month, day] = instrument.nextMaintenance.split('-').map(Number)
+                      const nextMaintenance = new Date(year, month - 1, day)
+
+                      // Get today at local midnight
+                      const today = new Date()
+                      today.setHours(0, 0, 0, 0)
+
+                      // Calculate days difference
+                      const msPerDay = 1000 * 60 * 60 * 24
+                      const daysUntil = Math.ceil((nextMaintenance.getTime() - today.getTime()) / msPerDay)
+                      return `${daysUntil} days`
+                    })()}
                   </dd>
                 </div>
               </dl>

@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { Sidebar } from '@/components/dashboard/sidebar'
+import { ProtectedRoute } from '@/components/auth/protected-route'
 import { Menu, Bell, Search } from 'lucide-react'
 
 export default function DashboardLayout({
@@ -14,17 +15,18 @@ export default function DashboardLayout({
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
 
   return (
-    <div className="min-h-screen flex bg-background relative">
-      {/* Sidebar */}
-      <Sidebar
-        sidebarOpen={sidebarOpen}
-        setSidebarOpen={setSidebarOpen}
-        collapsed={sidebarCollapsed}
-        setCollapsed={setSidebarCollapsed}
-      />
+    <ProtectedRoute>
+      <div className="min-h-screen flex bg-background relative">
+        {/* Sidebar */}
+        <Sidebar
+          sidebarOpen={sidebarOpen}
+          setSidebarOpen={setSidebarOpen}
+          collapsed={sidebarCollapsed}
+          setCollapsed={setSidebarCollapsed}
+        />
 
-      {/* Main content */}
-      <div className={`flex-1 flex flex-col min-w-0 transition-all duration-300 ${sidebarCollapsed ? 'lg:ml-16' : 'lg:ml-52'}`}>
+        {/* Main content */}
+        <div className={`flex-1 flex flex-col min-w-0 transition-all duration-300 ${sidebarCollapsed ? 'lg:ml-16' : 'lg:ml-52'}`}>
         {/* Top bar */}
         <header className="bg-card border-b border-border h-16 flex items-center px-4 lg:px-6">
           <div className="flex items-center justify-between w-full">
@@ -68,5 +70,6 @@ export default function DashboardLayout({
         </main>
       </div>
     </div>
+    </ProtectedRoute>
   )
 }
