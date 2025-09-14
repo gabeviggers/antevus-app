@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
+import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react'
 import { User, LoginCredentials, AuthSession, ROLE_PERMISSIONS, Permission } from '@/lib/auth/types'
 import { auditLogger } from '@/lib/audit/logger'
 import { useRouter } from 'next/navigation'
@@ -88,7 +88,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  const logout = () => {
+  const logout = useCallback(() => {
     // Log audit event
     if (session?.user) {
       auditLogger.logEvent(session.user, 'user.logout', {
@@ -99,7 +99,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setSession(null)
     localStorage.removeItem('antevus_session')
     router.push('/')
-  }
+  }, [session?.user, router])
 
   // Auto‑logout on expiry
   useEffect(() => {
@@ -111,7 +111,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     const t = setTimeout(() => logout(), ms)
     return () => clearTimeout(t)
-  }, [session?.expiresAt])
+  }, [session?.expiresAt, logout])
 
   const hasPermission = (permission: Permission): boolean => {
     if (!session?.user) return false
