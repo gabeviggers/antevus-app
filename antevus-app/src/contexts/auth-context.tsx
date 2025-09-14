@@ -1,7 +1,7 @@
 'use client'
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
-import { User, LoginCredentials, AuthSession, ROLE_PERMISSIONS } from '@/lib/auth/types'
+import { User, LoginCredentials, AuthSession, ROLE_PERMISSIONS, Permission } from '@/lib/auth/types'
 import { validateCredentials } from '@/lib/auth/mock-users'
 import { auditLogger } from '@/lib/audit/logger'
 import { useRouter } from 'next/navigation'
@@ -12,7 +12,7 @@ interface AuthContextType {
   isLoading: boolean
   login: (credentials: LoginCredentials) => Promise<{ success: boolean; error?: string }>
   logout: () => void
-  hasPermission: (permission: string) => boolean
+  hasPermission: (permission: Permission) => boolean
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -97,11 +97,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     router.push('/')
   }
 
-  const hasPermission = (permission: string): boolean => {
+  const hasPermission = (permission: Permission): boolean => {
     if (!session?.user) return false
 
     // Get permissions based on role
-    const userPermissions = ROLE_PERMISSIONS[session.user.role] || []
+    const userPermissions = ROLE_PERMISSIONS[session.user.role] as readonly Permission[]
+    if (!userPermissions) return false
+
     return userPermissions.includes(permission)
   }
 

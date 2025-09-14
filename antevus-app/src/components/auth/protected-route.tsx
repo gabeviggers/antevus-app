@@ -3,10 +3,11 @@
 import { useAuth } from '@/contexts/auth-context'
 import { useRouter } from 'next/navigation'
 import { useEffect } from 'react'
+import { Permission } from '@/lib/auth/types'
 
 interface ProtectedRouteProps {
   children: React.ReactNode
-  requiredPermission?: string
+  requiredPermission?: Permission
 }
 
 export function ProtectedRoute({ children, requiredPermission }: ProtectedRouteProps) {
