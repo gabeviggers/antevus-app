@@ -28,8 +28,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (storedSession) {
       try {
         const parsed = JSON.parse(storedSession)
-        // Check if session is still valid
-        if (new Date(parsed.expiresAt) > new Date()) {
+        const isValidShape =
+          parsed &&
+          typeof parsed.expiresAt === 'string' &&
+          parsed.user &&
+          typeof parsed.user.id === 'string' &&
+          typeof parsed.user.email === 'string' &&
+          typeof parsed.user.role === 'string'
+        // Only accept well-formed, unexpired sessions
+        if (isValidShape && new Date(parsed.expiresAt) > new Date()) {
           setSession(parsed)
         } else {
           localStorage.removeItem('antevus_session')
