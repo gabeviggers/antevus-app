@@ -10,7 +10,6 @@ interface InstrumentCardProps {
 }
 
 export function InstrumentCard({ instrument, onClick }: InstrumentCardProps) {
-  const [isHovered, setIsHovered] = useState(false)
   const statusColor = getStatusColor(instrument.status)
 
   // Format status text
@@ -33,8 +32,6 @@ export function InstrumentCard({ instrument, onClick }: InstrumentCardProps) {
   return (
     <div
       className="bg-card rounded-lg border border-border p-6 hover:shadow-lg transition-all duration-300 cursor-pointer relative overflow-hidden group focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
       onClick={onClick}
       onKeyDown={handleKeyDown}
       role="button"

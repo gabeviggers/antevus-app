@@ -13,7 +13,6 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
-  const [showDemoCredentials, setShowDemoCredentials] = useState(false)
 
   const { login } = useAuth()
   const router = useRouter()

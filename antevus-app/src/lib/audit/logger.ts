@@ -24,7 +24,7 @@ export interface AuditEvent {
   eventType: AuditEventType
   resourceType?: string
   resourceId?: string
-  details?: Record<string, any>
+  details?: Record<string, unknown>
   ipAddress?: string
   userAgent?: string
   success: boolean
@@ -46,7 +46,7 @@ class AuditLogger {
       resourceId?: string
       success?: boolean
       errorMessage?: string
-      metadata?: Record<string, any>
+      metadata?: Record<string, unknown>
     }
   ) {
     const event: AuditEvent = {

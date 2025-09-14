@@ -1,6 +1,6 @@
 'use client'
 
-import { X, Activity, Clock, Thermometer, Wrench, Download, Share2, Calendar } from 'lucide-react'
+import { X, Activity, Clock, Thermometer, Download, Share2, Calendar } from 'lucide-react'
 import { Instrument, getStatusColor } from '@/lib/mock-data/instruments'
 import { Button } from '@/components/ui/button'
 

@@ -1,7 +1,7 @@
 'use client'
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
-import { User, LoginCredentials, AuthSession } from '@/lib/auth/types'
+import { User, LoginCredentials, AuthSession, ROLE_PERMISSIONS } from '@/lib/auth/types'
 import { validateCredentials } from '@/lib/auth/mock-users'
 import { auditLogger } from '@/lib/audit/logger'
 import { useRouter } from 'next/navigation'
@@ -100,8 +100,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const hasPermission = (permission: string): boolean => {
     if (!session?.user) return false
 
-    // Import permissions based on role
-    const { ROLE_PERMISSIONS } = require('@/lib/auth/types')
+    // Get permissions based on role
     const userPermissions = ROLE_PERMISSIONS[session.user.role] || []
     return userPermissions.includes(permission)
   }
