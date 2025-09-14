@@ -2,7 +2,6 @@
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
 import { User, LoginCredentials, AuthSession, ROLE_PERMISSIONS, Permission } from '@/lib/auth/types'
-import { validateCredentials } from '@/lib/auth/mock-users'
 import { auditLogger } from '@/lib/audit/logger'
 import { useRouter } from 'next/navigation'
 
@@ -51,37 +50,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (credentials: LoginCredentials) => {
     try {
-      // Validate credentials against mock database
-      const user = validateCredentials(credentials.email, credentials.password)
+      // Call the API route for authentication
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(credentials),
+      })
 
-      if (!user) {
+      const data = await response.json()
+
+      if (!data.success) {
         // Log failed login attempt
         auditLogger.logEvent(null, 'user.failed_login', {
           success: false,
-          errorMessage: 'Invalid credentials',
+          errorMessage: data.error,
           metadata: { email: credentials.email }
         })
-        return { success: false, error: 'Invalid email or password' }
-      }
-
-      // Create session
-      const newSession: AuthSession = {
-        user: {
-          ...user,
-          lastLogin: new Date().toISOString()
-        },
-        token: `token_${crypto.randomUUID()}`, // Mock token
-        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() // 7 days
+        return { success: false, error: data.error }
       }
 
       // Store session
-      setSession(newSession)
-      localStorage.setItem('antevus_session', JSON.stringify(newSession))
+      setSession(data.session)
+      localStorage.setItem('antevus_session', JSON.stringify(data.session))
 
       // Log successful login
-      auditLogger.logEvent(user, 'user.login', {
+      auditLogger.logEvent(data.session.user, 'user.login', {
         success: true,
-        metadata: { sessionExpiry: newSession.expiresAt }
+        metadata: { sessionExpiry: data.session.expiresAt }
       })
 
       return { success: true }
@@ -103,32 +100,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem('antevus_session')
     router.push('/')
   }
-
-  useEffect(() => {
-    const storedSession = localStorage.getItem('antevus_session')
-    if (storedSession) {
-      try {
-        const parsed = JSON.parse(storedSession)
-        const isValidShape =
-          parsed &&
-          typeof parsed.expiresAt === 'string' &&
-          parsed.user &&
-          typeof parsed.user.id === 'string' &&
-          typeof parsed.user.email === 'string' &&
-          typeof parsed.user.role === 'string'
-        // Only accept well‑formed, unexpired sessions
-        if (isValidShape && new Date(parsed.expiresAt) > new Date()) {
-          setSession(parsed)
-        } else {
-          localStorage.removeItem('antevus_session')
-        }
-      } catch (error) {
-        console.error('Failed to parse session:', error)
-        localStorage.removeItem('antevus_session')
-      }
-    }
-    setIsLoading(false)
-  }, [])
 
   // Auto‑logout on expiry
   useEffect(() => {

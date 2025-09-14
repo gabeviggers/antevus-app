@@ -1,5 +1,5 @@
-import { User } from './types'
 import { createHash } from 'crypto'
+import { User } from './types'
 
 // Mock user database
 // In production, this would be stored in a secure database with hashed passwords
