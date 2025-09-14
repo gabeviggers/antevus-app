@@ -104,8 +104,49 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     router.push('/')
   }
 
+  useEffect(() => {
+    const storedSession = localStorage.getItem('antevus_session')
+    if (storedSession) {
+      try {
+        const parsed = JSON.parse(storedSession)
+        const isValidShape =
+          parsed &&
+          typeof parsed.expiresAt === 'string' &&
+          parsed.user &&
+          typeof parsed.user.id === 'string' &&
+          typeof parsed.user.email === 'string' &&
+          typeof parsed.user.role === 'string'
+        // Only accept well‑formed, unexpired sessions
+        if (isValidShape && new Date(parsed.expiresAt) > new Date()) {
+          setSession(parsed)
+        } else {
+          localStorage.removeItem('antevus_session')
+        }
+      } catch (error) {
+        console.error('Failed to parse session:', error)
+        localStorage.removeItem('antevus_session')
+      }
+    }
+    setIsLoading(false)
+  }, [])
+
+  // Auto‑logout on expiry
+  useEffect(() => {
+    if (!session?.expiresAt) return
+    const ms = new Date(session.expiresAt).getTime() - Date.now()
+    if (ms <= 0) {
+      logout()
+      return
+    }
+    const t = setTimeout(() => logout(), ms)
+    return () => clearTimeout(t)
+  }, [session?.expiresAt])
+
   const hasPermission = (permission: Permission): boolean => {
     if (!session?.user) return false
+    if (session.expiresAt && new Date(session.expiresAt) <= new Date()) {
+      return false
+    }
 
     // Get permissions based on role
     const userPermissions = ROLE_PERMISSIONS[session.user.role] as readonly Permission[]
