@@ -217,12 +217,13 @@ export default function MonitoringPage() {
         {/* Connection Status */}
         <div
           role="status"
-          aria-live="polite"
+          aria-atomic="true"
           className={`flex items-center gap-2 px-3 py-1.5 rounded-md border ${
-          isConnected
-            ? 'bg-green-50 border-green-200 text-green-700'
-            : 'bg-red-50 border-red-200 text-red-700'
-        }`}>
+            isConnected
+              ? 'bg-green-50 border-green-200 text-green-700 dark:bg-green-950 dark:border-green-800 dark:text-green-300'
+              : 'bg-red-50 border-red-200 text-red-700 dark:bg-red-950 dark:border-red-800 dark:text-red-300'
+          }`}
+        >
           {isConnected ? (
             <>
               <Wifi className="h-4 w-4" />
@@ -240,6 +241,8 @@ export default function MonitoringPage() {
         <Button
           variant="outline"
           size="sm"
+          type="button"
+          aria-pressed={isPaused}
           onClick={() => setIsPaused(!isPaused)}
           className="gap-2"
         >
@@ -266,16 +269,20 @@ export default function MonitoringPage() {
               alert('You do not have permission to export data')
               return
             }
-            auditLogger.logEvent(user, 'data.export', {
-              resourceType: 'monitoring',
-              success: true,
-              metadata: {
-                instrument: selectedInstrument,
-                metric: selectedMetric,
-                recordCount: currentMetricData.length,
-                format: 'CSV'
-              }
-            })
+            try {
+              auditLogger.logEvent(user, 'data.export', {
+                resourceType: 'monitoring',
+                success: true,
+                metadata: {
+                  instrument: selectedInstrument,
+                  metric: selectedMetric,
+                  recordCount: currentMetricData.length,
+                  format: 'CSV'
+                }
+              })
+            } catch (e) {
+              console.warn('audit log failed', e)
+            }
             // Export current metric data as CSV
             const rows = [['Time', 'Value']]
             for (const point of currentMetricData) {
@@ -287,7 +294,9 @@ export default function MonitoringPage() {
             const a = document.createElement('a')
             a.href = url
             a.download = `${selectedInstrument}-${selectedMetric}-${new Date().toISOString().split('T')[0]}.csv`
+            document.body.appendChild(a)
             a.click()
+            a.remove()
             URL.revokeObjectURL(url)
           }}
         >
