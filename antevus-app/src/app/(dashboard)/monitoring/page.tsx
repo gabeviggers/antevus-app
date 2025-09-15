@@ -245,7 +245,22 @@ export default function MonitoringPage() {
           variant="outline"
           size="sm"
           className="gap-2"
+          disabled={!canExport}
           onClick={() => {
+            if (!canExport) {
+              alert('You do not have permission to export data')
+              return
+            }
+            auditLogger.logEvent(user, 'data.export', {
+              resourceType: 'monitoring',
+              success: true,
+              metadata: {
+                instrument: selectedInstrument,
+                metric: selectedMetric,
+                recordCount: currentMetricData.length,
+                format: 'CSV'
+              }
+            })
             // Export current metric data as CSV
             const rows = [['Time', 'Value']]
             for (const point of currentMetricData) {
@@ -259,8 +274,6 @@ export default function MonitoringPage() {
             a.download = `${selectedInstrument}-${selectedMetric}-${new Date().toISOString().split('T')[0]}.csv`
             a.click()
             URL.revokeObjectURL(url)
-
-            // TODO: For SOC 2/HIPAA compliance, add role-based access control and audit logging
           }}
         >
           <Download className="h-4 w-4" />
