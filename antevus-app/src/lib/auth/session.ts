@@ -3,23 +3,26 @@ import { SignJWT, jwtVerify } from 'jose'
 import { randomBytes } from 'crypto'
 import { User } from './types'
 
-// Get JWT secret - in production this must be set via environment variable
-function getJWTSecret(): string {
-  if (process.env.JWT_SECRET) {
-    return process.env.JWT_SECRET
+// Cache for JWT secret to avoid regenerating in development
+let cachedSecret: string | null = null
+
+// Get JWT secret - deferred to runtime to avoid build-time errors
+function getSecretKey(): Uint8Array {
+  if (!cachedSecret) {
+    if (process.env.JWT_SECRET) {
+      cachedSecret = process.env.JWT_SECRET
+    } else if (process.env.NODE_ENV !== 'production') {
+      // Only use random secret in development
+      console.warn('[Auth] Using random JWT secret for development. Set JWT_SECRET env var for production.')
+      cachedSecret = randomBytes(32).toString('hex')
+    } else {
+      // In production, require explicit secret
+      throw new Error('JWT_SECRET environment variable is required in production')
+    }
   }
 
-  // Only use random secret in development
-  if (process.env.NODE_ENV !== 'production') {
-    return randomBytes(32).toString('hex')
-  }
-
-  // In production, require explicit secret
-  throw new Error('JWT_SECRET is required in production')
+  return new TextEncoder().encode(cachedSecret)
 }
-
-const JWT_SECRET = getJWTSecret()
-const secretKey = new TextEncoder().encode(JWT_SECRET)
 
 // Export cookie name for consistency across the app
 export const SESSION_COOKIE_NAME = 'antevus-app-auth'
@@ -46,7 +49,7 @@ export async function createSecureSession(user: User): Promise<string> {
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
     .setExpirationTime('7d')
-    .sign(secretKey)
+    .sign(getSecretKey())
 
   return token
 }
@@ -59,7 +62,7 @@ export async function getServerSession(request: NextRequest): Promise<SessionDat
       return null
     }
 
-    const { payload } = await jwtVerify(cookie.value, secretKey)
+    const { payload } = await jwtVerify(cookie.value, getSecretKey())
     const session = payload.session as SessionData
 
     // Validate session expiry

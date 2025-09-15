@@ -16,8 +16,15 @@ const TAG_LENGTH = 16
 const IV_LENGTH = 16
 const ITERATIONS = 100000 // PBKDF2 iterations
 
+// Cache for encryption key
+let cachedMasterKey: string | null = null
+
 // Get encryption key from environment - REQUIRED for production
-const MASTER_KEY = (() => {
+function getMasterKey(): string {
+  if (cachedMasterKey) {
+    return cachedMasterKey
+  }
+
   const key = process.env.CREDENTIAL_ENCRYPTION_KEY
 
   if (!key) {
@@ -25,12 +32,13 @@ const MASTER_KEY = (() => {
       'Please set it to a 64-character hex string (32 bytes) generated with: ' +
       'openssl rand -hex 32'
 
-    // In development, throw a clear error
+    // In development, use a consistent development key
     if (process.env.NODE_ENV !== 'production') {
       console.error(`[CRITICAL] ${errorMsg}`)
       // Use a development-only key for local testing
       // This ensures developers know they need to set the key
-      return 'DEVELOPMENT_ONLY_KEY_DO_NOT_USE_IN_PRODUCTION_' + crypto.randomBytes(16).toString('hex')
+      cachedMasterKey = 'DEVELOPMENT_ONLY_KEY_DO_NOT_USE_IN_PRODUCTION_' + crypto.randomBytes(16).toString('hex')
+      return cachedMasterKey
     }
 
     // In production, fail fast and clearly
@@ -45,8 +53,9 @@ const MASTER_KEY = (() => {
     )
   }
 
-  return key
-})()
+  cachedMasterKey = key
+  return cachedMasterKey
+}
 
 // Secure credential storage (in production, use encrypted database)
 interface EncryptedCredential {
@@ -90,7 +99,7 @@ interface CredentialData {
 
 // Derive encryption key using PBKDF2
 function deriveKey(salt: Buffer): Buffer {
-  return crypto.pbkdf2Sync(MASTER_KEY, salt, ITERATIONS, 32, 'sha256')
+  return crypto.pbkdf2Sync(getMasterKey(), salt, ITERATIONS, 32, 'sha256')
 }
 
 // Encrypt credentials using AES-256-GCM
