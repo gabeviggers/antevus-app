@@ -57,4 +57,6 @@ export const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
   ]
 }
 
+
 export type Permission = string
+
