@@ -11,8 +11,9 @@ export interface RunData {
   status: RunStatus
   quality: DataQuality
   startedAt: string
-  completedAt: string
+  completedAt: string | null
   duration: string
+  durationMinutes?: number // Machine-readable duration for sorting/filtering
   operator: string
   project: string
   samples: number
@@ -130,7 +131,7 @@ function generateRun(index: number): RunData {
     : statusRand < 0.95 ? 'aborted'
     : 'in_progress'
 
-  // Quality for completed runs
+  // Quality is determined once and used consistently everywhere
   const qualityRand = Math.random()
   const quality: DataQuality = qualityRand < 0.4 ? 'excellent'
     : qualityRand < 0.7 ? 'good'
@@ -149,18 +150,22 @@ function generateRun(index: number): RunData {
     purity: Math.floor(Math.random() * 10) + 90 // 90-100%
   }
 
+  // QC status type helper
+  type QCStatus = 'pass' | 'fail' | 'warning'
+  const QC = { pass: 'pass', fail: 'fail', warning: 'warning' } as const satisfies Record<QCStatus, QCStatus>
+
   // Generate QC checks
   const qcPassed = status === 'completed' && Math.random() > 0.1
   const qcChecks = instrumentType === 'DNA Sequencer' ? [
-    { name: 'Cluster Density', status: (qcPassed ? 'pass' : 'fail') as 'pass' | 'fail' | 'warning', value: 1250, threshold: 1200 },
-    { name: 'Q30 Score', status: (qcPassed ? 'pass' : 'warning') as 'pass' | 'fail' | 'warning', value: 91, threshold: 90 },
-    { name: 'Error Rate', status: 'pass' as 'pass' | 'fail' | 'warning', value: 0.8, threshold: 1.0 },
-    { name: 'PhiX Alignment', status: 'pass' as 'pass' | 'fail' | 'warning', value: 0.95, threshold: 0.90 }
+    { name: 'Cluster Density', status: qcPassed ? QC.pass : QC.fail, value: 1250, threshold: 1200 },
+    { name: 'Q30 Score', status: qcPassed ? QC.pass : QC.warning, value: 91, threshold: 90 },
+    { name: 'Error Rate', status: QC.pass, value: 0.8, threshold: 1.0 },
+    { name: 'PhiX Alignment', status: QC.pass, value: 0.95, threshold: 0.90 }
   ] : [
-    { name: 'Volume Accuracy', status: 'pass' as 'pass' | 'fail' | 'warning', value: 98.5, threshold: 95 },
-    { name: 'Cross-contamination', status: (qcPassed ? 'pass' : 'warning') as 'pass' | 'fail' | 'warning', value: 0.01, threshold: 0.05 },
-    { name: 'Temperature Stability', status: 'pass' as 'pass' | 'fail' | 'warning', value: 20.5, threshold: 21 },
-    { name: 'Precision CV', status: 'pass' as 'pass' | 'fail' | 'warning', value: 2.3, threshold: 5 }
+    { name: 'Volume Accuracy', status: QC.pass, value: 98.5, threshold: 95 },
+    { name: 'Cross-contamination', status: qcPassed ? QC.pass : QC.warning, value: 0.01, threshold: 0.05 },
+    { name: 'Temperature Stability', status: QC.pass, value: 20.5, threshold: 21 },
+    { name: 'Precision CV', status: QC.pass, value: 2.3, threshold: 5 }
   ]
 
   // Generate output files
@@ -185,16 +190,21 @@ function generateRun(index: number): RunData {
     }
   }
 
+  // Use the year from the actual run date
+  const runYear = startDate.getFullYear()
+  const runId = `RUN-${runYear}-${String(index).padStart(4, '0')}`
+
   return {
-    id: `RUN-2024-${String(index).padStart(4, '0')}`,
+    id: runId,
     instrumentId: instrument.id,
     instrumentName: instrument.name,
     protocol,
     status,
-    quality: status === 'completed' ? quality : 'poor',
+    quality, // Use the quality determined once above, consistently
     startedAt: startDate.toISOString(),
-    completedAt: status !== 'in_progress' ? endDate.toISOString() : '',
+    completedAt: status !== 'in_progress' ? endDate.toISOString() : null,
     duration: status !== 'in_progress' ? duration : 'In Progress',
+    durationMinutes: status !== 'in_progress' ? durationMinutes : undefined,
     operator,
     project,
     samples: Math.floor(Math.random() * 96) + 1,
@@ -214,12 +224,15 @@ function generateRun(index: number): RunData {
   }
 }
 
-// Generate 150 mock runs
-export const mockRuns: RunData[] = Array.from({ length: 150 }, (_, i) => generateRun(i + 1))
-  .sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime())
+// Generate 150 mock runs - frozen to prevent accidental mutation
+export const mockRuns: ReadonlyArray<Readonly<RunData>> = Object.freeze(
+  Array.from({ length: 150 }, (_, i) => generateRun(i + 1))
+    .sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime())
+    .map(r => Object.freeze(r))
+)
 
 // Helper functions for filtering and searching
-export function searchRuns(runs: RunData[], query: string): RunData[] {
+export function searchRuns(runs: readonly RunData[], query: string): RunData[] {
   const lowerQuery = query.toLowerCase()
   return runs.filter(run =>
     run.id.toLowerCase().includes(lowerQuery) ||
@@ -231,25 +244,48 @@ export function searchRuns(runs: RunData[], query: string): RunData[] {
   )
 }
 
-export function filterRunsByStatus(runs: RunData[], status: RunStatus | 'all'): RunData[] {
-  if (status === 'all') return runs
+export function filterRunsByStatus(runs: readonly RunData[], status: RunStatus | 'all'): RunData[] {
+  if (status === 'all') return [...runs]
   return runs.filter(run => run.status === status)
 }
 
-export function filterRunsByDateRange(runs: RunData[], startDate: Date, endDate: Date): RunData[] {
+export function filterRunsByDateRange(runs: readonly RunData[], startDate: Date, endDate: Date): RunData[] {
+  let start = new Date(startDate)
+  let end = new Date(endDate)
+
+  // Handle inverted date ranges
+  if (start > end) {
+    [start, end] = [end, start] // swap
+  }
+
+  // If end has no time set (00:00:00), make it inclusive end-of-day
+  if (end.getHours() === 0 && end.getMinutes() === 0 && end.getSeconds() === 0 && end.getMilliseconds() === 0) {
+    end = new Date(end.getTime())
+    end.setHours(23, 59, 59, 999)
+  }
+
   return runs.filter(run => {
     const runDate = new Date(run.startedAt)
-    return runDate >= startDate && runDate <= endDate
+    return runDate >= start && runDate <= end
   })
 }
 
-export function filterRunsByInstrument(runs: RunData[], instrumentId: string | 'all'): RunData[] {
-  if (instrumentId === 'all') return runs
+export function filterRunsByInstrument(runs: readonly RunData[], instrumentId: string | 'all'): RunData[] {
+  if (instrumentId === 'all') return [...runs]
   return runs.filter(run => run.instrumentId === instrumentId)
 }
 
 // Export functions
-export function exportToCSV(runs: RunData[]): string {
+function escapeCSVCell(cell: unknown): string {
+  const s = String(cell ?? '')
+  const escaped = s.replace(/"/g, '""')
+  // Prevent CSV injection by escaping leading special characters
+  const needsExcelEscaping = /^[=\-+@]/.test(escaped)
+  const safe = needsExcelEscaping ? `'${escaped}` : escaped
+  return `"${safe}"`
+}
+
+export function exportToCSV(runs: readonly RunData[]): string {
   const headers = ['ID', 'Instrument', 'Protocol', 'Status', 'Quality', 'Started', 'Duration', 'Operator', 'Project', 'Samples', 'Data Size']
   const rows = runs.map(run => [
     run.id,
@@ -257,7 +293,7 @@ export function exportToCSV(runs: RunData[]): string {
     run.protocol,
     run.status,
     run.quality,
-    new Date(run.startedAt).toLocaleString(),
+    new Date(run.startedAt).toISOString(), // Use ISO format for consistency
     run.duration,
     run.operator,
     run.project,
@@ -267,12 +303,12 @@ export function exportToCSV(runs: RunData[]): string {
 
   const csvContent = [
     headers.join(','),
-    ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
+    ...rows.map(row => row.map(escapeCSVCell).join(','))
   ].join('\n')
 
   return csvContent
 }
 
-export function exportToJSON(runs: RunData[]): string {
+export function exportToJSON(runs: readonly RunData[]): string {
   return JSON.stringify(runs, null, 2)
 }

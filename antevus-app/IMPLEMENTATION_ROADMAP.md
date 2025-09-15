@@ -1,7 +1,7 @@
 # Antevus Implementation Roadmap
 ## Ship Fast, Generate Revenue Early
 
-### 📊 CURRENT STATUS (December 15, 2024)
+### 📊 CURRENT STATUS (September 15, 2025)
 
 #### ✅ Completed Components
 1. **Phase 0: Foundation (100% Complete)**
@@ -85,12 +85,12 @@
 - [x] Search and filter capabilities
 - [x] Mock data: Mix of Illumina, Tecan, Hamilton devices
 
-#### 3. Run History & Data View 🚧 NOT STARTED
-- [ ] Searchable table of completed runs
-- [ ] Data preview modal with charts
-- [ ] Export buttons (CSV, JSON, PDF)
-- [ ] Filter by date, instrument, status
-- [ ] Pagination with 100+ mock entries
+#### 3. Run History & Data View ✅ COMPLETED
+- [x] Searchable table of runs
+- [x] Run detail modal with data preview
+- [x] Export buttons (CSV, JSON; PDF placeholder)
+- [x] Filter by date, instrument, status
+- [x] Pagination with 150 mock entries
 
 #### 4. Real-Time Monitoring 🚧 NOT STARTED
 - [ ] Live-updating line charts (mock data stream)
@@ -111,7 +111,7 @@
 - [ ] API key generation interface
 
 ### Frontend Technical Stack ✅ IMPLEMENTED
-```
+```text
 next.js 14 (app router)
 ├── /app
 │   ├── (auth)                    ✅ Implemented
@@ -119,7 +119,7 @@ next.js 14 (app router)
 │   │   └── signup/               🚧 Planned
 │   ├── (dashboard)               ✅ Implemented
 │   │   ├── dashboard/            ✅ Instruments dashboard
-│   │   ├── runs/                 🚧 Not started
+│   │   ├── runs/                 ✅ Implemented
 │   │   ├── monitoring/           🚧 Not started
 │   │   ├── integrations/         🚧 Not started
 │   │   └── api-playground/       🚧 Not started
@@ -144,7 +144,8 @@ next.js 14 (app router)
 ### 🎯 IMMEDIATE NEXT STEPS (Recommended Priority)
 
 #### Option 1: Complete Phase 1 Features (RECOMMENDED)
-**Week 1 Sprint (Dec 16-22)**
+
+##### Week 1 Sprint (Dec 16-22)
 1. **Run History Page** (2-3 days)
    - Create `/app/(dashboard)/runs/page.tsx`
    - Build searchable table component
@@ -159,7 +160,7 @@ next.js 14 (app router)
    - Add WebSocket simulation for real-time data
    - Implement QC threshold indicators
 
-**Week 2 Sprint (Dec 23-29)**
+##### Week 2 Sprint (Dec 23-29)
 3. **Integrations Hub** (2 days)
    - Create `/app/(dashboard)/integrations/page.tsx`
    - Design integration cards (Benchling, Slack, etc.)

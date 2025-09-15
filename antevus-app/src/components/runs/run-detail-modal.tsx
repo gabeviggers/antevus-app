@@ -1,6 +1,6 @@
 'use client'
 
-import { RunData } from '@/lib/mock-data/runs'
+import { RunData, type RunStatus, type DataQuality } from '@/lib/mock-data/runs'
 import { X, Download, CheckCircle, XCircle, AlertTriangle, FileText, Activity, BarChart3 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
@@ -17,7 +17,7 @@ export function RunDetailModal({ run, onClose }: RunDetailModalProps) {
     alert(`Downloading ${fileName}...`)
   }
 
-  const getStatusColor = (status: string) => {
+  const getStatusColor = (status: RunStatus) => {
     switch (status) {
       case 'completed':
         return 'text-green-600 dark:text-green-400 bg-green-100 dark:bg-green-900/20'
@@ -32,7 +32,7 @@ export function RunDetailModal({ run, onClose }: RunDetailModalProps) {
     }
   }
 
-  const getQualityColor = (quality: string) => {
+  const getQualityColor = (quality: DataQuality) => {
     switch (quality) {
       case 'excellent':
         return 'text-green-600 dark:text-green-400'
@@ -56,15 +56,20 @@ export function RunDetailModal({ run, onClose }: RunDetailModalProps) {
   }
 
   const chartData = generateMockChartData()
-  const maxValue = Math.max(...chartData.map(d => d.value))
+  const maxValue = Math.max(1, ...chartData.map(d => d.value))
 
   return (
     <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-card border border-border rounded-lg max-w-6xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="run-details-title"
+        className="bg-card border border-border rounded-lg max-w-6xl w-full max-h-[90vh] overflow-hidden flex flex-col"
+      >
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-border">
           <div>
-            <h2 className="text-2xl font-bold flex items-center gap-3">
+            <h2 id="run-details-title" className="text-2xl font-bold flex items-center gap-3">
               Run Details: {run.id}
               <span className={`px-3 py-1 text-sm rounded-full ${getStatusColor(run.status)}`}>
                 {run.status.replace('_', ' ')}
@@ -130,7 +135,7 @@ export function RunDetailModal({ run, onClose }: RunDetailModalProps) {
                   Performance Metrics
                 </h3>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                  {Object.entries(run.metrics).map(([key, value]) => (
+                  {Object.entries(run.metrics).filter(([, v]) => v != null).map(([key, value]) => (
                     <div key={key} className="text-center">
                       <p className="text-2xl font-bold">{value}{key === 'concentration' ? ' ng/µL' : key === 'coverage' ? 'x' : '%'}</p>
                       <p className="text-sm text-muted-foreground capitalize">
@@ -239,9 +244,10 @@ export function RunDetailModal({ run, onClose }: RunDetailModalProps) {
                 </h3>
                 <div className="space-y-2">
                   {run.outputFiles.map((file, i) => (
-                    <div
+                    <button
                       key={i}
-                      className="flex items-center justify-between py-2 px-3 bg-background rounded hover:bg-accent transition-colors cursor-pointer"
+                      type="button"
+                      className="w-full flex items-center justify-between py-2 px-3 bg-background rounded hover:bg-accent transition-colors"
                       onClick={() => handleDownloadFile(file.name)}
                     >
                       <div className="flex items-center gap-2">
@@ -255,8 +261,8 @@ export function RunDetailModal({ run, onClose }: RunDetailModalProps) {
                           </p>
                         </div>
                       </div>
-                      <Download className="h-4 w-4 text-muted-foreground" />
-                    </div>
+                      <Download aria-hidden="true" className="h-4 w-4 text-muted-foreground" />
+                    </button>
                   ))}
                 </div>
               </div>

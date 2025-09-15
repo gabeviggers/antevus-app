@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useMemo } from 'react'
+import { useAuth } from '@/contexts/auth-context'
+import { auditLogger } from '@/lib/audit/logger'
 import {
   mockRuns,
   searchRuns,
@@ -9,7 +11,8 @@ import {
   exportToCSV,
   exportToJSON,
   type RunData,
-  type RunStatus
+  type RunStatus,
+  type DataQuality
 } from '@/lib/mock-data/runs'
 import { mockInstruments } from '@/lib/mock-data/instruments'
 import { RunDetailModal } from '@/components/runs/run-detail-modal'
@@ -31,6 +34,7 @@ import {
 import { Button } from '@/components/ui/button'
 
 export default function RunHistoryPage() {
+  const { user, hasPermission } = useAuth()
   const [runs] = useState<RunData[]>(mockRuns)
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<RunStatus | 'all'>('all')
@@ -61,11 +65,13 @@ export default function RunHistoryPage() {
     if (dateRange.start && dateRange.end) {
       const startDate = new Date(dateRange.start)
       const endDate = new Date(dateRange.end)
-      endDate.setHours(23, 59, 59, 999)
-      filtered = filtered.filter(run => {
-        const runDate = new Date(run.startedAt)
-        return runDate >= startDate && runDate <= endDate
-      })
+      if (startDate <= endDate) {
+        endDate.setHours(23, 59, 59, 999)
+        filtered = filtered.filter(run => {
+          const runDate = new Date(run.startedAt)
+          return runDate >= startDate && runDate <= endDate
+        })
+      }
     }
 
     return filtered
@@ -87,8 +93,23 @@ export default function RunHistoryPage() {
     in_progress: runs.filter(r => r.status === 'in_progress').length
   }
 
+  // Check if user has export permissions
+  const canExport = hasPermission('export_data') || hasPermission('export_own_data')
+
   // Export handlers
   const handleExportCSV = () => {
+    if (!canExport) {
+      alert('You do not have permission to export data')
+      return
+    }
+
+    // Log audit event
+    auditLogger.logEvent(user, 'data.export', {
+      format: 'CSV',
+      recordCount: filteredRuns.length,
+      filters: { status: statusFilter, instrument: instrumentFilter, dateRange }
+    })
+
     const csv = exportToCSV(filteredRuns)
     const blob = new Blob([csv], { type: 'text/csv' })
     const url = window.URL.createObjectURL(blob)
@@ -96,9 +117,22 @@ export default function RunHistoryPage() {
     a.href = url
     a.download = `run_history_${new Date().toISOString().split('T')[0]}.csv`
     a.click()
+    URL.revokeObjectURL(url)
   }
 
   const handleExportJSON = () => {
+    if (!canExport) {
+      alert('You do not have permission to export data')
+      return
+    }
+
+    // Log audit event
+    auditLogger.logEvent(user, 'data.export', {
+      format: 'JSON',
+      recordCount: filteredRuns.length,
+      filters: { status: statusFilter, instrument: instrumentFilter, dateRange }
+    })
+
     const json = exportToJSON(filteredRuns)
     const blob = new Blob([json], { type: 'application/json' })
     const url = window.URL.createObjectURL(blob)
@@ -106,9 +140,22 @@ export default function RunHistoryPage() {
     a.href = url
     a.download = `run_history_${new Date().toISOString().split('T')[0]}.json`
     a.click()
+    URL.revokeObjectURL(url)
   }
 
   const handleExportPDF = () => {
+    if (!canExport) {
+      alert('You do not have permission to export data')
+      return
+    }
+
+    // Log audit event
+    auditLogger.logEvent(user, 'data.export', {
+      format: 'PDF',
+      recordCount: filteredRuns.length,
+      filters: { status: statusFilter, instrument: instrumentFilter, dateRange }
+    })
+
     // For now, just alert - would integrate with a PDF library
     alert('PDF export would be implemented with a library like jsPDF')
   }
@@ -126,7 +173,7 @@ export default function RunHistoryPage() {
     }
   }
 
-  const getQualityBadge = (quality: string) => {
+  const getQualityBadge = (quality: DataQuality) => {
     const colors = {
       excellent: 'bg-green-50 text-green-600 dark:bg-green-900/30 dark:text-green-400 ring-1 ring-green-600/20 dark:ring-green-800/30',
       good: 'bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400 ring-1 ring-blue-600/20 dark:ring-blue-800/30',
@@ -149,7 +196,7 @@ export default function RunHistoryPage() {
       {/* Stats Cards */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
         <button
-          onClick={() => setStatusFilter('all')}
+          onClick={() => { setStatusFilter('all'); setCurrentPage(1) }}
           className={`p-4 rounded-lg border transition-all ${
             statusFilter === 'all'
               ? 'bg-primary text-primary-foreground border-primary'
@@ -160,7 +207,7 @@ export default function RunHistoryPage() {
           <div className="text-sm">Total Runs</div>
         </button>
         <button
-          onClick={() => setStatusFilter('completed')}
+          onClick={() => { setStatusFilter('completed'); setCurrentPage(1) }}
           className={`p-4 rounded-lg border transition-all ${
             statusFilter === 'completed'
               ? 'bg-green-500 text-white border-green-500'
@@ -171,7 +218,7 @@ export default function RunHistoryPage() {
           <div className="text-sm">Completed</div>
         </button>
         <button
-          onClick={() => setStatusFilter('in_progress')}
+          onClick={() => { setStatusFilter('in_progress'); setCurrentPage(1) }}
           className={`p-4 rounded-lg border transition-all ${
             statusFilter === 'in_progress'
               ? 'bg-blue-500 text-white border-blue-500'
@@ -182,7 +229,7 @@ export default function RunHistoryPage() {
           <div className="text-sm">In Progress</div>
         </button>
         <button
-          onClick={() => setStatusFilter('failed')}
+          onClick={() => { setStatusFilter('failed'); setCurrentPage(1) }}
           className={`p-4 rounded-lg border transition-all ${
             statusFilter === 'failed'
               ? 'bg-red-500 text-white border-red-500'
@@ -193,7 +240,7 @@ export default function RunHistoryPage() {
           <div className="text-sm">Failed</div>
         </button>
         <button
-          onClick={() => setStatusFilter('aborted')}
+          onClick={() => { setStatusFilter('aborted'); setCurrentPage(1) }}
           className={`p-4 rounded-lg border transition-all ${
             statusFilter === 'aborted'
               ? 'bg-yellow-500 text-white border-yellow-500'
@@ -235,11 +282,12 @@ export default function RunHistoryPage() {
 
           {/* Export Dropdown */}
           <div className="relative group">
-            <Button variant="outline" size="sm">
+            <Button variant="outline" size="sm" disabled={!canExport}>
               <Download className="h-4 w-4 mr-2" />
               Export
             </Button>
-            <div className="absolute right-0 mt-1 w-48 bg-card border border-border rounded-md shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-10">
+            {canExport && (
+              <div className="absolute right-0 mt-1 w-48 bg-card border border-border rounded-md shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-10">
               <button
                 onClick={handleExportCSV}
                 className="block w-full text-left px-4 py-2 hover:bg-accent transition-colors"
@@ -262,6 +310,7 @@ export default function RunHistoryPage() {
                 Export as PDF
               </button>
             </div>
+            )}
           </div>
         </div>
       </div>
