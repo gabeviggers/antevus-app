@@ -86,9 +86,18 @@ export default function InstrumentsDashboard() {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="icon" className="relative">
-              <Bell className="h-5 w-5" />
-              <span className="absolute top-1 right-1 h-2 w-2 bg-red-500 rounded-full"></span>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              aria-label="Notifications"
+              title="Notifications"
+              aria-haspopup="menu"
+            >
+              <Bell className="h-5 w-5" aria-hidden="true" />
+              <span className="absolute top-1 right-1 h-2 w-2 bg-red-500 rounded-full" aria-hidden="true" />
+              <span className="sr-only">You have unread notifications</span>
             </Button>
             <ThemeToggle />
           </div>
