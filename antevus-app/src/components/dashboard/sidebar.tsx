@@ -19,7 +19,7 @@ import {
 const navigation = [
   { name: 'Instruments', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Monitoring', href: '/dashboard/monitoring', icon: Activity },
-  { name: 'Run History', href: '/dashboard/runs', icon: History },
+  { name: 'Run History', href: '/runs', icon: History },
   { name: 'Integrations', href: '/dashboard/integrations', icon: Plug },
   { name: 'API Playground', href: '/dashboard/api', icon: Code2 },
 ]

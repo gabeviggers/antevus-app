@@ -28,7 +28,7 @@ export interface AuthResponse {
   error?: string
 }
 
-export const ROLE_PERMISSIONS = {
+export const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
   admin: [
     'view_all_instruments',
     'control_instruments',
@@ -55,6 +55,6 @@ export const ROLE_PERMISSIONS = {
     'view_instruments',
     'view_own_runs'
   ]
-} as const
+}
 
-export type Permission = typeof ROLE_PERMISSIONS[UserRole][number]
+export type Permission = string
