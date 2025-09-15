@@ -20,6 +20,22 @@ export default function LoginPage() {
     }, 1500)
   }
 
+  // Quick fill for demo personas
+  const fillDemoCredentials = (role: string) => {
+    const credentials = {
+      admin: { email: 'admin@antevus.com', password: 'admin123' },
+      scientist: { email: 'scientist@antevus.com', password: 'science123' },
+      operator: { email: 'operator@antevus.com', password: 'operate123' },
+      viewer: { email: 'viewer@antevus.com', password: 'view123' }
+    }
+
+    const cred = credentials[role as keyof typeof credentials]
+    if (cred) {
+      setEmail(cred.email)
+      setPassword(cred.password)
+    }
+  }
+
   return (
     <div className="min-h-screen flex flex-col">
       {/* Header */}
@@ -129,6 +145,52 @@ export default function LoginPage() {
               <div className="relative flex justify-center text-xs uppercase">
                 <span className="bg-background px-2 text-muted-foreground">
                   Or continue with
+                </span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => fillDemoCredentials('admin')}
+                title="Admin Demo Account"
+              >
+                👨‍💼 Admin
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => fillDemoCredentials('scientist')}
+                title="Scientist Demo Account"
+              >
+                🧬 Scientist
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => fillDemoCredentials('operator')}
+                title="Operator Demo Account"
+              >
+                🔧 Operator
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => fillDemoCredentials('viewer')}
+                title="Viewer Demo Account"
+              >
+                👁️ Viewer
+              </Button>
+            </div>
+
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-border"></div>
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-background px-2 text-muted-foreground">
+                  Or sign in with
                 </span>
               </div>
             </div>

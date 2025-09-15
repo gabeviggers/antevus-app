@@ -12,16 +12,18 @@ export function middleware(request: NextRequest) {
   // X-XSS-Protection is obsolete in modern browsers, but kept for legacy support
   response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin')
   response.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()')
-  // Content Security Policy
+  // Content Security Policy - relaxed for development
+  const isDevelopment = process.env.NODE_ENV === 'development'
+
   response.headers.set(
     'Content-Security-Policy',
     "default-src 'self'; " +
     "base-uri 'none'; object-src 'none'; form-action 'self'; " +
-    "script-src 'self' 'unsafe-inline'; " +
+    `script-src 'self' 'unsafe-inline'${isDevelopment ? " 'unsafe-eval'" : ''}; ` +
     "style-src 'self' 'unsafe-inline'; " +
     "img-src 'self' data: https:; " +
     "font-src 'self' data:; " +
-    "connect-src 'self'; " + // allowlist Sentry/PostHog origins if used
+    `connect-src 'self'${isDevelopment ? ' ws: wss:' : ''}; ` + // Allow WebSocket in dev
     "frame-ancestors 'none';"
   )
 
