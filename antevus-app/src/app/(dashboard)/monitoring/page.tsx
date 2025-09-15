@@ -116,15 +116,19 @@ export default function MonitoringPage() {
   }, [updateInterval, isPaused, isConnected, selectedInstrument])
 
   const currentInstrumentData = monitoringData.get(selectedInstrument)
-  const currentMetricData = currentInstrumentData?.[selectedMetric] || []
+
+  // Memoize currentMetricData to avoid dependency warning
+  const currentMetricData = useMemo(() =>
+    currentInstrumentData?.[selectedMetric] || [],
+    [currentInstrumentData, selectedMetric]
+  )
+
   const latestValue = currentMetricData[currentMetricData.length - 1]?.value || 0
   const qcStatus = checkQCStatus(latestValue, selectedMetric)
   const threshold = QC_THRESHOLDS.find(t => t.metric === selectedMetric)
 
-  // Return early if threshold not found (defensive programming)
-  if (!threshold) return null
-
   // Format data for Recharts - memoized and optimized
+  // Must be called before any conditional returns (React hooks rules)
   const chartData = useMemo(() => currentMetricData.map(point => ({
     time: new Date(point.timestamp).toLocaleTimeString(undefined, {
       hour: '2-digit',
@@ -133,6 +137,9 @@ export default function MonitoringPage() {
     }),
     value: point.value
   })), [currentMetricData])
+
+  // Return early if threshold not found (defensive programming)
+  if (!threshold) return null
 
   const getMetricIcon = (metric: keyof MetricData) => {
     switch (metric) {
