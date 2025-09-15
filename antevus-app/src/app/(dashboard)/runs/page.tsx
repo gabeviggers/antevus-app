@@ -35,7 +35,7 @@ import { Button } from '@/components/ui/button'
 
 export default function RunHistoryPage() {
   const { user, hasPermission } = useAuth()
-  const [runs] = useState<RunData[]>(mockRuns)
+  const [runs] = useState<RunData[]>([...mockRuns])
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<RunStatus | 'all'>('all')
   const [instrumentFilter, setInstrumentFilter] = useState<string>('all')
@@ -105,9 +105,13 @@ export default function RunHistoryPage() {
 
     // Log audit event
     auditLogger.logEvent(user, 'data.export', {
-      format: 'CSV',
-      recordCount: filteredRuns.length,
-      filters: { status: statusFilter, instrument: instrumentFilter, dateRange }
+      resourceType: 'runs',
+      success: true,
+      metadata: {
+        format: 'CSV',
+        recordCount: filteredRuns.length,
+        filters: { status: statusFilter, instrument: instrumentFilter, dateRange }
+      }
     })
 
     const csv = exportToCSV(filteredRuns)
@@ -128,9 +132,13 @@ export default function RunHistoryPage() {
 
     // Log audit event
     auditLogger.logEvent(user, 'data.export', {
-      format: 'JSON',
-      recordCount: filteredRuns.length,
-      filters: { status: statusFilter, instrument: instrumentFilter, dateRange }
+      resourceType: 'runs',
+      success: true,
+      metadata: {
+        format: 'JSON',
+        recordCount: filteredRuns.length,
+        filters: { status: statusFilter, instrument: instrumentFilter, dateRange }
+      }
     })
 
     const json = exportToJSON(filteredRuns)
@@ -151,9 +159,13 @@ export default function RunHistoryPage() {
 
     // Log audit event
     auditLogger.logEvent(user, 'data.export', {
-      format: 'PDF',
-      recordCount: filteredRuns.length,
-      filters: { status: statusFilter, instrument: instrumentFilter, dateRange }
+      resourceType: 'runs',
+      success: true,
+      metadata: {
+        format: 'PDF',
+        recordCount: filteredRuns.length,
+        filters: { status: statusFilter, instrument: instrumentFilter, dateRange }
+      }
     })
 
     // For now, just alert - would integrate with a PDF library
