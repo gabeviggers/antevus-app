@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { z } from 'zod'
 import { type Integration, type IntegrationConfig } from '@/lib/mock-data/integrations'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
@@ -17,8 +18,22 @@ import {
   Users,
   FolderOpen,
   Clock,
-  Bell
+  Bell,
+  AlertTriangle
 } from 'lucide-react'
+
+// Validation schemas for different integration types
+const IntegrationConfigSchema = z.object({
+  apiKey: z.string().min(1, 'API key is required').max(500, 'API key too long').optional(),
+  webhookUrl: z.string().url('Invalid URL format').optional(),
+  projectId: z.string().min(1, 'Project ID is required').optional(),
+  channel: z.string().min(1, 'Channel is required').optional(),
+  workspace: z.string().min(1, 'Workspace is required').optional(),
+  folder: z.string().min(1, 'Folder is required').optional(),
+  syncInterval: z.number().min(60, 'Minimum 60 seconds').max(3600, 'Maximum 3600 seconds'),
+  enableNotifications: z.boolean(),
+  autoSync: z.boolean()
+})
 
 interface IntegrationConfigModalProps {
   integration: Integration | null
@@ -36,6 +51,7 @@ export function IntegrationConfigModal({
   const [config, setConfig] = useState<IntegrationConfig>({})
   const [isTesting, setIsTesting] = useState(false)
   const [testResult, setTestResult] = useState<'success' | 'error' | null>(null)
+  const [validationErrors, setValidationErrors] = useState<z.ZodIssue[]>([])
 
   useEffect(() => {
     if (integration?.config) {
@@ -62,8 +78,31 @@ export function IntegrationConfigModal({
   }
 
   const handleSave = () => {
-    onSave(integration, config)
+    // Validate configuration before saving
+    const validation = IntegrationConfigSchema.safeParse(config)
+
+    if (!validation.success) {
+      setValidationErrors(validation.error.issues)
+      return
+    }
+
+    // Clear any previous validation errors
+    setValidationErrors([])
+
+    // Never send actual credentials to client - this will be handled server-side
+    const sanitizedConfig = {
+      ...config,
+      apiKey: config.apiKey ? '[CONFIGURED]' : undefined,
+      webhookUrl: config.webhookUrl ? '[CONFIGURED]' : undefined
+    }
+
+    onSave(integration, sanitizedConfig)
     onClose()
+  }
+
+  const getFieldError = (field: string): string | undefined => {
+    const error = validationErrors.find(err => err.path[0] === field)
+    return error?.message
   }
 
   const renderConfigFields = () => {
@@ -82,8 +121,13 @@ export function IntegrationConfigModal({
                 placeholder="bench_xxxxxxxxxxxxx"
                 value={config.apiKey || ''}
                 onChange={(e) => setConfig({ ...config, apiKey: e.target.value })}
-                className="w-full px-3 py-2 bg-background border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring"
+                className={`w-full px-3 py-2 bg-background border rounded-md focus:outline-none focus:ring-2 focus:ring-ring ${
+                  getFieldError('apiKey') ? 'border-red-500' : 'border-input'
+                }`}
               />
+              {getFieldError('apiKey') && (
+                <p className="text-xs text-red-500 mt-1">{getFieldError('apiKey')}</p>
+              )}
               <p className="text-xs text-muted-foreground">
                 Find your API key in Benchling Settings → API
               </p>
@@ -264,6 +308,21 @@ export function IntegrationConfigModal({
 
         {/* Content */}
         <div className="p-6 space-y-6 overflow-y-auto max-h-[60vh]">
+          {/* Validation Errors */}
+          {validationErrors.length > 0 && (
+            <div className="flex items-start gap-3 p-4 bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-lg">
+              <AlertTriangle className="h-5 w-5 text-red-600 dark:text-red-400 mt-0.5" />
+              <div className="text-sm text-red-900 dark:text-red-100">
+                <p className="font-medium mb-1">Please fix the following errors:</p>
+                <ul className="list-disc list-inside">
+                  {validationErrors.map((error, idx) => (
+                    <li key={idx}>{error.message}</li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          )}
+
           {/* Info Box */}
           <div className="flex items-start gap-3 p-4 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg">
             <Info className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5" />

@@ -65,7 +65,7 @@ export const mockIntegrations: Integration[] = [
     connectedAt: '2024-11-15T10:30:00Z',
     lastSync: new Date(Date.now() - 1000 * 60 * 5).toISOString(), // 5 minutes ago
     config: {
-      apiKey: 'bench_***********',
+      // Credentials stored securely server-side, never exposed to client
       projectId: 'proj_ABC123',
       syncInterval: 300,
       autoSync: true
@@ -124,7 +124,7 @@ export const mockIntegrations: Integration[] = [
     connectedAt: '2024-10-20T14:00:00Z',
     lastSync: new Date().toISOString(),
     config: {
-      webhookUrl: 'https://hooks.slack.com/services/***',
+      // Webhook URL stored securely server-side
       channel: '#lab-instruments',
       enableNotifications: true
     },
