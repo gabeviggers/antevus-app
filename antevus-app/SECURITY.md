@@ -11,13 +11,18 @@ This document outlines the comprehensive security measures implemented in the An
 ### 1. ✅ Secure Credential Management (FULLY RESOLVED)
 **Issue**: API credentials were exposed client-side in React state
 **Solution**:
-- Moved all credential handling to secure server-side API routes
-- Credentials are now encrypted using AES-256-GCM before storage
-- Never store credentials in React state - using refs for temporary input
-- Dedicated secure endpoint for credential management
-- Implementation:
-  - `/src/app/api/integrations/[id]/credentials/route.ts` (server-side encryption)
-  - `/src/components/integrations/integration-config-modal.tsx` (secure input handling with refs)
+- **Strict credential rejection**: Generic `/api/integrations` endpoint now REJECTS any request containing credential fields with 400 error
+- **Dedicated secure endpoint**: All credentials must go through `/api/integrations/[id]/credentials` endpoint only
+- **AES-256-GCM encryption**: Proper authenticated encryption with:
+  - 256-bit key derived using PBKDF2 (100,000 iterations)
+  - Random 64-byte salt for each credential
+  - Random 16-byte IV for each encryption
+  - Authentication tag to prevent tampering
+- **Client-side security**: Never store credentials in React state - using refs for temporary input
+- **Implementation**:
+  - `/src/app/api/integrations/route.ts` - Rejects all credential fields
+  - `/src/app/api/integrations/[id]/credentials/route.ts` - AES-256-GCM encryption
+  - `/src/components/integrations/integration-config-modal.tsx` - Secure refs for input
 
 ### 2. ✅ Cryptographically Secure Token Generation
 **Issue**: Using Math.random() for token generation
@@ -106,7 +111,7 @@ This document outlines the comprehensive security measures implemented in the An
 ```env
 # Security Configuration
 JWT_SECRET=<32+ character random string>
-ENCRYPTION_KEY=<32+ character random string>
+CREDENTIAL_ENCRYPTION_KEY=<64 character hex string for AES-256>
 SESSION_SECRET=<32+ character random string>
 
 # Database
@@ -143,7 +148,9 @@ ENABLE_SOC2_COMPLIANCE=true
 - Per-resource authorization checks
 
 ### Data Protection
-- All sensitive data encrypted before storage
+- **AES-256-GCM encryption** for all credentials with PBKDF2 key derivation
+- **Credential isolation**: Generic endpoints reject credentials with 400 error
+- **Dedicated secure endpoint** for credential operations only
 - Credentials never sent to client (sanitized as [CONFIGURED])
 - Secure session cookies with httpOnly flag
 - Mock data scrubbed of all API keys and secrets

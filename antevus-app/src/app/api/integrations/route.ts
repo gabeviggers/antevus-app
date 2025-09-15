@@ -21,7 +21,7 @@ interface StoredIntegrationConfig {
   status: string
   lastSync: string
   userId: string
-  encryptedCredentials: string
+  hasCredentials?: boolean  // Only track if credentials exist, never store them here
   syncInterval?: number
   enableNotifications?: boolean
   autoSync?: boolean
@@ -81,7 +81,7 @@ export async function GET(request: NextRequest) {
       status: config.status,
       lastSync: config.lastSync,
       // Never send actual credentials to client
-      hasCredentials: !!config.encryptedCredentials
+      hasCredentials: config.hasCredentials || false
     }))
 
     return NextResponse.json({
@@ -134,7 +134,30 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json()
 
-    // Validate input
+    // CRITICAL: Reject any request containing credentials
+    const forbiddenFields = ['apiKey', 'webhookUrl', 'secretKey', 'accessToken', 'password', 'secret', 'token', 'credential']
+    const requestKeys = Object.keys(body.config || {})
+    const hasCredentials = forbiddenFields.some(field =>
+      requestKeys.some(key => key.toLowerCase().includes(field.toLowerCase()))
+    )
+
+    if (hasCredentials) {
+      auditLogger.logEvent(session.user, 'integration.error', {
+        resourceType: 'integration',
+        success: false,
+        errorMessage: 'Credentials rejected at generic endpoint',
+        metadata: {
+          attemptedFields: requestKeys,
+          ipAddress: request.headers.get('x-forwarded-for') || 'unknown'
+        }
+      })
+      return NextResponse.json({
+        error: 'Security Error: Credentials must be sent to /api/integrations/[id]/credentials endpoint only',
+        details: 'This endpoint does not accept any credential fields. Use the dedicated secure credentials endpoint.'
+      }, { status: 400 })
+    }
+
+    // Validate input after security check
     const validationResult = IntegrationConfigSchema.safeParse(body.config)
 
     if (!validationResult.success) {
@@ -147,19 +170,20 @@ export async function POST(request: NextRequest) {
     const { integrationId } = body
     const config = validationResult.data
 
-    // Enforce no secrets on this route
-    if ('apiKey' in (body.config ?? {}) || 'webhookUrl' in (body.config ?? {})) {
-      return NextResponse.json({ error: 'Secrets must be sent to /api/integrations/[id]/credentials' }, { status: 400 })
-    }
-    const nonSensitiveConfig = config
-
-    // Store configuration securely
+    // Store non-sensitive configuration only
     integrationConfigs.set(integrationId, {
-      ...encryptedConfig,
       name: body.name,
       status: 'connected',
       lastSync: new Date().toISOString(),
-      userId: session.user.id
+      userId: session.user.id,
+      hasCredentials: false, // Credentials must be set via dedicated endpoint
+      syncInterval: config.syncInterval,
+      enableNotifications: config.enableNotifications,
+      autoSync: config.autoSync,
+      projectId: config.projectId,
+      channel: config.channel,
+      workspace: config.workspace,
+      folder: config.folder
     })
 
     // Comprehensive audit logging
