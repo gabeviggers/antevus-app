@@ -3,7 +3,13 @@ import { SignJWT, jwtVerify } from 'jose'
 import { randomBytes } from 'crypto'
 import { User } from './types'
 
-const JWT_SECRET = process.env.JWT_SECRET || randomBytes(32).toString('hex')
+const JWT_SECRET =
+  process.env.JWT_SECRET ??
+  (process.env.NODE_ENV !== 'production'
+    ? randomBytes(32).toString('hex')
+    : (() => {
+        throw new Error('JWT_SECRET is required in production')
+      })())
 const secretKey = new TextEncoder().encode(JWT_SECRET)
 
 export interface SessionData {

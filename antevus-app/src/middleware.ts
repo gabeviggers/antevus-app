@@ -13,15 +13,17 @@ export function middleware(request: NextRequest) {
   response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin')
   response.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()')
 
+  return response
   // Content Security Policy
   response.headers.set(
     'Content-Security-Policy',
     "default-src 'self'; " +
-    "script-src 'self' 'unsafe-inline' 'unsafe-eval'; " +
+    "base-uri 'none'; object-src 'none'; form-action 'self'; " +
+    "script-src 'self' 'unsafe-inline'; " +
     "style-src 'self' 'unsafe-inline'; " +
     "img-src 'self' data: https:; " +
     "font-src 'self' data:; " +
-    "connect-src 'self'; " +
+    "connect-src 'self'; " + // allowlist Sentry/PostHog origins if used
     "frame-ancestors 'none';"
   )
 
@@ -42,14 +44,8 @@ export function middleware(request: NextRequest) {
     response.headers.set('Expires', '0')
   }
 
-  // Add CSRF protection for state-changing methods
-  if (request.method !== 'GET' && request.method !== 'HEAD') {
-    // Set SameSite cookie attribute for CSRF protection
-    const cookieHeader = response.headers.get('Set-Cookie')
-    if (cookieHeader && !cookieHeader.includes('SameSite')) {
-      response.headers.set('Set-Cookie', `${cookieHeader}; SameSite=Strict`)
-    }
-  }
+  // CSRF should be enforced where cookies are set (server routes) via SameSite+HttpOnly
+  // and verified using CSRF tokens or double-submit. Remove this no-op block.
   // Skip protection for local development
   if (process.env.NODE_ENV === 'development') {
     return NextResponse.next()

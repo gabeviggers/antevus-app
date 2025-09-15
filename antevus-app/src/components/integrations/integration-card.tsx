@@ -194,14 +194,17 @@ export function IntegrationCard({
               Connect
             </Button>
             {integration.documentation && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => window.open(integration.documentation, '_blank')}
+              <a
+                href={integration.documentation}
+                target="_blank"
+                rel="noopener noreferrer"
                 title="View documentation"
+                className="inline-flex"
               >
-                <ExternalLink className="h-4 w-4" />
-              </Button>
+                <Button variant="ghost" size="sm">
+                  <ExternalLink className="h-4 w-4" />
+                </Button>
+              </a>
             )}
           </>
         )}

@@ -1,4 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
+// Credentials API must run on Node.js and never be cached
+export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
 import { z } from 'zod'
 import { getServerSession } from '@/lib/auth/session'
 import { auditLogger } from '@/lib/audit/logger'
@@ -10,7 +14,6 @@ const credentialStore = new Map<string, {
   integrationId: string
   createdAt: string
 }>()
-
 // Validation schema for credentials
 const CredentialSchema = z.object({
   apiKey: z.string().min(1).max(500).optional(),

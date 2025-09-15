@@ -3,10 +3,9 @@
 ## Overview
 This document outlines the comprehensive security measures implemented in the Antevus platform to ensure HIPAA compliance, SOC 2 certification readiness, and enterprise-grade security standards.
 
-**Last Security Audit**: December 15, 2024
-**Security Status**: ✅ **PRODUCTION READY** - 100% Security Score
-**Compliance Status**: HIPAA & SOC 2 Compliant
-
+**Last internal security review**: December 15, 2024
+**Security Status**: ✅ Controls implemented; validated in staging (internal)
+**Compliance Status**: HIPAA & SOC 2 readiness in progress — external penetration test and third‑party SOC 2 attestation pending (attach reports/links)
 ## Security Fixes Implemented
 
 ### 1. ✅ Secure Credential Management (FULLY RESOLVED)

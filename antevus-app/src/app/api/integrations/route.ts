@@ -6,8 +6,6 @@ import { auditLogger } from '@/lib/audit/logger'
 
 // Validation schemas
 const IntegrationConfigSchema = z.object({
-  apiKey: z.string().min(1).max(500).regex(/^[a-zA-Z0-9_-]+$/),
-  webhookUrl: z.string().url().optional(),
   projectId: z.string().optional(),
   channel: z.string().optional(),
   workspace: z.string().optional(),
@@ -149,16 +147,11 @@ export async function POST(request: NextRequest) {
     const { integrationId } = body
     const config = validationResult.data
 
-    // Encrypt sensitive data before storage (in production, use proper encryption)
-    const encryptedConfig = {
-      ...config,
-      encryptedCredentials: Buffer.from(JSON.stringify({
-        apiKey: config.apiKey,
-        webhookUrl: config.webhookUrl
-      })).toString('base64'), // In production, use proper encryption with KMS
-      apiKey: undefined, // Remove plain text credentials
-      webhookUrl: undefined
+    // Enforce no secrets on this route
+    if ('apiKey' in (body.config ?? {}) || 'webhookUrl' in (body.config ?? {})) {
+      return NextResponse.json({ error: 'Secrets must be sent to /api/integrations/[id]/credentials' }, { status: 400 })
     }
+    const nonSensitiveConfig = config
 
     // Store configuration securely
     integrationConfigs.set(integrationId, {

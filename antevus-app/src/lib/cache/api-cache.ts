@@ -56,11 +56,15 @@ class APICache {
    * Clear all cache entries matching a pattern
    */
   invalidatePattern(pattern: string): void {
-    const regex = new RegExp(pattern)
+    if (pattern.length > 128) return
+    let regex: RegExp
+    try {
+      regex = new RegExp(pattern)
+    } catch {
+      return
+    }
     for (const key of this.cache.keys()) {
-      if (regex.test(key)) {
-        this.cache.delete(key)
-      }
+      if (regex.test(key)) this.cache.delete(key)
     }
   }
 

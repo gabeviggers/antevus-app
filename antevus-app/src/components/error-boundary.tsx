@@ -46,22 +46,27 @@ export class ErrorBoundary extends Component<Props, State> {
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
     this.errorCounter++
 
-    // Log to audit system for HIPAA compliance
+    // Log to audit system (server-side) for HIPAA/SOC2 compliance
     try {
-      auditLogger.logEvent(null, 'security.unauthorized_access', {
-        resourceType: 'error_boundary',
-        success: false,
-        errorMessage: error.message,
-        metadata: {
-          componentStack: errorInfo.componentStack,
-          errorCount: this.errorCounter,
-          level: this.props.level || 'component'
-        }
-      })
+      fetch('/api/audit', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          type: 'app.error',
+          resourceType: 'error_boundary',
+          success: false,
+          metadata: {
+            // Avoid full stacks; componentStack is already sanitized
+            message: process.env.NODE_ENV === 'production' ? 'redacted' : error.message,
+            componentStack: errorInfo.componentStack,
+            errorCount: this.errorCounter,
+            level: this.props.level || 'component'
+          }
+        })
+      }).catch(() => {})
     } catch (loggingError) {
       console.error('Failed to log error:', loggingError)
     }
-
     // Call custom error handler if provided
     if (this.props.onError) {
       this.props.onError(error, errorInfo)
