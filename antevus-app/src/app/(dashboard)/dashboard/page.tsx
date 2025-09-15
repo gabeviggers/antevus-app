@@ -4,8 +4,9 @@ import { useState, useEffect } from 'react'
 import { InstrumentCard } from '@/components/instruments/instrument-card'
 import { InstrumentDetailModal } from '@/components/instruments/instrument-detail-modal'
 import { mockInstruments, type Instrument, type InstrumentStatus } from '@/lib/mock-data/instruments'
-import { Search, Filter, RefreshCw, Plus, Grid3x3, List } from 'lucide-react'
+import { Search, Filter, RefreshCw, Plus, Grid3x3, List, Bell } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { ThemeToggle } from '@/components/theme-toggle'
 
 export default function InstrumentsDashboard() {
   const [instruments, setInstruments] = useState<Instrument[]>(mockInstruments)
@@ -77,10 +78,30 @@ export default function InstrumentsDashboard() {
     <div className="p-6">
       {/* Header */}
       <div className="mb-6">
-        <h1 className="text-3xl font-bold text-foreground mb-2">Instruments Dashboard</h1>
-        <p className="text-muted-foreground">
-          Monitor and manage all laboratory instruments in real-time
-        </p>
+        <div className="flex items-start justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-foreground mb-2">Instruments Dashboard</h1>
+            <p className="text-muted-foreground">
+              Monitor and manage all laboratory instruments in real-time
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              aria-label="Notifications"
+              title="Notifications"
+              aria-haspopup="menu"
+            >
+              <Bell className="h-5 w-5" aria-hidden="true" />
+              <span className="absolute top-1 right-1 h-2 w-2 bg-red-500 rounded-full" aria-hidden="true" />
+              <span className="sr-only">You have unread notifications</span>
+            </Button>
+            <ThemeToggle />
+          </div>
+        </div>
       </div>
 
       {/* Stats Overview */}

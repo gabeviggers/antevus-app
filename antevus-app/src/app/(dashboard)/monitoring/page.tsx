@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useEffect, useRef, useMemo } from 'react'
+import { useAuth } from '@/contexts/auth-context'
+import { auditLogger } from '@/lib/audit/logger'
 import {
   LineChart,
   Line,
@@ -34,11 +36,14 @@ import {
   RefreshCw,
   Download,
   Maximize2,
-  Settings
+  Settings,
+  Bell
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { ThemeToggle } from '@/components/theme-toggle'
 
 export default function MonitoringPage() {
+  const { user, hasPermission } = useAuth()
   const [monitoringData, setMonitoringData] = useState<Map<string, MetricData>>(
     () => generateInitialMonitoringData()
   )
@@ -127,6 +132,9 @@ export default function MonitoringPage() {
   const qcStatus = checkQCStatus(latestValue, selectedMetric)
   const threshold = QC_THRESHOLDS.find(t => t.metric === selectedMetric)
 
+  // Check if user has export permissions
+  const canExport = hasPermission('export_data') || hasPermission('export_own_data')
+
   // Format data for Recharts - memoized and optimized
   // Must be called before any conditional returns (React hooks rules)
   const chartData = useMemo(() => currentMetricData.map(point => ({
@@ -179,7 +187,7 @@ export default function MonitoringPage() {
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-start justify-between mb-4">
         <div>
           <h1 className="text-3xl font-bold">Real-Time Monitoring</h1>
           <p className="text-muted-foreground mt-1">
@@ -187,74 +195,114 @@ export default function MonitoringPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {/* Connection Status */}
-          <div
-            role="status"
-            aria-live="polite"
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-md border ${
-            isConnected
-              ? 'bg-green-50 border-green-200 text-green-700'
-              : 'bg-red-50 border-red-200 text-red-700'
-          }`}>
-            {isConnected ? (
-              <>
-                <Wifi className="h-4 w-4" />
-                <span className="text-sm font-medium">Connected</span>
-              </>
-            ) : (
-              <>
-                <WifiOff className="h-4 w-4" />
-                <span className="text-sm font-medium">Disconnected</span>
-              </>
-            )}
-          </div>
-
-          {/* Controls */}
           <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setIsPaused(!isPaused)}
-            className="gap-2"
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            aria-label="Notifications"
+            title="Notifications"
+            aria-haspopup="menu"
           >
-            {isPaused ? (
-              <>
-                <Activity className="h-4 w-4" />
-                Resume
-              </>
-            ) : (
-              <>
-                <RefreshCw className="h-4 w-4" />
-                Pause
-              </>
-            )}
+            <Bell className="h-5 w-5" aria-hidden="true" />
+            <span className="absolute top-1 right-1 h-2 w-2 bg-red-500 rounded-full" aria-hidden="true" />
+            <span className="sr-only">You have unread notifications</span>
           </Button>
-
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-2"
-            onClick={() => {
-              // Export current metric data as CSV
-              const rows = [['Time', 'Value']]
-              for (const point of currentMetricData) {
-                rows.push([point.timestamp, String(point.value)])
-              }
-              const csv = rows.map(row => row.join(',')).join('\n')
-              const blob = new Blob([csv], { type: 'text/csv' })
-              const url = URL.createObjectURL(blob)
-              const a = document.createElement('a')
-              a.href = url
-              a.download = `${selectedInstrument}-${selectedMetric}-${new Date().toISOString().split('T')[0]}.csv`
-              a.click()
-              URL.revokeObjectURL(url)
-
-              // TODO: For SOC 2/HIPAA compliance, add role-based access control and audit logging
-            }}
-          >
-            <Download className="h-4 w-4" />
-            Export
-          </Button>
+          <ThemeToggle />
         </div>
+      </div>
+
+      {/* Connection Status and Controls */}
+      <div className="flex items-center gap-2">
+        {/* Connection Status */}
+        <div
+          role="status"
+          aria-atomic="true"
+          className={`flex items-center gap-2 px-3 py-1.5 rounded-md border ${
+            isConnected
+              ? 'bg-green-50 border-green-200 text-green-700 dark:bg-green-950 dark:border-green-800 dark:text-green-300'
+              : 'bg-red-50 border-red-200 text-red-700 dark:bg-red-950 dark:border-red-800 dark:text-red-300'
+          }`}
+        >
+          {isConnected ? (
+            <>
+              <Wifi className="h-4 w-4" />
+              <span className="text-sm font-medium">Connected</span>
+            </>
+          ) : (
+            <>
+              <WifiOff className="h-4 w-4" />
+              <span className="text-sm font-medium">Disconnected</span>
+            </>
+          )}
+        </div>
+
+        {/* Controls */}
+        <Button
+          variant="outline"
+          size="sm"
+          type="button"
+          aria-pressed={isPaused}
+          onClick={() => setIsPaused(!isPaused)}
+          className="gap-2"
+        >
+          {isPaused ? (
+            <>
+              <Activity className="h-4 w-4" />
+              Resume
+            </>
+          ) : (
+            <>
+              <RefreshCw className="h-4 w-4" />
+              Pause
+            </>
+          )}
+        </Button>
+
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-2"
+          disabled={!canExport}
+          onClick={() => {
+            if (!canExport) {
+              alert('You do not have permission to export data')
+              return
+            }
+            try {
+              auditLogger.logEvent(user, 'data.export', {
+                resourceType: 'monitoring',
+                success: true,
+                metadata: {
+                  instrument: selectedInstrument,
+                  metric: selectedMetric,
+                  recordCount: currentMetricData.length,
+                  format: 'CSV'
+                }
+              })
+            } catch (e) {
+              console.warn('audit log failed', e)
+            }
+            // Export current metric data as CSV
+            const rows = [['Time', 'Value']]
+            for (const point of currentMetricData) {
+              rows.push([point.timestamp, String(point.value)])
+            }
+            const csv = rows.map(row => row.join(',')).join('\n')
+            const blob = new Blob([csv], { type: 'text/csv' })
+            const url = URL.createObjectURL(blob)
+            const a = document.createElement('a')
+            a.href = url
+            a.download = `${selectedInstrument}-${selectedMetric}-${new Date().toISOString().split('T')[0]}.csv`
+            document.body.appendChild(a)
+            a.click()
+            a.remove()
+            URL.revokeObjectURL(url)
+          }}
+        >
+          <Download className="h-4 w-4" />
+          Export
+        </Button>
       </div>
 
       {/* Instrument Selector */}
