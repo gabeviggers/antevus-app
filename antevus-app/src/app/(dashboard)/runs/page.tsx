@@ -29,9 +29,11 @@ import {
   CheckCircle,
   XCircle,
   AlertCircle,
-  Clock
+  Clock,
+  Bell
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { ThemeToggle } from '@/components/theme-toggle'
 
 export default function RunHistoryPage() {
   const { user, hasPermission } = useAuth()
@@ -199,10 +201,21 @@ export default function RunHistoryPage() {
     <div className="p-6">
       {/* Header */}
       <div className="mb-6">
-        <h1 className="text-3xl font-bold text-foreground mb-2">Run History</h1>
-        <p className="text-muted-foreground">
-          Browse and analyze all instrument runs, export data, and track performance metrics
-        </p>
+        <div className="flex items-start justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-foreground mb-2">Run History</h1>
+            <p className="text-muted-foreground">
+              Browse and analyze all instrument runs, export data, and track performance metrics
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="icon" className="relative">
+              <Bell className="h-5 w-5" />
+              <span className="absolute top-1 right-1 h-2 w-2 bg-red-500 rounded-full"></span>
+            </Button>
+            <ThemeToggle />
+          </div>
+        </div>
       </div>
 
       {/* Stats Cards */}

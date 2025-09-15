@@ -34,9 +34,11 @@ import {
   RefreshCw,
   Download,
   Maximize2,
-  Settings
+  Settings,
+  Bell
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { ThemeToggle } from '@/components/theme-toggle'
 
 export default function MonitoringPage() {
   const [monitoringData, setMonitoringData] = useState<Map<string, MetricData>>(
@@ -179,7 +181,7 @@ export default function MonitoringPage() {
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-start justify-between mb-4">
         <div>
           <h1 className="text-3xl font-bold">Real-Time Monitoring</h1>
           <p className="text-muted-foreground mt-1">
@@ -187,74 +189,83 @@ export default function MonitoringPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {/* Connection Status */}
-          <div
-            role="status"
-            aria-live="polite"
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-md border ${
-            isConnected
-              ? 'bg-green-50 border-green-200 text-green-700'
-              : 'bg-red-50 border-red-200 text-red-700'
-          }`}>
-            {isConnected ? (
-              <>
-                <Wifi className="h-4 w-4" />
-                <span className="text-sm font-medium">Connected</span>
-              </>
-            ) : (
-              <>
-                <WifiOff className="h-4 w-4" />
-                <span className="text-sm font-medium">Disconnected</span>
-              </>
-            )}
-          </div>
-
-          {/* Controls */}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setIsPaused(!isPaused)}
-            className="gap-2"
-          >
-            {isPaused ? (
-              <>
-                <Activity className="h-4 w-4" />
-                Resume
-              </>
-            ) : (
-              <>
-                <RefreshCw className="h-4 w-4" />
-                Pause
-              </>
-            )}
+          <Button variant="ghost" size="icon" className="relative">
+            <Bell className="h-5 w-5" />
+            <span className="absolute top-1 right-1 h-2 w-2 bg-red-500 rounded-full"></span>
           </Button>
-
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-2"
-            onClick={() => {
-              // Export current metric data as CSV
-              const rows = [['Time', 'Value']]
-              for (const point of currentMetricData) {
-                rows.push([point.timestamp, String(point.value)])
-              }
-              const csv = rows.map(row => row.join(',')).join('\n')
-              const blob = new Blob([csv], { type: 'text/csv' })
-              const url = URL.createObjectURL(blob)
-              const a = document.createElement('a')
-              a.href = url
-              a.download = `${selectedInstrument}-${selectedMetric}-${new Date().toISOString().split('T')[0]}.csv`
-              a.click()
-              URL.revokeObjectURL(url)
-
-              // TODO: For SOC 2/HIPAA compliance, add role-based access control and audit logging
-            }}
-          >
-            <Download className="h-4 w-4" />
-            Export
-          </Button>
+          <ThemeToggle />
         </div>
+      </div>
+
+      {/* Connection Status and Controls */}
+      <div className="flex items-center gap-2">
+        {/* Connection Status */}
+        <div
+          role="status"
+          aria-live="polite"
+          className={`flex items-center gap-2 px-3 py-1.5 rounded-md border ${
+          isConnected
+            ? 'bg-green-50 border-green-200 text-green-700'
+            : 'bg-red-50 border-red-200 text-red-700'
+        }`}>
+          {isConnected ? (
+            <>
+              <Wifi className="h-4 w-4" />
+              <span className="text-sm font-medium">Connected</span>
+            </>
+          ) : (
+            <>
+              <WifiOff className="h-4 w-4" />
+              <span className="text-sm font-medium">Disconnected</span>
+            </>
+          )}
+        </div>
+
+        {/* Controls */}
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setIsPaused(!isPaused)}
+          className="gap-2"
+        >
+          {isPaused ? (
+            <>
+              <Activity className="h-4 w-4" />
+              Resume
+            </>
+          ) : (
+            <>
+              <RefreshCw className="h-4 w-4" />
+              Pause
+            </>
+          )}
+        </Button>
+
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-2"
+          onClick={() => {
+            // Export current metric data as CSV
+            const rows = [['Time', 'Value']]
+            for (const point of currentMetricData) {
+              rows.push([point.timestamp, String(point.value)])
+            }
+            const csv = rows.map(row => row.join(',')).join('\n')
+            const blob = new Blob([csv], { type: 'text/csv' })
+            const url = URL.createObjectURL(blob)
+            const a = document.createElement('a')
+            a.href = url
+            a.download = `${selectedInstrument}-${selectedMetric}-${new Date().toISOString().split('T')[0]}.csv`
+            a.click()
+            URL.revokeObjectURL(url)
+
+            // TODO: For SOC 2/HIPAA compliance, add role-based access control and audit logging
+          }}
+        >
+          <Download className="h-4 w-4" />
+          Export
+        </Button>
       </div>
 
       {/* Instrument Selector */}
