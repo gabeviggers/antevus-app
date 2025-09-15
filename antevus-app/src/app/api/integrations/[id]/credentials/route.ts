@@ -7,6 +7,7 @@ export const revalidate = 0
 import { z } from 'zod'
 import { getServerSession } from '@/lib/auth/session'
 import { auditLogger } from '@/lib/audit/logger'
+import { validateCSRFToken, createCSRFTokenForUser } from '@/lib/security/csrf'
 
 // AES-256-GCM encryption configuration
 const ALGORITHM = 'aes-256-gcm'
@@ -15,8 +16,37 @@ const TAG_LENGTH = 16
 const IV_LENGTH = 16
 const ITERATIONS = 100000 // PBKDF2 iterations
 
-// Get encryption key from environment or generate secure default
-const MASTER_KEY = process.env.CREDENTIAL_ENCRYPTION_KEY || crypto.randomBytes(32).toString('hex')
+// Get encryption key from environment - REQUIRED for production
+const MASTER_KEY = (() => {
+  const key = process.env.CREDENTIAL_ENCRYPTION_KEY
+
+  if (!key) {
+    const errorMsg = 'CREDENTIAL_ENCRYPTION_KEY environment variable is required. ' +
+      'Please set it to a 64-character hex string (32 bytes) generated with: ' +
+      'openssl rand -hex 32'
+
+    // In development, throw a clear error
+    if (process.env.NODE_ENV !== 'production') {
+      console.error(`[CRITICAL] ${errorMsg}`)
+      // Use a development-only key for local testing
+      // This ensures developers know they need to set the key
+      return 'DEVELOPMENT_ONLY_KEY_DO_NOT_USE_IN_PRODUCTION_' + crypto.randomBytes(16).toString('hex')
+    }
+
+    // In production, fail fast and clearly
+    throw new Error(errorMsg)
+  }
+
+  // Validate key format (should be 64 hex chars = 32 bytes)
+  if (!/^[0-9a-fA-F]{64}$/.test(key)) {
+    throw new Error(
+      'CREDENTIAL_ENCRYPTION_KEY must be a 64-character hex string (32 bytes). ' +
+      'Generate with: openssl rand -hex 32'
+    )
+  }
+
+  return key
+})()
 
 // Secure credential storage (in production, use encrypted database)
 interface EncryptedCredential {
@@ -30,13 +60,25 @@ interface EncryptedCredential {
 }
 
 const credentialStore = new Map<string, EncryptedCredential>()
-// Validation schema for credentials
+// Validation schema for credentials - requires at least one field
 const CredentialSchema = z.object({
   apiKey: z.string().min(1).max(500).optional(),
   webhookUrl: z.string().url().optional(),
   accessToken: z.string().optional(),
   secretKey: z.string().optional()
-})
+}).refine(
+  (data) => {
+    // Ensure at least one credential field is provided
+    const hasCredentials = Object.keys(data).some(key =>
+      data[key as keyof typeof data] !== undefined &&
+      data[key as keyof typeof data] !== ''
+    )
+    return hasCredentials
+  },
+  {
+    message: 'At least one credential field must be provided (apiKey, webhookUrl, accessToken, or secretKey)'
+  }
+)
 
 // Type for credential data
 interface CredentialData {
@@ -123,8 +165,25 @@ export async function POST(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    // Validate CSRF token for state-changing operations
+    const csrfValidation = validateCSRFToken(request, session.user.id, session.user)
+    if (!csrfValidation.valid) {
+      return NextResponse.json(
+        { error: csrfValidation.error || 'Invalid CSRF token' },
+        { status: 403 }
+      )
+    }
+
     const { id: integrationId } = await params
     const body = await request.json()
+
+    // Early check for empty or null body
+    if (!body || (typeof body === 'object' && Object.keys(body).length === 0)) {
+      return NextResponse.json({
+        error: 'Invalid request',
+        details: 'Request body cannot be empty. At least one credential field must be provided.'
+      }, { status: 400 })
+    }
 
     // Validate credentials
     const validation = CredentialSchema.safeParse(body)
@@ -189,6 +248,9 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    // Generate new CSRF token for future requests
+    const csrfToken = createCSRFTokenForUser(session.user.id)
+
     const { id: integrationId } = await params
     const credentialId = `${integrationId}_${session.user.id}`
     const stored = credentialStore.get(credentialId)
@@ -196,7 +258,12 @@ export async function GET(
     if (!stored || stored.userId !== session.user.id) {
       return NextResponse.json({
         configured: false,
-        message: 'No credentials configured'
+        message: 'No credentials configured',
+        csrfToken // Still provide token for future POST requests
+      }, {
+        headers: {
+          'X-CSRF-Token': csrfToken
+        }
       })
     }
 
@@ -214,14 +281,24 @@ export async function GET(
         configured: true,
         configuredAt: stored.createdAt,
         // Only send field names, not values
-        configuredFields: Object.keys(decrypted)
+        configuredFields: Object.keys(decrypted),
+        csrfToken // Include token for future requests
+      }, {
+        headers: {
+          'X-CSRF-Token': csrfToken
+        }
       })
     } catch (error) {
       // If decryption fails, still indicate credentials exist
       return NextResponse.json({
         configured: true,
         configuredAt: stored.createdAt,
-        configuredFields: ['encrypted']
+        configuredFields: ['encrypted'],
+        csrfToken
+      }, {
+        headers: {
+          'X-CSRF-Token': csrfToken
+        }
       })
     }
   } catch (error) {
@@ -239,6 +316,15 @@ export async function DELETE(
 
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    // Validate CSRF token for state-changing operations
+    const csrfValidation = validateCSRFToken(request, session.user.id, session.user)
+    if (!csrfValidation.valid) {
+      return NextResponse.json(
+        { error: csrfValidation.error || 'Invalid CSRF token' },
+        { status: 403 }
+      )
     }
 
     const { id: integrationId } = await params

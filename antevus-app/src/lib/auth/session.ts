@@ -14,13 +14,15 @@ function getJWTSecret(): string {
     return randomBytes(32).toString('hex')
   }
 
-  // In production, we'll check at runtime
-  console.warn('JWT_SECRET not set - using fallback')
-  return 'temporary-secret-replace-in-production'
+  // In production, require explicit secret
+  throw new Error('JWT_SECRET is required in production')
 }
 
 const JWT_SECRET = getJWTSecret()
 const secretKey = new TextEncoder().encode(JWT_SECRET)
+
+// Export cookie name for consistency across the app
+export const SESSION_COOKIE_NAME = 'antevus-app-auth'
 
 export interface SessionData {
   user: User
@@ -51,7 +53,7 @@ export async function createSecureSession(user: User): Promise<string> {
 
 export async function getServerSession(request: NextRequest): Promise<SessionData | null> {
   try {
-    const cookie = request.cookies.get('session')
+    const cookie = request.cookies.get(SESSION_COOKIE_NAME)
 
     if (!cookie?.value) {
       return null

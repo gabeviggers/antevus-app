@@ -4,7 +4,7 @@
  * Test script to verify credential security implementation
  */
 
-const BASE_URL = 'http://localhost:3001';
+const BASE_URL = process.env.BASE_URL || process.argv[2] || 'http://localhost:3001';
 
 // Test 1: Verify generic endpoint rejects credentials
 async function testCredentialRejection() {
@@ -22,12 +22,11 @@ async function testCredentialRejection() {
 
   for (const testCase of testCases) {
     try {
+      const headers = { 'Content-Type': 'application/json' }
+      if (process.env.CSRF_TOKEN) headers['X-CSRF-Token'] = process.env.CSRF_TOKEN
       const response = await fetch(`${BASE_URL}/api/integrations`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-CSRF-Token': 'test-token', // Would need real token in production
-        },
+        headers,
         body: JSON.stringify({
           integrationId: 'test-integration',
           name: 'Test Integration',
@@ -35,7 +34,9 @@ async function testCredentialRejection() {
         }),
       });
 
-      const data = await response.json();
+      const raw = await response.text()
+      let data = {}
+      try { data = raw ? JSON.parse(raw) : {} } catch {}
 
       if (testCase.shouldReject) {
         if (response.status === 400 && data.error?.includes('credentials')) {
@@ -45,7 +46,7 @@ async function testCredentialRejection() {
           console.log(`   Response: ${response.status} - ${JSON.stringify(data)}`);
         }
       } else {
-        if (response.status !== 400 || !data.error?.includes('credentials')) {
+        if (response.ok) {
           console.log(`✅ PASS: Correctly accepted ${Object.keys(testCase.config)[0]}`);
         } else {
           console.log(`❌ FAIL: Should have accepted ${Object.keys(testCase.config)[0]}`);
@@ -95,25 +96,26 @@ async function testSecurityDocClaims() {
   console.log('\n=== Test 3: Security documentation accuracy ===');
 
   const fs = require('fs');
-  const securityDoc = fs.readFileSync('./SECURITY.md', 'utf8');
+  const path = require('path');
+  const securityDoc = fs.readFileSync(path.resolve(__dirname, 'SECURITY.md'), 'utf8');
 
   const claims = [
     {
       claim: 'AES-256-GCM encryption',
       check: securityDoc.includes('AES-256-GCM') &&
-             fs.readFileSync('./src/app/api/integrations/[id]/credentials/route.ts', 'utf8').includes('aes-256-gcm')
+             fs.readFileSync(path.resolve(__dirname, 'src/app/api/integrations/[id]/credentials/route.ts'), 'utf8').includes('aes-256-gcm')
     },
     {
       claim: 'PBKDF2 key derivation',
-      check: fs.readFileSync('./src/app/api/integrations/[id]/credentials/route.ts', 'utf8').includes('pbkdf2')
+      check: fs.readFileSync(path.resolve(__dirname, 'src/app/api/integrations/[id]/credentials/route.ts'), 'utf8').includes('pbkdf2')
     },
     {
       claim: 'Generic endpoint rejects credentials',
-      check: fs.readFileSync('./src/app/api/integrations/route.ts', 'utf8').includes('forbiddenFields')
+      check: fs.readFileSync(path.resolve(__dirname, 'src/app/api/integrations/route.ts'), 'utf8').includes('forbiddenFields')
     },
     {
       claim: '100,000 iterations for PBKDF2',
-      check: fs.readFileSync('./src/app/api/integrations/[id]/credentials/route.ts', 'utf8').includes('100000')
+      check: /100_?000/.test(fs.readFileSync(path.resolve(__dirname, 'src/app/api/integrations/[id]/credentials/route.ts'), 'utf8'))
     }
   ];
 

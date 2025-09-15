@@ -45,12 +45,17 @@ This document outlines the comprehensive security measures implemented in the An
   - `/src/app/api/integrations/[id]/credentials/route.ts` (credential validation)
   - `/src/components/integrations/integration-config-modal.tsx` (client-side)
 
-### 4. ✅ CSRF Protection
+### 4. ✅ CSRF Protection (COMPREHENSIVE)
 **Issue**: No CSRF protection on state-changing operations
 **Solution**:
 - Generate secure CSRF tokens for each session
-- Validate tokens on all POST/DELETE requests
-- Implementation: `/src/app/api/integrations/route.ts`
+- Validate tokens on ALL POST/DELETE requests across all endpoints
+- Centralized CSRF utilities for consistent protection
+- Comprehensive audit logging for CSRF failures
+- Implementation:
+  - `/src/lib/security/csrf.ts` - Shared CSRF utilities
+  - `/src/app/api/integrations/route.ts` - Protected POST/DELETE operations
+  - `/src/app/api/integrations/[id]/credentials/route.ts` - Protected credential operations
 
 ### 5. ✅ Comprehensive Audit Logging (ENTERPRISE-GRADE)
 **Issue**: Limited audit logging for compliance
@@ -146,6 +151,12 @@ ENABLE_SOC2_COMPLIANCE=true
 ### Authorization
 - Role-based access control (Admin, Scientist, Operator, Viewer)
 - Per-resource authorization checks
+
+### CSRF Protection
+- X-CSRF-Token header validation on all state-changing operations
+- Secure token generation with 1-hour expiry
+- Automatic token refresh on GET requests
+- Comprehensive failure logging for security monitoring
 
 ### Data Protection
 - **AES-256-GCM encryption** for all credentials with PBKDF2 key derivation

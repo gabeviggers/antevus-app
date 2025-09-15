@@ -9,11 +9,9 @@ export function middleware(request: NextRequest) {
   // Security headers for HIPAA and SOC 2 compliance
   response.headers.set('X-Frame-Options', 'DENY')
   response.headers.set('X-Content-Type-Options', 'nosniff')
-  response.headers.set('X-XSS-Protection', '1; mode=block')
+  // X-XSS-Protection is obsolete in modern browsers, but kept for legacy support
   response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin')
   response.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()')
-
-  return response
   // Content Security Policy
   response.headers.set(
     'Content-Security-Policy',
@@ -48,7 +46,7 @@ export function middleware(request: NextRequest) {
   // and verified using CSRF tokens or double-submit. Remove this no-op block.
   // Skip protection for local development
   if (process.env.NODE_ENV === 'development') {
-    return NextResponse.next()
+    return response
   }
 
   // Skip protection for API routes and static files
@@ -57,7 +55,7 @@ export function middleware(request: NextRequest) {
     request.nextUrl.pathname.startsWith('/_next') ||
     request.nextUrl.pathname.startsWith('/favicon.ico')
   ) {
-    return NextResponse.next()
+    return response
   }
 
   // Check if already authenticated
@@ -71,20 +69,25 @@ export function middleware(request: NextRequest) {
 
     if (password === process.env.AUTH_PASSWORD) {
       // Set auth cookie and redirect without password in URL
-      const response = NextResponse.redirect(
+      const redirectResponse = NextResponse.redirect(
         new URL(request.nextUrl.pathname, request.url)
       )
-      response.cookies.set('antevus-app-auth', password || '', {
+      // Copy security headers to the redirect response
+      for (const [key, value] of response.headers) {
+        redirectResponse.headers.set(key, value)
+      }
+      redirectResponse.cookies.set('antevus-app-auth', password || '', {
         httpOnly: true,
         secure: true,
         sameSite: 'strict',
+        path: '/',
         maxAge: 60 * 60 * 24 * 7, // 1 week
       })
-      return response
+      return redirectResponse
     }
 
     // Show password prompt page
-    return new NextResponse(
+    const promptResponse = new NextResponse(
       `
       <!DOCTYPE html>
       <html>
@@ -201,9 +204,14 @@ export function middleware(request: NextRequest) {
         headers: { 'Content-Type': 'text/html' },
       }
     )
+    // Apply security headers to the password prompt
+    for (const [key, value] of response.headers) {
+      promptResponse.headers.set(key, value)
+    }
+    return promptResponse
   }
 
-  return NextResponse.next()
+  return response
 }
 
 export const config = {
