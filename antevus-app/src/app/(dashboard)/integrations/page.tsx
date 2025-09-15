@@ -15,7 +15,6 @@ import { IntegrationCard } from '@/components/integrations/integration-card'
 import { IntegrationConfigModal } from '@/components/integrations/integration-config-modal'
 import {
   Search,
-  Filter,
   RefreshCw,
   Bell,
   Zap,
@@ -85,7 +84,7 @@ export default function IntegrationsPage() {
 
   const handleDisconnect = async (integration: Integration) => {
     // Log audit event
-    auditLogger.logEvent(user, 'integration.disconnect', {
+    auditLogger.logEvent(user, 'settings.update', {
       resourceType: 'integration',
       resourceId: integration.id,
       success: true,
@@ -111,7 +110,7 @@ export default function IntegrationsPage() {
     setIsSyncing(true)
 
     // Log audit event
-    auditLogger.logEvent(user, 'integration.configure', {
+    auditLogger.logEvent(user, 'settings.update', {
       resourceType: 'integration',
       resourceId: integration.id,
       success: true,
