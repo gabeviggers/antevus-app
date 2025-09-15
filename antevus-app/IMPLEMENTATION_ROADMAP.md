@@ -107,7 +107,7 @@
 #### 4. Real-Time Monitoring ✅ COMPLETED
 - [x] Live-updating line charts (mock data stream)
 - [x] QC threshold indicators
-- [x] Temperature, pressure, progress metrics
+- [x] Temperature, pressure, flow rate, vibration metrics
 - [x] WebSocket connection indicator
 
 #### 5. Integrations Hub 🚧 NOT STARTED

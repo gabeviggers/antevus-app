@@ -21,7 +21,7 @@ const navigation = [
   { name: 'Monitoring', href: '/monitoring', icon: Activity },
   { name: 'Run History', href: '/runs', icon: History },
   { name: 'Integrations', href: '/dashboard/integrations', icon: Plug },
-  { name: 'API Playground', href: '/dashboard/api', icon: Code2 },
+  { name: 'API Playground', href: '/dashboard/api-playground', icon: Code2 },
 ]
 
 interface SidebarProps {
@@ -41,6 +41,13 @@ export function Sidebar({ sidebarOpen, setSidebarOpen, collapsed, setCollapsed }
     .map(n => n[0])
     .join('')
     .toUpperCase() || 'U'
+
+  // Find the most specific active route
+  // This prevents parent routes from being active when on child routes
+  const activeHref = navigation
+    .map(item => item.href)
+    .filter(href => pathname === href || pathname.startsWith(`${href}/`))
+    .sort((a, b) => b.length - a.length)[0] || null
 
   return (
     <>
@@ -112,8 +119,7 @@ export function Sidebar({ sidebarOpen, setSidebarOpen, collapsed, setCollapsed }
           <div className="flex-1 overflow-y-auto py-4">
             <ul className="px-2 space-y-1">
             {navigation.map((item) => {
-              const isActive =
-                pathname === item.href || pathname.startsWith(`${item.href}/`)
+              const isActive = item.href === activeHref
               return (
                 <li key={item.name}>
                   <Link
