@@ -22,6 +22,7 @@ This repository contains the product dashboard for Antevus, deployed at [app.ant
 - **Authentication**: Password protection (NextAuth.js coming soon)
 - **Deployment**: Vercel
 - **Database**: PostgreSQL (via Supabase/Neon)
+- **Charts**: Recharts (v3.2.0 - pinned for React 19 compatibility)
 
 ## Getting Started
 

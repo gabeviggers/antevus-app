@@ -61,8 +61,13 @@ export const QC_THRESHOLDS: QCThreshold[] = [
   }
 ]
 
-export const THRESHOLDS_BY_METRIC: Record<keyof MetricData, QCThreshold> = QC_THRESHOLDS
-  .reduce((acc, t) => (acc[t.metric] = t, acc), {} as Record<keyof MetricData, QCThreshold>)
+// Create indexed map for efficient threshold lookup
+const THRESHOLDS_BY_METRIC: Record<keyof MetricData, QCThreshold> = {
+  temperature: QC_THRESHOLDS[0],
+  pressure: QC_THRESHOLDS[1],
+  flowRate: QC_THRESHOLDS[2],
+  vibration: QC_THRESHOLDS[3]
+}
 
 const INSTRUMENTS_FOR_MONITORING = [
   'Illumina NovaSeq X',
@@ -79,7 +84,7 @@ function generateHistoricalData(
 ): MetricPoint[] {
   const data: MetricPoint[] = []
   const now = Date.now()
-  const threshold = QC_THRESHOLDS.find(t => t.metric === metric)!
+  const threshold = THRESHOLDS_BY_METRIC[metric]
 
   for (let i = points - 1; i >= 0; i--) {
     const timestamp = new Date(now - i * 5000).toISOString()
@@ -143,7 +148,7 @@ export function generateNewDataPoint(
   instrumentId: string,
   instrumentName: string
 ): MetricPoint {
-  const threshold = QC_THRESHOLDS.find(t => t.metric === metric)!
+  const threshold = THRESHOLDS_BY_METRIC[metric]
   let newValue = lastValue
 
   // Generate realistic changes based on metric type
@@ -183,16 +188,26 @@ export function generateNewDataPoint(
   }
 }
 
+/**
+ * Check QC status for a given value and metric
+ * Boundary semantics: min/max values are inclusive for "pass" status
+ * - Pass: value is within [min, max] inclusive
+ * - Warning: value is outside [min, max] but within warning thresholds
+ * - Fail: value is outside warning thresholds
+ */
 export function checkQCStatus(value: number, metric: keyof MetricData): 'pass' | 'warning' | 'fail' {
-  const threshold = QC_THRESHOLDS.find(t => t.metric === metric)
+  const threshold = THRESHOLDS_BY_METRIC[metric]
   if (!threshold) return 'pass'
 
-  if (value < threshold.min || value > threshold.max) {
+  // Check if value is outside warning thresholds (fail condition)
+  if (value < threshold.warning.min || value > threshold.warning.max) {
     return 'fail'
   }
-  if (value < threshold.warning.min || value > threshold.warning.max) {
+  // Check if value is outside normal range but within warning (warning condition)
+  if (value < threshold.min || value > threshold.max) {
     return 'warning'
   }
+  // Value is within normal range (pass condition)
   return 'pass'
 }
 

@@ -112,7 +112,8 @@ export function Sidebar({ sidebarOpen, setSidebarOpen, collapsed, setCollapsed }
           <div className="flex-1 overflow-y-auto py-4">
             <ul className="px-2 space-y-1">
             {navigation.map((item) => {
-              const isActive = pathname === item.href
+              const isActive =
+                pathname === item.href || pathname.startsWith(`${item.href}/`)
               return (
                 <li key={item.name}>
                   <Link
@@ -122,6 +123,7 @@ export function Sidebar({ sidebarOpen, setSidebarOpen, collapsed, setCollapsed }
                         ? 'bg-primary text-primary-foreground'
                         : 'hover:bg-accent hover:text-accent-foreground'
                     } ${collapsed ? 'justify-center' : ''}`}
+                    aria-current={isActive ? 'page' : undefined}
                     title={collapsed ? item.name : undefined}
                   >
                     <item.icon className="h-5 w-5 flex-shrink-0" />

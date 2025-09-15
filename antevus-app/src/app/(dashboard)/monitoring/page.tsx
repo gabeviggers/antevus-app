@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import {
   LineChart,
   Line,
@@ -48,7 +48,7 @@ export default function MonitoringPage() {
   const [isPaused, setIsPaused] = useState(false)
   const [updateInterval, setUpdateInterval] = useState(2000) // 2 seconds
   const [showThresholds, setShowThresholds] = useState(true)
-  const intervalRef = useRef<NodeJS.Timeout | null>(null)
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   // Simulate WebSocket connection status changes
   useEffect(() => {
@@ -74,7 +74,14 @@ export default function MonitoringPage() {
       setMonitoringData(prevData => {
         const newData = new Map(prevData)
 
+        // Performance optimization: Update only the selected instrument
+        // Other instruments update at a slower rate (every 10 seconds)
         newData.forEach((metrics, instrumentId) => {
+          // Skip update for non-selected instruments most of the time
+          if (instrumentId !== selectedInstrument && Math.random() > 0.2) {
+            return
+          }
+
           const updatedMetrics = { ...metrics }
 
           // Update each metric
@@ -106,27 +113,26 @@ export default function MonitoringPage() {
         clearInterval(intervalRef.current)
       }
     }
-  }, [updateInterval, isPaused, isConnected])
+  }, [updateInterval, isPaused, isConnected, selectedInstrument])
 
   const currentInstrumentData = monitoringData.get(selectedInstrument)
   const currentMetricData = currentInstrumentData?.[selectedMetric] || []
   const latestValue = currentMetricData[currentMetricData.length - 1]?.value || 0
   const qcStatus = checkQCStatus(latestValue, selectedMetric)
-  const threshold = QC_THRESHOLDS.find(t => t.metric === selectedMetric)!
+  const threshold = QC_THRESHOLDS.find(t => t.metric === selectedMetric)
 
-  // Format data for Recharts
-  const chartData = currentMetricData.map(point => ({
-    time: new Date(point.timestamp).toLocaleTimeString('en-US', {
+  // Return early if threshold not found (defensive programming)
+  if (!threshold) return null
+
+  // Format data for Recharts - memoized and optimized
+  const chartData = useMemo(() => currentMetricData.map(point => ({
+    time: new Date(point.timestamp).toLocaleTimeString(undefined, {
       hour: '2-digit',
       minute: '2-digit',
       second: '2-digit'
     }),
-    value: point.value,
-    min: threshold.min,
-    max: threshold.max,
-    warningMin: threshold.warning.min,
-    warningMax: threshold.warning.max
-  }))
+    value: point.value
+  })), [currentMetricData])
 
   const getMetricIcon = (metric: keyof MetricData) => {
     switch (metric) {
@@ -175,7 +181,10 @@ export default function MonitoringPage() {
         </div>
         <div className="flex items-center gap-2">
           {/* Connection Status */}
-          <div className={`flex items-center gap-2 px-3 py-1.5 rounded-md border ${
+          <div
+            role="status"
+            aria-live="polite"
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-md border ${
             isConnected
               ? 'bg-green-50 border-green-200 text-green-700'
               : 'bg-red-50 border-red-200 text-red-700'
@@ -213,7 +222,28 @@ export default function MonitoringPage() {
             )}
           </Button>
 
-          <Button variant="outline" size="sm" className="gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2"
+            onClick={() => {
+              // Export current metric data as CSV
+              const rows = [['Time', 'Value']]
+              for (const point of currentMetricData) {
+                rows.push([point.timestamp, String(point.value)])
+              }
+              const csv = rows.map(row => row.join(',')).join('\n')
+              const blob = new Blob([csv], { type: 'text/csv' })
+              const url = URL.createObjectURL(blob)
+              const a = document.createElement('a')
+              a.href = url
+              a.download = `${selectedInstrument}-${selectedMetric}-${new Date().toISOString().split('T')[0]}.csv`
+              a.click()
+              URL.revokeObjectURL(url)
+
+              // TODO: For SOC 2/HIPAA compliance, add role-based access control and audit logging
+            }}
+          >
             <Download className="h-4 w-4" />
             Export
           </Button>
@@ -221,7 +251,7 @@ export default function MonitoringPage() {
       </div>
 
       {/* Instrument Selector */}
-      <div className="flex gap-2">
+      <div className="flex gap-2 overflow-x-auto pb-1">
         {Array.from(monitoringData.keys()).map(instrumentId => {
           const data = monitoringData.get(instrumentId)!
           const name = data.temperature[0]?.instrumentName || instrumentId
@@ -239,7 +269,7 @@ export default function MonitoringPage() {
       </div>
 
       {/* Metrics Grid */}
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {(Object.keys(METRIC_DISPLAY_NAMES) as Array<keyof MetricData>).map(metric => {
           const data = monitoringData.get(selectedInstrument)?.[metric] || []
           const latest = data[data.length - 1]?.value || 0
