@@ -3,6 +3,7 @@
 import { useState, useMemo } from 'react'
 import { useAuth } from '@/contexts/auth-context'
 import { auditLogger } from '@/lib/audit/logger'
+import { IntegrationErrorBoundary } from '@/components/error-boundary'
 import {
   mockIntegrations,
   INTEGRATION_CATEGORIES,
@@ -133,20 +134,74 @@ export default function IntegrationsPage() {
   const handleSyncAll = async () => {
     setIsSyncing(true)
 
-    // Update all connected integrations to syncing status
+    const connectedIntegrations = integrations.filter(i => i.status === 'connected')
+
+    // Set all connected integrations to syncing status
     setIntegrations(prev => prev.map(i =>
       i.status === 'connected' ? { ...i, status: 'syncing' as const } : i
     ))
 
-    // Simulate sync process
-    setTimeout(() => {
+    try {
+      // Proper async handling with Promise.all to avoid race conditions
+      const syncResults = await Promise.all(
+        connectedIntegrations.map(async (integration) => {
+          try {
+            // Simulate individual sync with random delay
+            await new Promise(resolve => setTimeout(resolve, Math.random() * 2000 + 1000))
+
+            // Log successful sync
+            auditLogger.logEvent(user, 'integration.sync', {
+              resourceType: 'integration',
+              resourceId: integration.id,
+              success: true,
+              metadata: {
+                integrationName: integration.name,
+                syncTime: new Date().toISOString()
+              }
+            })
+
+            return {
+              ...integration,
+              status: 'connected' as const,
+              lastSync: new Date().toISOString(),
+              error: undefined
+            }
+          } catch (error) {
+            // Handle individual sync errors
+            auditLogger.logEvent(user, 'integration.error', {
+              resourceType: 'integration',
+              resourceId: integration.id,
+              success: false,
+              errorMessage: error instanceof Error ? error.message : 'Sync failed',
+              metadata: {
+                integrationName: integration.name
+              }
+            })
+
+            return {
+              ...integration,
+              status: 'error' as const,
+              error: 'Sync failed'
+            }
+          }
+        })
+      )
+
+      // Update all integrations with sync results atomically
+      setIntegrations(prev => prev.map(integration => {
+        const syncResult = syncResults.find(r => r.id === integration.id)
+        return syncResult || integration
+      }))
+    } catch (error) {
+      console.error('Sync all failed:', error)
+
+      // Revert all to connected status on catastrophic failure
       setIntegrations(prev => prev.map(i =>
-        i.status === 'syncing'
-          ? { ...i, status: 'connected' as const, lastSync: new Date().toISOString() }
-          : i
+        i.status === 'syncing' ? { ...i, status: 'connected' as const } : i
       ))
+    } finally {
       setIsSyncing(false)
-    }, 3000)
+    }
   }
 
   return (
@@ -295,17 +350,19 @@ export default function IntegrationsPage() {
                   <h2 className="text-xl font-semibold mb-1">{categoryInfo.label}</h2>
                   <p className="text-sm text-muted-foreground">{categoryInfo.description}</p>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {categoryIntegrations.map(integration => (
-                    <IntegrationCard
-                      key={integration.id}
-                      integration={integration}
-                      onConnect={handleConnect}
-                      onDisconnect={handleDisconnect}
-                      onConfigure={handleConfigure}
-                    />
-                  ))}
-                </div>
+                <IntegrationErrorBoundary>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {categoryIntegrations.map(integration => (
+                      <IntegrationCard
+                        key={integration.id}
+                        integration={integration}
+                        onConnect={handleConnect}
+                        onDisconnect={handleDisconnect}
+                        onConfigure={handleConfigure}
+                      />
+                    ))}
+                  </div>
+                </IntegrationErrorBoundary>
               </div>
             )
           })}

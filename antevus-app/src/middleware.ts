@@ -41,6 +41,15 @@ export function middleware(request: NextRequest) {
     response.headers.set('Pragma', 'no-cache')
     response.headers.set('Expires', '0')
   }
+
+  // Add CSRF protection for state-changing methods
+  if (request.method !== 'GET' && request.method !== 'HEAD') {
+    // Set SameSite cookie attribute for CSRF protection
+    const cookieHeader = response.headers.get('Set-Cookie')
+    if (cookieHeader && !cookieHeader.includes('SameSite')) {
+      response.headers.set('Set-Cookie', `${cookieHeader}; SameSite=Strict`)
+    }
+  }
   // Skip protection for local development
   if (process.env.NODE_ENV === 'development') {
     return NextResponse.next()

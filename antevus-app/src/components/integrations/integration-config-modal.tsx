@@ -77,7 +77,7 @@ export function IntegrationConfigModal({
     setIsTesting(false)
   }
 
-  const handleSave = () => {
+  const handleSave = async () => {
     // Validate configuration before saving
     const validation = IntegrationConfigSchema.safeParse(config)
 
@@ -89,15 +89,54 @@ export function IntegrationConfigModal({
     // Clear any previous validation errors
     setValidationErrors([])
 
-    // Never send actual credentials to client - this will be handled server-side
-    const sanitizedConfig = {
-      ...config,
-      apiKey: config.apiKey ? '[CONFIGURED]' : undefined,
-      webhookUrl: config.webhookUrl ? '[CONFIGURED]' : undefined
-    }
+    try {
+      // Send credentials directly to secure server-side storage
+      if (config.apiKey || config.webhookUrl) {
+        const response = await fetch(`/api/integrations/${integration.id}/credentials`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            apiKey: config.apiKey,
+            webhookUrl: config.webhookUrl
+          })
+        })
 
-    onSave(integration, sanitizedConfig)
-    onClose()
+        if (!response.ok) {
+          throw new Error('Failed to store credentials securely')
+        }
+      }
+
+      // Only send non-sensitive config to parent component
+      const nonSensitiveConfig = {
+        syncInterval: config.syncInterval,
+        enableNotifications: config.enableNotifications,
+        autoSync: config.autoSync,
+        projectId: config.projectId,
+        channel: config.channel,
+        workspace: config.workspace,
+        folder: config.folder,
+        // Mark as configured without exposing values
+        hasCredentials: !!(config.apiKey || config.webhookUrl)
+      }
+
+      onSave(integration, nonSensitiveConfig)
+
+      // Clear sensitive data from state immediately
+      setConfig(prev => ({
+        ...prev,
+        apiKey: undefined,
+        webhookUrl: undefined
+      }))
+
+      onClose()
+    } catch (error) {
+      console.error('Error saving integration:', error)
+      setValidationErrors([{
+        code: 'custom',
+        message: 'Failed to save credentials securely. Please try again.',
+        path: []
+      }])
+    }
   }
 
   const getFieldError = (field: string): string | undefined => {
