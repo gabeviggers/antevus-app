@@ -239,7 +239,7 @@ export function IntegrationErrorBoundary({ children }: { children: ReactNode }) 
             <div>
               <h3 className="font-medium">Integration Temporarily Unavailable</h3>
               <p className="text-sm text-muted-foreground">
-                We're having trouble loading this integration. Please try again.
+                We&apos;re having trouble loading this integration. Please try again.
               </p>
             </div>
           </div>

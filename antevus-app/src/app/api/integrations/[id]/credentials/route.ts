@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { getServerSession } from '@/lib/auth/session'
 import { auditLogger } from '@/lib/audit/logger'
-import { randomBytes } from 'crypto'
 
 // Secure credential storage (in production, use encrypted database)
 const credentialStore = new Map<string, {
@@ -20,18 +19,26 @@ const CredentialSchema = z.object({
   secretKey: z.string().optional()
 })
 
+// Type for credential data
+interface CredentialData {
+  apiKey?: string
+  webhookUrl?: string
+  accessToken?: string
+  secretKey?: string
+}
+
 // Encrypt credentials (in production, use proper KMS)
-function encryptCredentials(credentials: any): string {
+function encryptCredentials(credentials: CredentialData): string {
   // In production, use AWS KMS or similar
   const encrypted = Buffer.from(JSON.stringify(credentials)).toString('base64')
   return encrypted
 }
 
 // Decrypt credentials (server-side only)
-function decryptCredentials(encryptedData: string): any {
+function decryptCredentials(encryptedData: string): CredentialData {
   // In production, use AWS KMS or similar
   const decrypted = Buffer.from(encryptedData, 'base64').toString()
-  return JSON.parse(decrypted)
+  return JSON.parse(decrypted) as CredentialData
 }
 
 export async function POST(
