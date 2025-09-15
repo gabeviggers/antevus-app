@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { z } from 'zod'
 import { type Integration, type IntegrationConfig } from '@/lib/mock-data/integrations'
 import { Button } from '@/components/ui/button'
@@ -48,10 +48,16 @@ export function IntegrationConfigModal({
   onClose,
   onSave
 }: IntegrationConfigModalProps) {
-  const [config, setConfig] = useState<IntegrationConfig>({})
+  // Non-sensitive config in state
+  const [config, setConfig] = useState<Omit<IntegrationConfig, 'apiKey' | 'webhookUrl' | 'secretKey'>>({})
   const [isTesting, setIsTesting] = useState(false)
   const [testResult, setTestResult] = useState<'success' | 'error' | null>(null)
   const [validationErrors, setValidationErrors] = useState<z.ZodIssue[]>([])
+
+  // Use refs for sensitive inputs to avoid storing in state
+  const apiKeyRef = useRef<HTMLInputElement>(null)
+  const webhookUrlRef = useRef<HTMLInputElement>(null)
+  const secretKeyRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (integration?.config) {
@@ -78,8 +84,16 @@ export function IntegrationConfigModal({
   }
 
   const handleSave = async () => {
+    // Gather all config including sensitive data from refs
+    const fullConfig = {
+      ...config,
+      apiKey: apiKeyRef.current?.value,
+      webhookUrl: webhookUrlRef.current?.value,
+      secretKey: secretKeyRef.current?.value
+    }
+
     // Validate configuration before saving
-    const validation = IntegrationConfigSchema.safeParse(config)
+    const validation = IntegrationConfigSchema.safeParse(fullConfig)
 
     if (!validation.success) {
       setValidationErrors(validation.error.issues)
@@ -91,13 +105,19 @@ export function IntegrationConfigModal({
 
     try {
       // Send credentials directly to secure server-side storage
-      if (config.apiKey || config.webhookUrl) {
+      const hasCredentials = !!(fullConfig.apiKey || fullConfig.webhookUrl || fullConfig.secretKey)
+
+      if (hasCredentials) {
         const response = await fetch(`/api/integrations/${integration.id}/credentials`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${sessionStorage.getItem('token') || ''}`
+          },
           body: JSON.stringify({
-            apiKey: config.apiKey,
-            webhookUrl: config.webhookUrl
+            apiKey: fullConfig.apiKey,
+            webhookUrl: fullConfig.webhookUrl,
+            secretKey: fullConfig.secretKey
           })
         })
 
@@ -116,17 +136,15 @@ export function IntegrationConfigModal({
         workspace: config.workspace,
         folder: config.folder,
         // Mark as configured without exposing values
-        hasCredentials: !!(config.apiKey || config.webhookUrl)
+        hasCredentials
       }
 
       onSave(integration, nonSensitiveConfig)
 
-      // Clear sensitive data from state immediately
-      setConfig(prev => ({
-        ...prev,
-        apiKey: undefined,
-        webhookUrl: undefined
-      }))
+      // Clear sensitive inputs
+      if (apiKeyRef.current) apiKeyRef.current.value = ''
+      if (webhookUrlRef.current) webhookUrlRef.current.value = ''
+      if (secretKeyRef.current) secretKeyRef.current.value = ''
 
       onClose()
     } catch (error) {
@@ -156,10 +174,9 @@ export function IntegrationConfigModal({
               </Label>
               <input
                 id="apiKey"
+                ref={apiKeyRef}
                 type="password"
                 placeholder="bench_xxxxxxxxxxxxx"
-                value={config.apiKey || ''}
-                onChange={(e) => setConfig({ ...config, apiKey: e.target.value })}
                 className={`w-full px-3 py-2 bg-background border rounded-md focus:outline-none focus:ring-2 focus:ring-ring ${
                   getFieldError('apiKey') ? 'border-red-500' : 'border-input'
                 }`}
@@ -198,10 +215,9 @@ export function IntegrationConfigModal({
               </Label>
               <input
                 id="webhookUrl"
+                ref={webhookUrlRef}
                 type="text"
                 placeholder="https://hooks.slack.com/services/..."
-                value={config.webhookUrl || ''}
-                onChange={(e) => setConfig({ ...config, webhookUrl: e.target.value })}
                 className="w-full px-3 py-2 bg-background border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring"
               />
               <p className="text-xs text-muted-foreground">
@@ -235,10 +251,9 @@ export function IntegrationConfigModal({
               </Label>
               <input
                 id="webhookUrl"
+                ref={webhookUrlRef}
                 type="text"
                 placeholder="https://outlook.office.com/webhook/..."
-                value={config.webhookUrl || ''}
-                onChange={(e) => setConfig({ ...config, webhookUrl: e.target.value })}
                 className="w-full px-3 py-2 bg-background border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring"
               />
               <p className="text-xs text-muted-foreground">
@@ -272,10 +287,9 @@ export function IntegrationConfigModal({
               </Label>
               <input
                 id="apiKey"
+                ref={apiKeyRef}
                 type="password"
                 placeholder="AKIA..."
-                value={config.apiKey || ''}
-                onChange={(e) => setConfig({ ...config, apiKey: e.target.value })}
                 className="w-full px-3 py-2 bg-background border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring"
               />
             </div>
@@ -305,10 +319,9 @@ export function IntegrationConfigModal({
             </Label>
             <input
               id="apiKey"
+              ref={apiKeyRef}
               type="password"
               placeholder="Enter your API key"
-              value={config.apiKey || ''}
-              onChange={(e) => setConfig({ ...config, apiKey: e.target.value })}
               className="w-full px-3 py-2 bg-background border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring"
             />
           </div>

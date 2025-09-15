@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useAuth } from '@/contexts/auth-context'
 import { auditLogger } from '@/lib/audit/logger'
 import { IntegrationErrorBoundary } from '@/components/error-boundary'
@@ -26,6 +26,8 @@ import {
 import { Button } from '@/components/ui/button'
 import { ThemeToggle } from '@/components/theme-toggle'
 
+const ITEMS_PER_PAGE = 9 // 3x3 grid
+
 export default function IntegrationsPage() {
   const { user } = useAuth()
   const [integrations, setIntegrations] = useState<Integration[]>(mockIntegrations)
@@ -34,6 +36,7 @@ export default function IntegrationsPage() {
   const [selectedIntegration, setSelectedIntegration] = useState<Integration | null>(null)
   const [isConfigModalOpen, setIsConfigModalOpen] = useState(false)
   const [isSyncing, setIsSyncing] = useState(false)
+  const [currentPage, setCurrentPage] = useState(1)
 
   // Filter integrations based on search and category
   const filteredIntegrations = useMemo(() => {
@@ -57,7 +60,18 @@ export default function IntegrationsPage() {
     return filtered
   }, [integrations, searchQuery, selectedCategory])
 
-  // Group integrations by category for display
+  // Pagination calculations
+  const totalPages = Math.ceil(filteredIntegrations.length / ITEMS_PER_PAGE)
+  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE
+  const endIndex = startIndex + ITEMS_PER_PAGE
+  const paginatedIntegrations = filteredIntegrations.slice(startIndex, endIndex)
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [searchQuery, selectedCategory])
+
+  // Group integrations by category for display (when showing all categories)
   const groupedIntegrations = useMemo(() => {
     const groups: Record<IntegrationCategory, Integration[]> = {
       eln_lims: [],
@@ -67,12 +81,12 @@ export default function IntegrationsPage() {
       automation: []
     }
 
-    filteredIntegrations.forEach(integration => {
+    paginatedIntegrations.forEach(integration => {
       groups[integration.category].push(integration)
     })
 
     return groups
-  }, [filteredIntegrations])
+  }, [paginatedIntegrations])
 
   // Count connected integrations
   const connectedCount = integrations.filter(i => i.status === 'connected').length
@@ -110,25 +124,41 @@ export default function IntegrationsPage() {
     // Simulate connecting
     setIsSyncing(true)
 
-    // Log audit event
-    auditLogger.logEvent(user, 'integration.configure', {
-      resourceType: 'integration',
-      resourceId: integration.id,
-      success: true,
-      metadata: {
-        integrationName: integration.name,
-        action: integration.status === 'connected' ? 'update' : 'connect'
-      }
-    })
+    try {
+      // Log audit event
+      auditLogger.logEvent(user, 'integration.configure', {
+        resourceType: 'integration',
+        resourceId: integration.id,
+        success: true,
+        metadata: {
+          integrationName: integration.name,
+          action: integration.status === 'connected' ? 'update' : 'connect'
+        }
+      })
 
-    // Update integration with new config
-    setTimeout(() => {
+      // Simulate API call delay
+      await new Promise(resolve => setTimeout(resolve, 2000))
+
+      // Update integration with new config
       const updated = updateIntegrationStatus(integration.id, 'connected', config)
       if (updated) {
         setIntegrations(prev => prev.map(i => i.id === integration.id ? updated : i))
       }
+    } catch (error) {
+      console.error('Error saving config:', error)
+      // Log failure event
+      auditLogger.logEvent(user, 'integration.error', {
+        resourceType: 'integration',
+        resourceId: integration.id,
+        success: false,
+        errorMessage: error instanceof Error ? error.message : 'Configuration failed',
+        metadata: {
+          integrationName: integration.name
+        }
+      })
+    } finally {
       setIsSyncing(false)
-    }, 2000)
+    }
   }
 
   const handleSyncAll = async () => {
@@ -380,7 +410,7 @@ export default function IntegrationsPage() {
                 </p>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {filteredIntegrations.map(integration => (
+                {paginatedIntegrations.map(integration => (
                   <IntegrationCard
                     key={integration.id}
                     integration={integration}
@@ -396,6 +426,56 @@ export default function IntegrationsPage() {
               <p className="text-muted-foreground">No integrations found matching your criteria</p>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-center gap-2 mt-8">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+            disabled={currentPage === 1}
+          >
+            Previous
+          </Button>
+          <div className="flex items-center gap-1">
+            {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => {
+              let pageNum: number
+              if (totalPages <= 7) {
+                pageNum = i + 1
+              } else if (currentPage <= 4) {
+                pageNum = i + 1
+              } else if (currentPage >= totalPages - 3) {
+                pageNum = totalPages - 6 + i
+              } else {
+                if (i === 0) pageNum = 1
+                else if (i === 6) pageNum = totalPages
+                else if (i === 1 || i === 5) return <span key={i} className="px-2">...</span>
+                else pageNum = currentPage - 3 + i
+              }
+              return (
+                <Button
+                  key={i}
+                  variant={currentPage === pageNum ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setCurrentPage(pageNum)}
+                  className="w-10"
+                >
+                  {pageNum}
+                </Button>
+              )
+            })}
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+            disabled={currentPage === totalPages}
+          >
+            Next
+          </Button>
         </div>
       )}
 
