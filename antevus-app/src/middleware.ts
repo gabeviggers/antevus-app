@@ -74,7 +74,7 @@ export function middleware(request: NextRequest) {
       const response = NextResponse.redirect(
         new URL(request.nextUrl.pathname, request.url)
       )
-      response.cookies.set('antevus-app-auth', password, {
+      response.cookies.set('antevus-app-auth', password || '', {
         httpOnly: true,
         secure: true,
         sameSite: 'strict',
