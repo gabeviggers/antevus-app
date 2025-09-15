@@ -61,6 +61,9 @@ export const QC_THRESHOLDS: QCThreshold[] = [
   }
 ]
 
+export const THRESHOLDS_BY_METRIC: Record<keyof MetricData, QCThreshold> = QC_THRESHOLDS
+  .reduce((acc, t) => (acc[t.metric] = t, acc), {} as Record<keyof MetricData, QCThreshold>)
+
 const INSTRUMENTS_FOR_MONITORING = [
   'Illumina NovaSeq X',
   'Tecan Freedom EVO',
