@@ -84,7 +84,7 @@ export default function IntegrationsPage() {
 
   const handleDisconnect = async (integration: Integration) => {
     // Log audit event
-    auditLogger.logEvent(user, 'settings.update', {
+    auditLogger.logEvent(user, 'integration.disconnect', {
       resourceType: 'integration',
       resourceId: integration.id,
       success: true,
@@ -110,7 +110,7 @@ export default function IntegrationsPage() {
     setIsSyncing(true)
 
     // Log audit event
-    auditLogger.logEvent(user, 'settings.update', {
+    auditLogger.logEvent(user, 'integration.configure', {
       resourceType: 'integration',
       resourceId: integration.id,
       success: true,
