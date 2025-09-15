@@ -25,15 +25,27 @@
    - Detailed instrument modal
    - Status animations and indicators
 
+4. **Run History & Data View (Complete)**
+   - Searchable table of 150+ runs
+   - Run detail modal with charts
+   - Export functionality (CSV, JSON)
+   - Date range and status filters
+   - Pagination
+
+5. **Real-Time Monitoring (Complete)**
+   - Live-updating line charts (Recharts)
+   - Temperature, pressure, flow rate, vibration metrics
+   - QC threshold indicators with visual alerts
+   - WebSocket connection status
+   - Configurable update frequencies
+
 #### 🚧 Phase 1 Remaining (Priority Order)
-1. **Run History & Data View** - HIGH PRIORITY
-2. **Real-Time Monitoring Charts** - MEDIUM PRIORITY
-3. **Integrations Hub** - MEDIUM PRIORITY
-4. **API Playground** - LOWER PRIORITY
+1. **Integrations Hub** - HIGH PRIORITY
+2. **API Playground** - MEDIUM PRIORITY
 
 #### 📈 Progress Metrics
 - **Phase 0**: 100% Complete ✅
-- **Phase 1**: ~35% Complete (2 of 6 major components)
+- **Phase 1**: ~67% Complete (4 of 6 major components)
 - **Lines of Code**: ~2,500
 - **Components Built**: 15+
 - **Time to Demo-Ready**: ~2-3 weeks needed
@@ -92,11 +104,11 @@
 - [x] Filter by date, instrument, status
 - [x] Pagination with 150 mock entries
 
-#### 4. Real-Time Monitoring 🚧 NOT STARTED
-- [ ] Live-updating line charts (mock data stream)
-- [ ] QC threshold indicators
-- [ ] Temperature, pressure, progress metrics
-- [ ] WebSocket connection indicator
+#### 4. Real-Time Monitoring ✅ COMPLETED
+- [x] Live-updating line charts (mock data stream)
+- [x] QC threshold indicators
+- [x] Temperature, pressure, flow rate, vibration metrics
+- [x] WebSocket connection indicator
 
 #### 5. Integrations Hub 🚧 NOT STARTED
 - [ ] Grid of integration cards (Benchling, Slack, Teams, etc.)
@@ -119,8 +131,8 @@ next.js 14 (app router)
 │   │   └── signup/               🚧 Planned
 │   ├── (dashboard)               ✅ Implemented
 │   │   ├── dashboard/            ✅ Instruments dashboard
-│   │   ├── runs/                 ✅ Implemented
-│   │   ├── monitoring/           🚧 Not started
+│   │   ├── runs/                 ✅ Run History implemented
+│   │   ├── monitoring/           ✅ Real-time monitoring
 │   │   ├── integrations/         🚧 Not started
 │   │   └── api-playground/       🚧 Not started
 │   └── api/
@@ -130,13 +142,14 @@ next.js 14 (app router)
 │   ├── auth/                     ✅ ProtectedRoute
 │   ├── dashboard/                ✅ Sidebar
 │   ├── instruments/              ✅ Card, DetailModal
-│   └── charts/                   🚧 Not started
+│   ├── runs/                     ✅ RunDetailModal
+│   └── charts/                   ✅ Using Recharts library
 ├── /contexts                      ✅ Implemented
 │   └── auth-context.tsx          ✅ Full auth flow
 ├── /lib                          ✅ Implemented
 │   ├── auth/                     ✅ Types, mock users
 │   ├── audit/                    ✅ Audit logger
-│   ├── mock-data/                ✅ Instruments data
+│   ├── mock-data/                ✅ Instruments, runs, monitoring
 │   └── utils.ts                  ✅ Utility functions
 └── /public                        ✅ Standard Next.js
 ```
