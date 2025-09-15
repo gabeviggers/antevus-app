@@ -20,7 +20,7 @@ const navigation = [
   { name: 'Instruments', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Monitoring', href: '/monitoring', icon: Activity },
   { name: 'Run History', href: '/runs', icon: History },
-  { name: 'Integrations', href: '/dashboard/integrations', icon: Plug },
+  { name: 'Integrations', href: '/integrations', icon: Plug },
   { name: 'API Playground', href: '/dashboard/api-playground', icon: Code2 },
 ]
 

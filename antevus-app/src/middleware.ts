@@ -1,11 +1,52 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
-// Password protection for app subdomain
+// Middleware for security headers and password protection
 export function middleware(request: NextRequest) {
+  // Add security headers to all responses
+  const response = NextResponse.next()
+
+  // Security headers for HIPAA and SOC 2 compliance
+  response.headers.set('X-Frame-Options', 'DENY')
+  response.headers.set('X-Content-Type-Options', 'nosniff')
+  // X-XSS-Protection is obsolete in modern browsers, but kept for legacy support
+  response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin')
+  response.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()')
+  // Content Security Policy
+  response.headers.set(
+    'Content-Security-Policy',
+    "default-src 'self'; " +
+    "base-uri 'none'; object-src 'none'; form-action 'self'; " +
+    "script-src 'self' 'unsafe-inline'; " +
+    "style-src 'self' 'unsafe-inline'; " +
+    "img-src 'self' data: https:; " +
+    "font-src 'self' data:; " +
+    "connect-src 'self'; " + // allowlist Sentry/PostHog origins if used
+    "frame-ancestors 'none';"
+  )
+
+  // HSTS for production
+  if (process.env.NODE_ENV === 'production' || process.env.VERCEL_ENV === 'production') {
+    response.headers.set(
+      'Strict-Transport-Security',
+      'max-age=31536000; includeSubDomains; preload'
+    )
+  }
+
+  // Cache control for sensitive pages
+  if (request.nextUrl.pathname.startsWith('/dashboard') ||
+      request.nextUrl.pathname.startsWith('/integrations') ||
+      request.nextUrl.pathname.startsWith('/api')) {
+    response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, private')
+    response.headers.set('Pragma', 'no-cache')
+    response.headers.set('Expires', '0')
+  }
+
+  // CSRF should be enforced where cookies are set (server routes) via SameSite+HttpOnly
+  // and verified using CSRF tokens or double-submit. Remove this no-op block.
   // Skip protection for local development
   if (process.env.NODE_ENV === 'development') {
-    return NextResponse.next()
+    return response
   }
 
   // Skip protection for API routes and static files
@@ -14,7 +55,7 @@ export function middleware(request: NextRequest) {
     request.nextUrl.pathname.startsWith('/_next') ||
     request.nextUrl.pathname.startsWith('/favicon.ico')
   ) {
-    return NextResponse.next()
+    return response
   }
 
   // Check if already authenticated
@@ -28,20 +69,25 @@ export function middleware(request: NextRequest) {
 
     if (password === process.env.AUTH_PASSWORD) {
       // Set auth cookie and redirect without password in URL
-      const response = NextResponse.redirect(
+      const redirectResponse = NextResponse.redirect(
         new URL(request.nextUrl.pathname, request.url)
       )
-      response.cookies.set('antevus-app-auth', password, {
+      // Copy security headers to the redirect response
+      for (const [key, value] of response.headers) {
+        redirectResponse.headers.set(key, value)
+      }
+      redirectResponse.cookies.set('antevus-app-auth', password || '', {
         httpOnly: true,
         secure: true,
         sameSite: 'strict',
+        path: '/',
         maxAge: 60 * 60 * 24 * 7, // 1 week
       })
-      return response
+      return redirectResponse
     }
 
     // Show password prompt page
-    return new NextResponse(
+    const promptResponse = new NextResponse(
       `
       <!DOCTYPE html>
       <html>
@@ -158,9 +204,14 @@ export function middleware(request: NextRequest) {
         headers: { 'Content-Type': 'text/html' },
       }
     )
+    // Apply security headers to the password prompt
+    for (const [key, value] of response.headers) {
+      promptResponse.headers.set(key, value)
+    }
+    return promptResponse
   }
 
-  return NextResponse.next()
+  return response
 }
 
 export const config = {

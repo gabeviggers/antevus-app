@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { randomBytes } from 'crypto'
 import { validateCredentials } from '@/lib/auth/mock-users'
 import { AuthSession } from '@/lib/auth/types'
 
@@ -23,13 +24,15 @@ export async function POST(request: Request) {
       )
     }
 
-    // Create session
+    // Create secure session with cryptographically secure token
+    const secureToken = randomBytes(32).toString('hex')
+
     const session: AuthSession = {
       user: {
         ...user,
         lastLogin: new Date().toISOString()
       },
-      token: `token_${Math.random().toString(36).substring(2, 11)}`, // Mock token
+      token: secureToken, // Cryptographically secure token
       expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() // 7 days
     }
 

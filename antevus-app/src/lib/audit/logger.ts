@@ -13,6 +13,14 @@ export type AuditEventType =
   | 'user.create'
   | 'user.update'
   | 'user.delete'
+  | 'integration.connect'
+  | 'integration.disconnect'
+  | 'integration.configure'
+  | 'integration.sync'
+  | 'integration.error'
+  | 'security.csrf_failure'
+  | 'security.rate_limit_exceeded'
+  | 'security.unauthorized_access'
 
 export interface AuditEvent {
   id: string
