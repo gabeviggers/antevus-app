@@ -17,8 +17,24 @@ const IntegrationConfigSchema = z.object({
   autoSync: z.boolean().default(false)
 })
 
+// Type for stored integration config
+interface StoredIntegrationConfig {
+  name: string
+  status: string
+  lastSync: string
+  userId: string
+  encryptedCredentials: string
+  syncInterval?: number
+  enableNotifications?: boolean
+  autoSync?: boolean
+  projectId?: string
+  channel?: string
+  workspace?: string
+  folder?: string
+}
+
 // Secure storage for integration configs (in production, use encrypted database)
-const integrationConfigs = new Map<string, any>()
+const integrationConfigs = new Map<string, StoredIntegrationConfig>()
 
 // Rate limiting map (in production, use Redis)
 const rateLimitMap = new Map<string, { count: number; resetTime: number }>()
@@ -180,20 +196,6 @@ export async function POST(request: NextRequest) {
     })
   } catch (error) {
     console.error('Error configuring integration:', error)
-
-    // Log failed attempt
-    if (session?.user) {
-      auditLogger.logEvent(session.user, 'settings.update', {
-        resourceType: 'integration',
-        success: false,
-        errorMessage: error instanceof Error ? error.message : 'Unknown error',
-        metadata: {
-          action: 'connect',
-          timestamp: new Date().toISOString()
-        }
-      })
-    }
-
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

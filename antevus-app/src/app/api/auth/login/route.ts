@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server'
 import { randomBytes } from 'crypto'
 import { validateCredentials } from '@/lib/auth/mock-users'
 import { AuthSession } from '@/lib/auth/types'
-import { createSecureSession } from '@/lib/auth/session'
 
 export async function POST(request: Request) {
   try {
@@ -27,7 +26,6 @@ export async function POST(request: Request) {
 
     // Create secure session with cryptographically secure token
     const secureToken = randomBytes(32).toString('hex')
-    const sessionToken = await createSecureSession(user)
 
     const session: AuthSession = {
       user: {
