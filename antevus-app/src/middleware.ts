@@ -18,9 +18,19 @@ export function middleware(request: NextRequest) {
   response.headers.set(
     'Content-Security-Policy',
     "default-src 'self'; " +
-    "base-uri 'none'; " +
-    "object-src 'none'; " +
-    "form-action 'self'; " +
+    const csp = [
+      "default-src 'self'",
+      "base-uri 'none'",
+      "object-src 'none'",
+      "form-action 'self'",
+      `script-src 'self' 'unsafe-inline'${isDevelopment ? " 'unsafe-eval'" : ''}`,
+      "style-src 'self' 'unsafe-inline'",
+      "img-src 'self' data: https:",
+      "font-src 'self' data:",
+      `connect-src 'self'${isDevelopment ? ' ws: wss:' : ''}`, // Allow WebSocket in dev
+      "frame-ancestors 'none'",
+    ].join('; ') + ';'
+    response.headers.set('Content-Security-Policy', csp)
     `script-src 'self' 'unsafe-inline'${isDevelopment ? " 'unsafe-eval'" : ''}; ` +
     "style-src 'self' 'unsafe-inline'; " +
     "img-src 'self' data: https:; " +
