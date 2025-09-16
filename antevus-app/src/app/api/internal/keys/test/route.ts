@@ -6,9 +6,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/session'
 import { validateAPIKey } from '@/lib/api/auth-db'
-import { validateCSRFToken } from '@/lib/security/csrf'
+import { validateCSRFToken } from '@/lib/security/csrf-jwt'
 import { auditLogger } from '@/lib/audit/logger'
 import { logger } from '@/lib/logger'
+import { authorizationService } from '@/lib/auth/authorization'
 
 // Force Node.js runtime
 export const runtime = 'nodejs'
@@ -24,9 +25,44 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    // Enforce RBAC - require explicit permission for internal testing
+    const canTestKeys = await authorizationService.can({
+      user: session.user,
+      resource: 'api_key',
+      action: 'execute', // Using 'execute' action for testing operations
+      resourceData: {
+        type: 'internal_test'
+      }
+    })
+
+    if (!canTestKeys) {
+      await auditLogger.logEvent(
+        session.user,
+        'security.unauthorized_access',
+        {
+          resourceType: 'api_test',
+          resourceId: 'test_endpoint',
+          success: false,
+          errorMessage: 'Insufficient permissions',
+          metadata: {
+            endpoint: '/api/internal/keys/test',
+            requiredResource: 'api_key',
+            requiredAction: 'execute'
+          }
+        }
+      )
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
     // Validate CSRF token for state-changing operations
-    const csrfValidation = validateCSRFToken(request, session.user.id, session.user)
-    if (!csrfValidation.valid) {
+    const { valid: csrfValid, error: csrfError } = await validateCSRFToken(
+      request,
+      session.user.id,
+      session.csrfToken || session.user.id, // Use csrfToken as sessionId, fallback to userId
+      session.user
+    )
+
+    if (!csrfValid) {
       await auditLogger.logEvent(
         session.user,
         'security.csrf_failure',
@@ -38,66 +74,60 @@ export async function POST(request: NextRequest) {
           metadata: {
             endpoint: '/api/internal/keys/test',
             reason: 'Invalid CSRF token',
-            error: csrfValidation.error
+            error: csrfError
           }
         }
       )
 
       return NextResponse.json(
-        { error: csrfValidation.error || 'Invalid CSRF token' },
+        { error: csrfError || 'Invalid CSRF token' },
         { status: 403 }
       )
     }
 
     const body = await request.json()
-    const { endpoint, method = 'GET', apiKey } = body
+    const { endpoint, method = 'GET' } = body
 
     // Validate required fields
     if (!endpoint) {
       return NextResponse.json({ error: 'Endpoint required' }, { status: 400 })
     }
 
-    if (!apiKey) {
-      return NextResponse.json({ error: 'API key required for testing' }, { status: 400 })
+    // Restrict which endpoints can be tested
+    if (!/^\/api\/v1\//.test(endpoint)) {
+      return NextResponse.json({ error: 'Endpoint not allowed for testing' }, { status: 400 })
     }
 
-    // Validate that the API key belongs to the current user
-    // This prevents testing other users' keys
-    const keyOwnership = await validateApiKeyOwnership(session.user.id, apiKey)
-    if (!keyOwnership.valid) {
-      await auditLogger.logEvent(
-        session.user,
-        'security.unauthorized_access',
-        {
-          resourceType: 'api_key',
-          resourceId: 'test_endpoint',
-          success: false,
-          errorMessage: 'Attempted to test unauthorized API key',
-          metadata: {
-            endpoint,
-            reason: keyOwnership.reason
-          }
-        }
-      )
-
+    // Never accept plaintext API keys from clients in production
+    // This endpoint is for testing server-stored keys only
+    const storedApiKey = await getUserStoredApiKey(session.user.id)
+    if (!storedApiKey) {
       return NextResponse.json(
-        { error: 'Unauthorized: API key does not belong to current user' },
-        { status: 403 }
+        { error: 'No API key available for this user' },
+        { status: 404 }
       )
     }
 
-    // Create a test request with the provided API key
-    // The key is only used for validation, never stored or returned
-    const testRequest = new Request(`https://api.antevus.com${endpoint}`, {
-      method,
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json'
-      }
+    // Create a proper NextRequest that preserves client context
+    const url = new URL(`https://api.antevus.com${endpoint}`)
+    const headers = new Headers({
+      'Authorization': `Bearer ${storedApiKey}`,
+      'Content-Type': 'application/json'
     })
 
+    // Preserve client IP and user agent for proper auditing
+    const xff = request.headers.get('x-forwarded-for')
+      ?? request.headers.get('cf-connecting-ip')
+      ?? ''
+    if (xff) headers.set('x-forwarded-for', xff)
+
+    const ua = request.headers.get('user-agent')
+    if (ua) headers.set('user-agent', ua)
+
+    const testRequest = new NextRequest(url, { method, headers })
+
     // Test the API key
-    const authResult = await validateAPIKey(testRequest as unknown as NextRequest)
+    const authResult = await validateAPIKey(testRequest)
 
     if (!authResult.authenticated) {
       await auditLogger.logEvent(
@@ -115,11 +145,18 @@ export async function POST(request: NextRequest) {
         }
       )
 
-      return NextResponse.json({
-        success: false,
-        error: authResult.error,
-        message: 'API key validation failed'
-      })
+      const status =
+        authResult.error === 'Rate limit exceeded' ? 429 :
+        authResult.error === 'Insufficient permissions' ? 403 : 401
+
+      return NextResponse.json(
+        {
+          success: false,
+          error: authResult.error,
+          message: 'API key validation failed'
+        },
+        { status }
+      )
     }
 
     await auditLogger.logEvent(
@@ -161,43 +198,31 @@ export async function POST(request: NextRequest) {
 }
 
 /**
- * Validate that an API key belongs to a specific user
- * This checks ownership without exposing stored keys
+ * Get user's stored API key from secure server-side storage
+ * This retrieves an encrypted key for testing purposes only
+ * Never exposes keys to clients
  */
-async function validateApiKeyOwnership(
-  userId: string,
-  providedKey: string
-): Promise<{ valid: boolean; reason?: string }> {
+async function getUserStoredApiKey(userId: string): Promise<string | null> {
   try {
     // In production, this would:
-    // 1. Hash the provided key
-    // 2. Query database for user's API keys (stored as hashes)
-    // 3. Compare hashes to verify ownership
-    // 4. Check key is not revoked/expired
-    // 5. NEVER return or expose the stored key
+    // 1. Query database for user's active API key (encrypted)
+    // 2. Decrypt using server-side encryption key
+    // 3. Return for internal testing use only
+    // 4. NEVER send to client
 
-    // For now, validate using the validateAPIKey function
-    // which already checks the key hash in the database
-    const testRequest = new Request('https://api.antevus.com/test', {
-      headers: {
-        'Authorization': `Bearer ${providedKey}`
-      }
-    })
+    // For now, return null to indicate no stored key
+    // This forces the endpoint to be non-functional until proper
+    // server-side key storage is implemented
+    logger.info('API key retrieval requested', { userId })
 
-    const authResult = await validateAPIKey(testRequest as unknown as NextRequest)
+    // TODO: Implement secure server-side key retrieval
+    // const encryptedKey = await apiKeyRepository.getActiveKeyForUser(userId)
+    // if (!encryptedKey) return null
+    // return await decrypt(encryptedKey, process.env.API_KEY_ENCRYPTION_KEY)
 
-    if (!authResult.authenticated) {
-      return { valid: false, reason: 'Invalid or expired API key' }
-    }
-
-    // Verify the key belongs to the requesting user
-    if (authResult.userId !== userId) {
-      return { valid: false, reason: 'API key does not belong to current user' }
-    }
-
-    return { valid: true }
+    return null
   } catch (error) {
-    logger.error('API key ownership validation failed', error, { userId })
-    return { valid: false, reason: 'Validation error' }
+    logger.error('Failed to retrieve user API key', error, { userId })
+    return null
   }
 }

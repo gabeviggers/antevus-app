@@ -33,57 +33,38 @@ export class RateLimitRepository {
     const resetAt = new Date(windowStart.getTime() + windowDuration)
 
     try {
-      // Use transaction for atomicity
+      // Use atomic upsert to prevent race conditions
       const result = await prisma.$transaction(async (tx) => {
-        // Find or create rate limit entry for current window
-        let rateLimit = await tx.rateLimit.findUnique({
+        // Atomic upsert: create if not exists, increment if exists
+        const rateLimit = await tx.rateLimit.upsert({
           where: {
             keyId_windowStart: {
               keyId,
               windowStart
             }
-          }
-        })
-
-        if (!rateLimit) {
-          // Create new window
-          rateLimit = await tx.rateLimit.create({
-            data: {
-              keyId,
-              windowStart,
-              requestCount: 1
-            }
-          })
-
-          return {
-            allowed: true,
-            remaining: limit - 1,
-            resetAt
-          }
-        }
-
-        // Check if limit exceeded
-        if (rateLimit.requestCount >= limit) {
-          return {
-            allowed: false,
-            remaining: 0,
-            resetAt
-          }
-        }
-
-        // Increment counter
-        await tx.rateLimit.update({
-          where: {
-            id: rateLimit.id
           },
-          data: {
+          create: {
+            keyId,
+            windowStart,
+            requestCount: 1
+          },
+          update: {
             requestCount: { increment: 1 }
           }
         })
 
+        // Check if limit exceeded (after increment)
+        if (rateLimit.requestCount > limit) {
+          return {
+            allowed: false,
+            remaining: Math.max(0, limit - rateLimit.requestCount),
+            resetAt
+          }
+        }
+
         return {
           allowed: true,
-          remaining: limit - (rateLimit.requestCount + 1),
+          remaining: limit - rateLimit.requestCount,
           resetAt
         }
       })
@@ -91,10 +72,21 @@ export class RateLimitRepository {
       return result
     } catch (error) {
       logger.error('Rate limit check failed', error, { keyId })
-      // Fail open in case of database issues (allow request)
+
+      // Use configurable fail-open behavior aligned with global rate limiter
+      const failOpen = process.env.FAIL_OPEN_RATE_LIMIT === 'true'
+      const isDevelopment = process.env.NODE_ENV !== 'production'
+      const shouldFailOpen = failOpen && isDevelopment
+
+      logger.warn('Rate limit database error - applying failure mode', {
+        keyId,
+        failureMode: shouldFailOpen ? 'fail-open' : 'fail-closed',
+        decision: shouldFailOpen ? 'ALLOWING' : 'BLOCKING'
+      })
+
       return {
-        allowed: true,
-        remaining: limit,
+        allowed: shouldFailOpen,
+        remaining: shouldFailOpen ? limit : 0,
         resetAt
       }
     }
