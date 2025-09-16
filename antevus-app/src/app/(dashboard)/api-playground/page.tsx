@@ -1,7 +1,7 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
-import { Search, Key, Code2, Terminal, Copy, Check, Shield, Activity, Lock, AlertCircle, ExternalLink, Bell } from 'lucide-react'
+import React, { useState } from 'react'
+import { Search, Key, Copy, Check, Shield, Activity, Lock, AlertCircle, ExternalLink, Bell } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -190,7 +190,7 @@ const API_ENDPOINTS = {
 }
 
 // Code examples generator
-const generateCodeExample = (endpoint: any, language: string, apiKey: string) => {
+const generateCodeExample = (endpoint: { method: string; path: string; params?: { body?: unknown } }, language: string, apiKey: string) => {
   const baseUrl = 'https://api.antevus.com'
   const fullPath = `${baseUrl}${endpoint.path}`
 
@@ -272,7 +272,7 @@ export default function APIPlaygroundPage() {
           description: 'Your new API key has been created securely.',
         })
       }
-    } catch (error) {
+    } catch {
       // For demo, generate a mock key
       const mockKey = 'ak_live_' + Array.from({ length: 32 }, () =>
         '0123456789abcdef'[Math.floor(Math.random() * 16)]
@@ -301,7 +301,7 @@ export default function APIPlaygroundPage() {
   const codeExample = generateCodeExample(currentEndpoint, selectedLanguage, apiKey || 'YOUR_API_KEY')
 
   // Filter endpoints based on search
-  const filteredCategories = Object.entries(API_ENDPOINTS).filter(([_, category]) =>
+  const filteredCategories = Object.entries(API_ENDPOINTS).filter(([, category]) =>
     category.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
     category.endpoints.some(endpoint =>
       endpoint.path.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -667,7 +667,7 @@ export default function APIPlaygroundPage() {
                     <h3 className="font-semibold">Response</h3>
                     <div className="p-4 bg-muted/50 rounded-md">
                       <p className="text-sm text-muted-foreground">
-                        Send a request from the "Try It" tab to see the response here.
+                        Send a request from the &ldquo;Try It&rdquo; tab to see the response here.
                       </p>
                     </div>
                   </div>

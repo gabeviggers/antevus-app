@@ -13,7 +13,7 @@ export const dynamic = 'force-dynamic'
 const ALGORITHM = 'aes-256-gcm'
 const SALT_LENGTH = 64
 const IV_LENGTH = 16
-const TAG_LENGTH = 16
+// const TAG_LENGTH = 16 // Reserved for future use
 const ITERATIONS = 100000
 
 // Get encryption key from environment
@@ -79,7 +79,9 @@ function generateAPIKey(): { key: string; prefix: string; hash: string } {
 }
 
 // Encrypt sensitive API key metadata
-function encryptMetadata(data: any): { encrypted: string; salt: string; iv: string; authTag: string } {
+// Encryption function reserved for future use
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+function encryptMetadata(data: unknown): { encrypted: string; salt: string; iv: string; authTag: string } {
   const salt = crypto.randomBytes(SALT_LENGTH)
   const key = crypto.pbkdf2Sync(getEncryptionKey(), salt, ITERATIONS, 32, 'sha256')
   const iv = crypto.randomBytes(IV_LENGTH)
