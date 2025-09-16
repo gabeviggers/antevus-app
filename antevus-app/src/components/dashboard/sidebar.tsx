@@ -12,8 +12,8 @@ import {
   Settings,
   LogOut,
   ChevronLeft,
-  ChevronRight,
-  X
+  X,
+  Menu
 } from 'lucide-react'
 
 const navigation = [
@@ -61,6 +61,7 @@ export function Sidebar({ sidebarOpen, setSidebarOpen, collapsed, setCollapsed }
 
       {/* Sidebar */}
       <aside
+        id="primary-sidebar"
         className={`${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         } fixed inset-y-0 left-0 z-50 flex flex-col h-screen bg-card border-r border-border transition-all duration-300 lg:translate-x-0 ${
@@ -68,50 +69,67 @@ export function Sidebar({ sidebarOpen, setSidebarOpen, collapsed, setCollapsed }
         }`}
       >
         {/* Logo Section */}
-        <div className={`flex items-center ${collapsed ? 'justify-center' : 'justify-between'} h-16 px-4 border-b border-border`}>
-          {!collapsed && (
-            <div className="flex items-center gap-2">
-              <svg
-                width="24"
-                height="24"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="text-gray-600 dark:text-gray-400"
+        <div className="h-16 px-4 border-b border-border">
+          {collapsed ? (
+            // Collapsed state - show hamburger menu button
+            <div className="h-full flex items-center justify-center">
+              <button
+                onClick={() => setCollapsed(false)}
+                className="p-2 rounded-md hover:bg-accent transition-colors"
+                aria-label="Expand sidebar"
+                aria-controls="primary-sidebar"
+                aria-expanded={false}
+                title="Expand sidebar"
               >
-                <path d="M4.5 3h15" />
-                <path d="M6 3v16a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V3" />
-                <path d="M6 14h12" />
-              </svg>
-              <span className="text-lg font-bold">Antevus</span>
+                <Menu className="h-5 w-5" />
+              </button>
+            </div>
+          ) : (
+            // Expanded state - show logo and close button
+            <div className="h-full flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <svg
+                  width="24"
+                  height="24"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="text-gray-600 dark:text-gray-400"
+                >
+                  <path d="M4.5 3h15" />
+                  <path d="M6 3v16a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V3" />
+                  <path d="M6 14h12" />
+                </svg>
+                <span className="text-lg font-bold">Antevus</span>
+              </div>
+              <div className="flex items-center gap-1">
+                {/* Desktop collapse button */}
+                <button
+                  onClick={() => setCollapsed(true)}
+                  className="hidden lg:block p-1.5 rounded-md hover:bg-accent transition-colors"
+                  aria-label="Collapse sidebar"
+                  title="Collapse sidebar"
+                  aria-controls="primary-sidebar"
+                  aria-expanded={!collapsed}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </button>
+                {/* Mobile close button */}
+                <button
+                  onClick={() => setSidebarOpen(false)}
+                  className="lg:hidden p-1.5 rounded-md hover:bg-accent transition-colors"
+                  aria-label="Close sidebar"
+                  aria-controls="primary-sidebar"
+                  aria-expanded={false}
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
             </div>
           )}
-          {collapsed && (
-            <svg
-              width="24"
-              height="24"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="text-gray-600 dark:text-gray-400"
-            >
-              <path d="M4.5 3h15" />
-              <path d="M6 3v16a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V3" />
-              <path d="M6 14h12" />
-            </svg>
-          )}
-          <button
-            onClick={() => setSidebarOpen(false)}
-            className="lg:hidden p-1 rounded-md hover:bg-accent"
-          >
-            <X className="h-4 w-4" />
-          </button>
         </div>
 
         {/* Navigation */}
@@ -209,19 +227,6 @@ export function Sidebar({ sidebarOpen, setSidebarOpen, collapsed, setCollapsed }
             )}
           </div>
 
-          {/* Collapse Toggle - Desktop only */}
-          <div className="hidden lg:block border-t border-border">
-            <button
-              onClick={() => setCollapsed(!collapsed)}
-              className={`w-full flex items-center ${collapsed ? 'justify-center' : 'justify-end'} px-3 py-2.5 hover:bg-accent transition-colors`}
-            >
-              {collapsed ? (
-                <ChevronRight className="h-4 w-4" />
-              ) : (
-                <ChevronLeft className="h-4 w-4" />
-              )}
-            </button>
-          </div>
         </div>
       </aside>
     </>

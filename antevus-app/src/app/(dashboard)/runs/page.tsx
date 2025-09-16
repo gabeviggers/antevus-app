@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useAuth } from '@/contexts/auth-context'
 import { auditLogger } from '@/lib/audit/logger'
 import {
@@ -30,10 +30,13 @@ import {
   XCircle,
   AlertCircle,
   Clock,
-  Bell
+  Bell,
+  Activity,
+  Pause
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ThemeToggle } from '@/components/theme-toggle'
+import { MetricCard } from '@/components/ui/metric-card'
 
 export default function RunHistoryPage() {
   const { user, hasPermission } = useAuth()
@@ -45,6 +48,7 @@ export default function RunHistoryPage() {
   const [currentPage, setCurrentPage] = useState(1)
   const [showFilters, setShowFilters] = useState(false)
   const [dateRange, setDateRange] = useState({ start: '', end: '' })
+  const [showExportMenu, setShowExportMenu] = useState(false)
 
   const itemsPerPage = 20
 
@@ -86,13 +90,21 @@ export default function RunHistoryPage() {
     currentPage * itemsPerPage
   )
 
-  // Status counts
+  // Clamp currentPage when result size shrinks
+  useEffect(() => {
+    if (totalPages > 0 && currentPage > totalPages) {
+      setCurrentPage(totalPages)
+    }
+  }, [totalPages, currentPage])
+
+  // Status counts (respect current filters)
+  const countsSource = filteredRuns
   const statusCounts = {
-    all: runs.length,
-    completed: runs.filter(r => r.status === 'completed').length,
-    failed: runs.filter(r => r.status === 'failed').length,
-    aborted: runs.filter(r => r.status === 'aborted').length,
-    in_progress: runs.filter(r => r.status === 'in_progress').length
+    all: countsSource.length,
+    completed: countsSource.filter(r => r.status === 'completed').length,
+    failed: countsSource.filter(r => r.status === 'failed').length,
+    aborted: countsSource.filter(r => r.status === 'aborted').length,
+    in_progress: countsSource.filter(r => r.status === 'in_progress').length
   }
 
   // Check if user has export permissions
@@ -123,7 +135,7 @@ export default function RunHistoryPage() {
     a.href = url
     a.download = `run_history_${new Date().toISOString().split('T')[0]}.csv`
     a.click()
-    URL.revokeObjectURL(url)
+    setTimeout(() => URL.revokeObjectURL(url), 0)
   }
 
   const handleExportJSON = () => {
@@ -150,7 +162,7 @@ export default function RunHistoryPage() {
     a.href = url
     a.download = `run_history_${new Date().toISOString().split('T')[0]}.json`
     a.click()
-    URL.revokeObjectURL(url)
+    setTimeout(() => URL.revokeObjectURL(url), 0)
   }
 
   const handleExportPDF = () => {
@@ -191,7 +203,7 @@ export default function RunHistoryPage() {
     const colors = {
       excellent: 'bg-green-50 text-green-600 dark:bg-green-900/30 dark:text-green-400 ring-1 ring-green-600/20 dark:ring-green-800/30',
       good: 'bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400 ring-1 ring-blue-600/20 dark:ring-blue-800/30',
-      fair: 'bg-amber-50 text-amber-600 dark:bg-yellow-900/30 dark:text-yellow-400 ring-1 ring-amber-600/20 dark:ring-yellow-800/30',
+      fair: 'bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400 ring-1 ring-amber-600/20 dark:ring-amber-800/30',
       poor: 'bg-red-50 text-red-600 dark:bg-red-900/30 dark:text-red-400 ring-1 ring-red-600/20 dark:ring-red-800/30'
     }
     return colors[quality as keyof typeof colors] || colors.fair
@@ -232,61 +244,58 @@ export default function RunHistoryPage() {
 
       {/* Stats Cards */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
-        <button
+        <MetricCard
+          title="Total Runs"
+          value={statusCounts.all}
+          icon={<FileText className="h-4 w-4" />}
+          status="neutral"
+          isSelected={statusFilter === 'all'}
           onClick={() => { setStatusFilter('all'); setCurrentPage(1) }}
-          className={`p-4 rounded-lg border transition-all ${
-            statusFilter === 'all'
-              ? 'bg-primary text-primary-foreground border-primary'
-              : 'bg-card border-border hover:bg-accent'
-          }`}
-        >
-          <div className="text-2xl font-bold">{statusCounts.all}</div>
-          <div className="text-sm">Total Runs</div>
-        </button>
-        <button
+        />
+        <MetricCard
+          title="Completed"
+          value={statusCounts.completed}
+          icon={<CheckCircle className="h-4 w-4" />}
+          status="pass"
+          statusText={statusCounts.completed > 0 ? 'Successful runs' : 'No completions'}
+          isSelected={statusFilter === 'completed'}
           onClick={() => { setStatusFilter('completed'); setCurrentPage(1) }}
-          className={`p-4 rounded-lg border transition-all ${
-            statusFilter === 'completed'
-              ? 'bg-green-500 text-white border-green-500'
-              : 'bg-card border-border hover:bg-accent'
-          }`}
-        >
-          <div className="text-2xl font-bold">{statusCounts.completed}</div>
-          <div className="text-sm">Completed</div>
-        </button>
-        <button
+          trend={statusCounts.all > 0 ? {
+            value: Math.round((statusCounts.completed / statusCounts.all) * 100),
+            isPositive: true
+          } : undefined}
+        />
+        <MetricCard
+          title="In Progress"
+          value={statusCounts.in_progress}
+          icon={<Activity className="h-4 w-4" />}
+          status={statusCounts.in_progress > 0 ? 'warning' : 'neutral'}
+          statusText={statusCounts.in_progress > 0 ? 'Currently running' : 'None active'}
+          isSelected={statusFilter === 'in_progress'}
           onClick={() => { setStatusFilter('in_progress'); setCurrentPage(1) }}
-          className={`p-4 rounded-lg border transition-all ${
-            statusFilter === 'in_progress'
-              ? 'bg-blue-500 text-white border-blue-500'
-              : 'bg-card border-border hover:bg-accent'
-          }`}
-        >
-          <div className="text-2xl font-bold">{statusCounts.in_progress}</div>
-          <div className="text-sm">In Progress</div>
-        </button>
-        <button
+        />
+        <MetricCard
+          title="Failed"
+          value={statusCounts.failed}
+          icon={<XCircle className="h-4 w-4" />}
+          status={statusCounts.failed > 0 ? 'error' : 'pass'}
+          statusText={statusCounts.failed > 0 ? 'Review required' : 'No failures'}
+          isSelected={statusFilter === 'failed'}
           onClick={() => { setStatusFilter('failed'); setCurrentPage(1) }}
-          className={`p-4 rounded-lg border transition-all ${
-            statusFilter === 'failed'
-              ? 'bg-red-500 text-white border-red-500'
-              : 'bg-card border-border hover:bg-accent'
-          }`}
-        >
-          <div className="text-2xl font-bold">{statusCounts.failed}</div>
-          <div className="text-sm">Failed</div>
-        </button>
-        <button
+          trend={statusCounts.all > 0 ? {
+            value: Math.round((statusCounts.failed / statusCounts.all) * 100),
+            isPositive: false
+          } : undefined}
+        />
+        <MetricCard
+          title="Aborted"
+          value={statusCounts.aborted}
+          icon={<Pause className="h-4 w-4" />}
+          status={statusCounts.aborted > 0 ? 'warning' : 'neutral'}
+          statusText={statusCounts.aborted > 0 ? 'User stopped' : 'None aborted'}
+          isSelected={statusFilter === 'aborted'}
           onClick={() => { setStatusFilter('aborted'); setCurrentPage(1) }}
-          className={`p-4 rounded-lg border transition-all ${
-            statusFilter === 'aborted'
-              ? 'bg-yellow-500 text-white border-yellow-500'
-              : 'bg-card border-border hover:bg-accent'
-          }`}
-        >
-          <div className="text-2xl font-bold">{statusCounts.aborted}</div>
-          <div className="text-sm">Aborted</div>
-        </button>
+        />
       </div>
 
       {/* Controls Bar */}
@@ -318,29 +327,58 @@ export default function RunHistoryPage() {
           </Button>
 
           {/* Export Dropdown */}
-          <div className="relative group">
-            <Button variant="outline" size="sm" disabled={!canExport}>
+          <div className="relative">
+            <Button
+              id="export-menu-button"
+              variant="outline"
+              size="sm"
+              disabled={!canExport}
+              onClick={() => setShowExportMenu(!showExportMenu)}
+              aria-expanded={showExportMenu}
+              aria-haspopup="menu"
+              aria-controls={showExportMenu ? 'export-menu' : undefined}
+            >
               <Download className="h-4 w-4 mr-2" />
               Export
             </Button>
-            {canExport && (
-              <div className="absolute right-0 mt-1 w-48 bg-card border border-border rounded-md shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-10">
+            {canExport && showExportMenu && (
+              <div
+                id="export-menu"
+                role="menu"
+                aria-labelledby="export-menu-button"
+                tabIndex={-1}
+                onKeyDown={(e) => { if (e.key === 'Escape') setShowExportMenu(false) }}
+                onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setShowExportMenu(false) }}
+                className="absolute right-0 mt-1 w-48 bg-card border border-border rounded-md shadow-lg z-10"
+              >
               <button
-                onClick={handleExportCSV}
+                role="menuitem"
+                onClick={() => {
+                  handleExportCSV()
+                  setShowExportMenu(false)
+                }}
                 className="block w-full text-left px-4 py-2 hover:bg-accent transition-colors"
               >
                 <FileText className="inline h-4 w-4 mr-2" />
                 Export as CSV
               </button>
               <button
-                onClick={handleExportJSON}
+                role="menuitem"
+                onClick={() => {
+                  handleExportJSON()
+                  setShowExportMenu(false)
+                }}
                 className="block w-full text-left px-4 py-2 hover:bg-accent transition-colors"
               >
                 <FileText className="inline h-4 w-4 mr-2" />
                 Export as JSON
               </button>
               <button
-                onClick={handleExportPDF}
+                role="menuitem"
+                onClick={() => {
+                  handleExportPDF()
+                  setShowExportMenu(false)
+                }}
                 className="block w-full text-left px-4 py-2 hover:bg-accent transition-colors"
               >
                 <FileText className="inline h-4 w-4 mr-2" />
@@ -429,7 +467,11 @@ export default function RunHistoryPage() {
 
       {/* Results Summary */}
       <div className="mb-4 text-sm text-muted-foreground">
-        Showing {((currentPage - 1) * itemsPerPage) + 1} - {Math.min(currentPage * itemsPerPage, filteredRuns.length)} of {filteredRuns.length} runs
+        Showing {filteredRuns.length ? ((currentPage - 1) * itemsPerPage) + 1 : 0}
+        {' - '}
+        {filteredRuns.length ? Math.min(currentPage * itemsPerPage, filteredRuns.length) : 0}
+        {' of '}
+        {filteredRuns.length} runs
       </div>
 
       {/* Runs Table */}
@@ -529,16 +571,12 @@ export default function RunHistoryPage() {
             {/* Page numbers */}
             <div className="flex gap-1">
               {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                let pageNum
-                if (totalPages <= 5) {
-                  pageNum = i + 1
-                } else if (currentPage <= 3) {
-                  pageNum = i + 1
-                } else if (currentPage >= totalPages - 2) {
-                  pageNum = totalPages - 4 + i
-                } else {
-                  pageNum = currentPage - 2 + i
-                }
+                const startPage =
+                  totalPages <= 5 ? 1 :
+                  currentPage <= 3 ? 1 :
+                  currentPage >= totalPages - 2 ? totalPages - 4 :
+                  currentPage - 2
+                const pageNum = startPage + i
 
                 return (
                   <Button
