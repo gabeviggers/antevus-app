@@ -40,7 +40,7 @@ const GenerateKeySchema = z.object({
   name: z.string().min(1).max(100),
   permissions: z.array(z.enum(['read', 'write', 'delete', 'admin'])),
   expiresIn: z.enum(['7d', '30d', '90d', '1y', 'never']).optional(),
-  ipAllowlist: z.array(z.string().ip()).optional(),
+  ipAllowlist: z.array(z.string().regex(/^(\d{1,3}\.){3}\d{1,3}$/)).optional(),
   rateLimit: z.number().min(10).max(10000).optional()
 })
 
