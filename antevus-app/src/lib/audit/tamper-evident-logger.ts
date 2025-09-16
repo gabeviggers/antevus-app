@@ -4,7 +4,7 @@
  * Compliant with 21 CFR Part 11 and HIPAA requirements
  */
 
-import { createHash, createHmac } from 'crypto'
+import { createHash, createHmac, timingSafeEqual } from 'crypto'
 import { User } from '@/lib/auth/types'
 import { prisma } from '@/lib/db/prisma'
 import { logger } from '@/lib/logger'
@@ -43,6 +43,16 @@ export interface AuditVerificationResult {
   tamperedEvents?: string[]
 }
 
+// Type for metadata stored in database
+interface AuditMetadata {
+  hash?: string
+  signature?: string
+  previousHash?: string
+  sequenceNumber?: number
+  merkleRoot?: string
+  [key: string]: unknown
+}
+
 /**
  * Tamper-Evident Audit Logger
  */
@@ -70,11 +80,11 @@ export class TamperEvidentAuditLogger {
       })
 
       if (lastEvent?.metadata) {
-        const metadata = lastEvent.metadata as any
+        const metadata = lastEvent.metadata as AuditMetadata
         if (metadata.hash) {
           this.previousHash = metadata.hash
         }
-        if (metadata.sequenceNumber) {
+        if (typeof metadata.sequenceNumber === 'number') {
           this.sequenceNumber = metadata.sequenceNumber + 1
         }
       }
@@ -121,10 +131,11 @@ export class TamperEvidentAuditLogger {
   private verifySignature(eventHash: string, signature: string): boolean {
     const expectedSignature = this.signEvent(eventHash)
     // Use timing-safe comparison
-    return crypto.timingSafeEqual(
-      Buffer.from(signature),
-      Buffer.from(expectedSignature)
-    )
+    // Use timing-safe comparison from crypto module
+    const sig1 = Buffer.from(signature)
+    const sig2 = Buffer.from(expectedSignature)
+    if (sig1.length !== sig2.length) return false
+    return timingSafeEqual(sig1, sig2)
   }
 
   /**
@@ -144,7 +155,7 @@ export class TamperEvidentAuditLogger {
     try {
       // Create base event
       const baseEvent: Omit<TamperEvidentAuditEvent, 'hash' | 'signature'> = {
-        id: `evt_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        id: `evt_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`,
         timestamp: new Date().toISOString(),
         userId: user?.id || 'anonymous',
         userEmail: user?.email || 'anonymous',
@@ -246,7 +257,7 @@ export class TamperEvidentAuditLogger {
       })
 
       for (const dbEvent of events) {
-        const metadata = dbEvent.metadata as any
+        const metadata = dbEvent.metadata as AuditMetadata
 
         // Check sequence number
         if (metadata.sequenceNumber !== expectedSequence) {
@@ -280,22 +291,22 @@ export class TamperEvidentAuditLogger {
         }
 
         // Verify hash
-        const calculatedHash = this.hashEvent(eventForHash as any)
-        if (calculatedHash !== metadata.hash) {
+        const calculatedHash = this.hashEvent(eventForHash as Omit<TamperEvidentAuditEvent, 'hash' | 'signature'>)
+        if (metadata.hash && calculatedHash !== metadata.hash) {
           errors.push(`Hash mismatch for event ${dbEvent.id}: data has been tampered`)
           tamperedEvents.push(dbEvent.id)
         }
 
         // Verify signature
         if (metadata.signature) {
-          const validSignature = this.verifySignature(metadata.hash, metadata.signature)
+          const validSignature = this.verifySignature(metadata.hash || '', metadata.signature)
           if (!validSignature) {
             errors.push(`Invalid signature for event ${dbEvent.id}`)
             tamperedEvents.push(dbEvent.id)
           }
         }
 
-        previousHash = metadata.hash
+        previousHash = metadata.hash || ''
         expectedSequence++
       }
 
@@ -352,7 +363,7 @@ export class TamperEvidentAuditLogger {
     startDate: Date,
     endDate: Date
   ): Promise<{
-    events: any[]
+    events: TamperEvidentAuditEvent[]
     proof: {
       merkleRoot: string
       chainValid: boolean
@@ -360,7 +371,7 @@ export class TamperEvidentAuditLogger {
       timestamp: string
     }
   }> {
-    const events = await prisma.auditEvent.findMany({
+    const dbEvents = await prisma.auditEvent.findMany({
       where: {
         timestamp: {
           gte: startDate,
@@ -373,8 +384,30 @@ export class TamperEvidentAuditLogger {
     // Verify chain integrity
     const verification = await this.verifyChain(startDate, endDate)
 
+    // Map database events to TamperEvidentAuditEvent format
+    const events: TamperEvidentAuditEvent[] = dbEvents.map(evt => ({
+      id: evt.id,
+      timestamp: evt.timestamp.toISOString(),
+      userId: evt.userId || 'anonymous',
+      userEmail: 'unknown',
+      userName: 'Unknown',
+      userRole: 'none',
+      eventType: evt.eventType as AuditEventType,
+      resourceType: evt.resourceType || undefined,
+      resourceId: evt.resourceId || undefined,
+      details: evt.metadata as Record<string, unknown> || undefined,
+      success: evt.success,
+      errorMessage: evt.errorMessage || undefined,
+      ipAddress: evt.ipAddress || 'unknown',
+      userAgent: evt.userAgent || 'unknown',
+      hash: (evt.metadata as AuditMetadata)?.hash || '',
+      previousHash: evt.previousHash || '',
+      signature: evt.signature || '',
+      sequenceNumber: (evt.metadata as AuditMetadata)?.sequenceNumber || 0
+    }))
+
     // Create Merkle root
-    const merkleRoot = this.createMerkleRoot(events as any)
+    const merkleRoot = this.createMerkleRoot(events)
 
     // Sign the export
     const exportSignature = createHmac('sha256', this.signingKey)
@@ -418,7 +451,11 @@ export class TamperEvidentAuditLogger {
   /**
    * Send security alert (placeholder for production implementation)
    */
-  private async sendSecurityAlert(alert: any): Promise<void> {
+  private async sendSecurityAlert(alert: {
+    severity: string
+    message: string
+    details: AuditVerificationResult
+  }): Promise<void> {
     logger.error('SECURITY ALERT', alert)
     // In production: Send to SIEM, PagerDuty, email security team, etc.
   }

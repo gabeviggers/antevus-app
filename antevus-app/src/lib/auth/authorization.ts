@@ -33,10 +33,13 @@ export type ConditionOperator =
   | 'less_than'
   | 'matches_regex'
 
+// Type for condition values
+export type ConditionValue = string | number | boolean | null | string[]
+
 export interface Condition {
   field: string
   operator: ConditionOperator
-  value: any
+  value: ConditionValue
 }
 
 export interface Permission {
@@ -260,7 +263,7 @@ export interface AuthorizationContext {
   user: User
   resource: Resource
   action: Action
-  resourceData?: Record<string, any> // Actual resource being accessed
+  resourceData?: Record<string, unknown> // Actual resource being accessed
   environment?: {
     ipAddress?: string
     time?: Date
@@ -389,11 +392,11 @@ export class AuthorizationService {
 
       case 'department':
         // In production, would check against user's department
-        return resourceData.department === (context.user as any).department
+        return resourceData.department === (context.user as User & { department?: string }).department
 
       case 'organization':
         // In production, would check against user's organization
-        return resourceData.organization === (context.user as any).organization
+        return resourceData.organization === (context.user as User & { organization?: string }).organization
 
       default:
         return false
@@ -429,13 +432,13 @@ export class AuthorizationService {
   /**
    * Get nested field value from object
    */
-  private getFieldValue(obj: any, field: string): any {
+  private getFieldValue(obj: Record<string, unknown>, field: string): unknown {
     const parts = field.split('.')
-    let value = obj
+    let value: unknown = obj
 
     for (const part of parts) {
       if (value == null) return undefined
-      value = value[part]
+      value = (value as Record<string, unknown>)[part]
     }
 
     return value
@@ -445,9 +448,9 @@ export class AuthorizationService {
    * Evaluate a single condition
    */
   private evaluateCondition(
-    fieldValue: any,
+    fieldValue: unknown,
     operator: ConditionOperator,
-    expectedValue: any
+    expectedValue: ConditionValue
   ): boolean {
     switch (operator) {
       case 'equals':
@@ -460,10 +463,10 @@ export class AuthorizationService {
         return String(fieldValue).includes(String(expectedValue))
 
       case 'in':
-        return Array.isArray(expectedValue) && expectedValue.includes(fieldValue)
+        return Array.isArray(expectedValue) && expectedValue.includes(fieldValue as string)
 
       case 'not_in':
-        return Array.isArray(expectedValue) && !expectedValue.includes(fieldValue)
+        return Array.isArray(expectedValue) && !expectedValue.includes(fieldValue as string)
 
       case 'greater_than':
         return Number(fieldValue) > Number(expectedValue)
@@ -472,6 +475,7 @@ export class AuthorizationService {
         return Number(fieldValue) < Number(expectedValue)
 
       case 'matches_regex':
+        if (typeof expectedValue !== 'string') return false
         return new RegExp(expectedValue).test(String(fieldValue))
 
       default:
@@ -492,7 +496,7 @@ export class AuthorizationService {
       'security.authorization',
       {
         resourceType: context.resource,
-        resourceId: context.resourceData?.id,
+        resourceId: context.resourceData?.id as string | undefined,
         success: allowed,
         metadata: {
           action: context.action,
@@ -545,8 +549,22 @@ export const authorizationService = new AuthorizationService()
 /**
  * Express/Next.js middleware for authorization
  */
+interface AuthRequest {
+  user?: User
+  body?: Record<string, unknown>
+  query?: Record<string, unknown>
+  ip?: string
+}
+
+interface AuthResponse {
+  status: (code: number) => AuthResponse
+  json: (data: unknown) => void
+}
+
+type NextFunction = () => void
+
 export function requirePermission(resource: Resource, action: Action) {
-  return async (req: any, res: any, next: any) => {
+  return async (req: AuthRequest, res: AuthResponse, next: NextFunction) => {
     try {
       const user = req.user // Assumes user is attached by auth middleware
 

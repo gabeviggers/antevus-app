@@ -45,6 +45,8 @@ export interface SessionData {
   expiresAt: number
   ipAddress?: string
   userAgent?: string
+  organization?: string
+  department?: string
 }
 
 /**
@@ -81,7 +83,9 @@ export async function createSecureSession(
       createdAt: now,
       expiresAt,
       ipAddress: request?.headers.get('x-forwarded-for')?.split(',')[0],
-      userAgent: request?.headers.get('user-agent')
+      userAgent: request?.headers.get('user-agent') || undefined,
+      organization: user.organization,
+      department: user.department
     }
 
     const secret = getSessionSecret()
@@ -163,7 +167,9 @@ export async function refreshSessionIfNeeded(
       id: session.userId,
       email: session.email,
       name: session.name,
-      role: session.role
+      role: session.role as 'admin' | 'scientist' | 'lab_manager' | 'viewer',
+      organization: session.organization || 'Unknown',
+      createdAt: new Date(session.createdAt).toISOString()
     }
 
     const newToken = await createSecureSession(user)
@@ -279,7 +285,9 @@ export async function authenticateUser(
       id: dbUser.id,
       email: dbUser.email,
       name: dbUser.name,
-      role: dbUser.role
+      role: dbUser.role as 'admin' | 'scientist' | 'lab_manager' | 'viewer',
+      organization: 'Unknown', // Add organization to database schema if needed
+      createdAt: dbUser.createdAt.toISOString()
     }
 
     return { success: true, user }

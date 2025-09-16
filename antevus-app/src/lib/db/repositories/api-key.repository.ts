@@ -4,7 +4,7 @@
  */
 
 import { prisma } from '@/lib/db/prisma'
-import { ApiKey, Prisma } from '@prisma/client'
+import { ApiKey } from '@prisma/client'
 import crypto from 'crypto'
 import { logger } from '@/lib/logger'
 

@@ -11,7 +11,7 @@ import { logger } from '@/lib/logger'
 const ALGORITHM = 'aes-256-gcm'
 const SALT_LENGTH = 64
 const IV_LENGTH = 16
-const TAG_LENGTH = 16
+// const TAG_LENGTH = 16 // Currently unused but kept for reference
 const ITERATIONS = 100000
 const KEY_LENGTH = 32
 
@@ -172,7 +172,7 @@ export class EncryptionService {
   /**
    * Encrypt sensitive fields in an object
    */
-  encryptFields<T extends Record<string, any>>(
+  encryptFields<T extends Record<string, unknown>>(
     obj: T,
     fieldsToEncrypt: (keyof T)[]
   ): T & { _encrypted: Record<string, EncryptedData> } {
@@ -186,7 +186,7 @@ export class EncryptionService {
           purpose: `field:${String(field)}`
         }
 
-        result._encrypted[String(field)] = this.encrypt(obj[field], metadata)
+        result._encrypted[String(field)] = this.encrypt(obj[field] as string | object, metadata)
         delete result[field]
       }
     }
@@ -197,7 +197,7 @@ export class EncryptionService {
   /**
    * Decrypt sensitive fields in an object
    */
-  decryptFields<T extends Record<string, any>>(
+  decryptFields<T extends Record<string, unknown>>(
     obj: T & { _encrypted?: Record<string, EncryptedData> }
   ): T {
     if (!obj._encrypted) {
@@ -213,7 +213,7 @@ export class EncryptionService {
         purpose: `field:${field}`
       }
 
-      result[field as keyof T] = this.decrypt(encryptedData, metadata)
+      result[field as keyof T] = this.decrypt(encryptedData, metadata) as T[keyof T]
     }
 
     return result
@@ -304,28 +304,28 @@ export function decryptDatabaseField(encryptedValue: string | null): string | nu
  */
 export function createEncryptionMiddleware(fieldsToEncrypt: string[]) {
   return {
-    async beforeCreate(data: any) {
+    async beforeCreate(data: Record<string, unknown>) {
       for (const field of fieldsToEncrypt) {
         if (data[field]) {
-          data[field] = encryptDatabaseField(data[field])
+          data[field] = encryptDatabaseField(data[field] as string | null)
         }
       }
       return data
     },
 
-    async afterFind(data: any) {
+    async afterFind(data: unknown) {
       if (!data) return data
 
-      const decrypt = (item: any) => {
+      const decrypt = (item: Record<string, unknown>) => {
         for (const field of fieldsToEncrypt) {
           if (item[field]) {
-            item[field] = decryptDatabaseField(item[field])
+            item[field] = decryptDatabaseField(item[field] as string | null)
           }
         }
         return item
       }
 
-      return Array.isArray(data) ? data.map(decrypt) : decrypt(data)
+      return Array.isArray(data) ? data.map(decrypt) : decrypt(data as Record<string, unknown>)
     }
   }
 }

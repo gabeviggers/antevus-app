@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState } from 'react'
-import { Search, Key, Copy, Check, Shield, Activity, Lock, AlertCircle, ExternalLink, Bell } from 'lucide-react'
+import { Search, Key, Copy, Check, Shield, Activity, AlertCircle, ExternalLink, Bell } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -282,13 +282,12 @@ export default function APIPlaygroundPage() {
                 ⚠️ This key will never be shown again!
               </p>
             </div>
-          ),
-          duration: 30000 // Show for 30 seconds
+          )
         })
       } else {
         throw new Error('Failed to generate key')
       }
-    } catch (error) {
+    } catch {
       toast({
         title: 'Error',
         description: 'Failed to generate API key. Please try again.',

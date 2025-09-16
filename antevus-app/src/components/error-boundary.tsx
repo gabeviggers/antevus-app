@@ -3,7 +3,7 @@
 import React, { Component, ReactNode } from 'react'
 import { AlertTriangle, RefreshCw, Home } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { auditLogger } from '@/lib/audit/logger'
+// import { auditLogger } from '@/lib/audit/logger' // Currently unused
 
 interface Props {
   children: ReactNode

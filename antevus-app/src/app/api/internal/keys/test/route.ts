@@ -106,7 +106,7 @@ export async function POST(request: NextRequest) {
  * Get user's stored API key from secure storage
  * In production, this would fetch from encrypted database
  */
-async function getUserStoredApiKey(userId: string): Promise<string> {
+async function getUserStoredApiKey(_userId: string): Promise<string> {
   // This is a placeholder function
   // In production:
   // 1. Query database for user's active API key

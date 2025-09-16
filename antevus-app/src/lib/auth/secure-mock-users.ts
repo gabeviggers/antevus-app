@@ -159,7 +159,10 @@ export async function validateSecureCredentials(
       id: storedUser.id,
       email: storedUser.email,
       name: storedUser.name,
-      role: storedUser.role
+      role: storedUser.role,
+      organization: storedUser.organization,
+      department: storedUser.department,
+      createdAt: storedUser.createdAt
     }
 
     return { user }
@@ -231,11 +234,14 @@ export async function needsRehash(hash: string): Promise<boolean> {
  * Get all users (without passwords) for admin purposes
  */
 export function getAllUsers(): User[] {
-  return mockUsersWithHashes.map(({ passwordHash, ...user }) => ({
+  return mockUsersWithHashes.map((user) => ({
     id: user.id,
     email: user.email,
     name: user.name,
-    role: user.role
+    role: user.role,
+    organization: user.organization,
+    department: user.department,
+    createdAt: user.createdAt
   }))
 }
 

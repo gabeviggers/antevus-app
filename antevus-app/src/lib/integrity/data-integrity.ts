@@ -5,8 +5,8 @@
  */
 
 import { createHash, createHmac } from 'crypto'
+import { promises as fs } from 'fs'
 import { logger } from '@/lib/logger'
-import { prisma } from '@/lib/db/prisma'
 import { encryptionService } from '@/lib/security/encryption'
 
 // Supported checksum algorithms
@@ -266,7 +266,7 @@ export class DataIntegrityService {
       }
 
       // Parse backup data
-      let parsedData: any
+      let parsedData: { data: unknown; integrity: IntegrityMetadata }
       if (metadata.encrypted) {
         const encrypted = JSON.parse(backupData)
         const decrypted = encryptionService.decrypt(encrypted)
@@ -277,7 +277,7 @@ export class DataIntegrityService {
 
       // Verify internal integrity
       const internalCheck = this.verifyIntegrityMetadata(
-        parsedData.data,
+        parsedData.data as string | object | Buffer,
         parsedData.integrity
       )
 
@@ -354,7 +354,6 @@ export class DataIntegrityService {
   }> {
     // In production, this would read file in chunks
     // For now, simplified implementation
-    const fs = require('fs').promises
     const fileBuffer = await fs.readFile(filePath)
 
     const chunkChecksums: string[] = []
@@ -377,18 +376,18 @@ export class DataIntegrityService {
   /**
    * Normalize JSON for consistent hashing
    */
-  private normalizeJSON(obj: any): any {
+  private normalizeJSON(obj: unknown): unknown {
     if (obj === null || typeof obj !== 'object') return obj
 
     if (Array.isArray(obj)) {
       return obj.map(item => this.normalizeJSON(item))
     }
 
-    const sorted: any = {}
+    const sorted: Record<string, unknown> = {}
     const keys = Object.keys(obj).sort()
 
     for (const key of keys) {
-      sorted[key] = this.normalizeJSON(obj[key])
+      sorted[key] = this.normalizeJSON((obj as Record<string, unknown>)[key])
     }
 
     return sorted
@@ -448,7 +447,7 @@ export class DataIntegrityService {
   /**
    * Store backup data (placeholder - would use S3/GCS in production)
    */
-  private async storeBackup(backupId: string, data: string): Promise<string> {
+  private async storeBackup(backupId: string, _data: string): Promise<string> {
     // In production, store to S3/GCS
     // For now, return a mock location
     return `s3://backups/${backupId}`
@@ -457,7 +456,7 @@ export class DataIntegrityService {
   /**
    * Retrieve backup data
    */
-  private async retrieveBackup(location: string): Promise<string> {
+  private async retrieveBackup(_location: string): Promise<string> {
     // In production, retrieve from S3/GCS
     // For now, return mock data
     return '{"data":"mock","integrity":{}}'
@@ -474,7 +473,7 @@ export class DataIntegrityService {
   /**
    * Get backup metadata
    */
-  private async getBackupMetadata(backupId: string): Promise<BackupMetadata | null> {
+  private async getBackupMetadata(_backupId: string): Promise<BackupMetadata | null> {
     // In production, retrieve from database
     return null
   }
@@ -505,13 +504,24 @@ export const dataIntegrityService = new DataIntegrityService()
 /**
  * Middleware for automatic integrity checking
  */
+interface IntegrityRequest {
+  body?: unknown
+}
+
+interface IntegrityResponse {
+  send: (data: unknown) => unknown
+  setHeader: (name: string, value: string) => void
+}
+
+type IntegrityNext = () => void
+
 export function integrityMiddleware() {
-  return async (req: any, res: any, next: any) => {
+  return async (_req: IntegrityRequest, res: IntegrityResponse & Record<string, unknown>, next: IntegrityNext) => {
     // Add integrity metadata to response
     const originalSend = res.send
 
-    res.send = function(data: any) {
-      if (typeof data === 'object') {
+    res.send = function(data: unknown) {
+      if (typeof data === 'object' && data !== null) {
         const checksum = dataIntegrityService.generateChecksum(data)
         res.setHeader('X-Data-Checksum', checksum)
         res.setHeader('X-Checksum-Algorithm', 'sha256')

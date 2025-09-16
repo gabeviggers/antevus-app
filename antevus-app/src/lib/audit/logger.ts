@@ -21,6 +21,7 @@ export type AuditEventType =
   | 'security.csrf_failure'
   | 'security.rate_limit_exceeded'
   | 'security.unauthorized_access'
+  | 'security.authorization'
   | 'api.key.generate'
   | 'api.key.generate.failed'
   | 'api.key.revoke'

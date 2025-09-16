@@ -231,7 +231,7 @@ export async function POST(request: NextRequest) {
 
     // Check for existing keys limit (max 10 active keys per user)
     const userKeys = Array.from(apiKeyStore.values()).filter(
-      k => k.userId === session.user.id && k.isActive
+      k => k.userId === session!.user.id && k.isActive
     )
 
     if (userKeys.length >= 10) {
@@ -257,7 +257,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Generate the API key
-    const { key, prefix, hash, displayPrefix } = generateAPIKey()
+    const { key, hash, displayPrefix } = generateAPIKey()
     const keyId = 'apikey_' + crypto.randomBytes(16).toString('hex')
 
     // Create API key record - NEVER store the actual key, only its hash
@@ -348,7 +348,7 @@ export async function GET(request: NextRequest) {
 
     // Get user's API keys
     const userKeys = Array.from(apiKeyStore.values())
-      .filter(k => k.userId === session.user.id)
+      .filter(k => k.userId === session!.user.id)
       .map(k => ({
         id: k.id,
         name: k.name,

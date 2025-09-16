@@ -36,7 +36,7 @@ export interface SecurityEvent {
   userId?: string
   ipAddress?: string
   userAgent?: string
-  details: Record<string, any>
+  details: Record<string, unknown>
   indicators: string[] // Indicators of compromise
   mitigationTaken?: string
   falsePositive?: boolean
@@ -536,7 +536,7 @@ export class SecurityMonitoringService {
       timestamp: new Date(),
       type: 'api.suspicious_pattern',
       severity: 'low',
-      details: this.metrics,
+      details: { ...this.metrics } as Record<string, unknown>,
       indicators: []
     })
   }
@@ -607,7 +607,7 @@ interface SecurityDetectionRule {
     detected: boolean
     type?: SecurityEventType
     severity?: SeverityLevel
-    details?: Record<string, any>
+    details?: Record<string, unknown>
   }>
 }
 
