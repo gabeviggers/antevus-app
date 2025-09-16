@@ -18,7 +18,9 @@ export function middleware(request: NextRequest) {
   response.headers.set(
     'Content-Security-Policy',
     "default-src 'self'; " +
-    "base-uri 'none'; object-src 'none'; form-action 'self'; " +
+    "base-uri 'none'; " +
+    "object-src 'none'; " +
+    "form-action 'self'; " +
     `script-src 'self' 'unsafe-inline'${isDevelopment ? " 'unsafe-eval'" : ''}; ` +
     "style-src 'self' 'unsafe-inline'; " +
     "img-src 'self' data: https:; " +
