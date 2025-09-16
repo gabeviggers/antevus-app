@@ -129,17 +129,20 @@ export async function POST(request: NextRequest) {
     // Verify authentication
     const session = await getServerSession(request)
     if (!session?.user) {
-      await auditLogger.log({
-        type: 'api.key.generate.failed',
-        userId: 'anonymous',
-        resourceType: 'api_key',
-        resourceId: 'unknown',
-        success: false,
-        metadata: {
-          reason: 'Unauthorized',
-          ip: request.ip || request.headers.get('x-forwarded-for') || 'unknown'
+      await auditLogger.logEvent(
+        null,
+        'api.key.generate.failed',
+        {
+          resourceType: 'api_key',
+          resourceId: 'unknown',
+          success: false,
+          errorMessage: 'Unauthorized',
+          metadata: {
+            reason: 'Unauthorized',
+            ip: request.headers.get('x-forwarded-for') || 'unknown'
+          }
         }
-      })
+      )
 
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
@@ -147,17 +150,20 @@ export async function POST(request: NextRequest) {
     // Validate CSRF token
     const csrfValidation = validateCSRFToken(request, session.user.id, session.user)
     if (!csrfValidation.valid) {
-      await auditLogger.log({
-        type: 'api.key.generate.failed',
-        userId: session.user.id,
-        resourceType: 'api_key',
-        resourceId: 'unknown',
-        success: false,
-        metadata: {
-          reason: 'Invalid CSRF token',
-          error: csrfValidation.error
+      await auditLogger.logEvent(
+        session.user,
+        'api.key.generate.failed',
+        {
+          resourceType: 'api_key',
+          resourceId: 'unknown',
+          success: false,
+          errorMessage: 'Invalid CSRF token',
+          metadata: {
+            reason: 'Invalid CSRF token',
+            error: csrfValidation.error
+          }
         }
-      })
+      )
 
       return NextResponse.json(
         { error: csrfValidation.error || 'Invalid CSRF token' },
@@ -167,17 +173,20 @@ export async function POST(request: NextRequest) {
 
     // Check user permissions (must be Admin or have API access)
     if (session.user.role !== 'admin' && session.user.role !== 'scientist') {
-      await auditLogger.log({
-        type: 'api.key.generate.failed',
-        userId: session.user.id,
-        resourceType: 'api_key',
-        resourceId: 'unknown',
-        success: false,
-        metadata: {
-          reason: 'Insufficient permissions',
-          userRole: session.user.role
+      await auditLogger.logEvent(
+        session.user,
+        'api.key.generate.failed',
+        {
+          resourceType: 'api_key',
+          resourceId: 'unknown',
+          success: false,
+          errorMessage: 'Insufficient permissions',
+          metadata: {
+            reason: 'Insufficient permissions',
+            userRole: session.user.role
+          }
         }
-      })
+      )
 
       return NextResponse.json(
         { error: 'Insufficient permissions to generate API keys' },
@@ -190,17 +199,20 @@ export async function POST(request: NextRequest) {
     const validation = GenerateKeySchema.safeParse(body)
 
     if (!validation.success) {
-      await auditLogger.log({
-        type: 'api.key.generate.failed',
-        userId: session.user.id,
-        resourceType: 'api_key',
-        resourceId: 'unknown',
-        success: false,
-        metadata: {
-          reason: 'Validation failed',
-          errors: validation.error.flatten()
+      await auditLogger.logEvent(
+        session.user,
+        'api.key.generate.failed',
+        {
+          resourceType: 'api_key',
+          resourceId: 'unknown',
+          success: false,
+          errorMessage: 'Validation failed',
+          metadata: {
+            reason: 'Validation failed',
+            errors: validation.error.flatten()
+          }
         }
-      })
+      )
 
       return NextResponse.json(
         { error: 'Invalid request', details: validation.error.flatten() },
@@ -216,17 +228,20 @@ export async function POST(request: NextRequest) {
     )
 
     if (userKeys.length >= 10) {
-      await auditLogger.log({
-        type: 'api.key.generate.failed',
-        userId: session.user.id,
-        resourceType: 'api_key',
-        resourceId: 'unknown',
-        success: false,
-        metadata: {
-          reason: 'Key limit exceeded',
-          currentKeys: userKeys.length
+      await auditLogger.logEvent(
+        session.user,
+        'api.key.generate.failed',
+        {
+          resourceType: 'api_key',
+          resourceId: 'unknown',
+          success: false,
+          errorMessage: 'Key limit exceeded',
+          metadata: {
+            reason: 'Key limit exceeded',
+            currentKeys: userKeys.length
+          }
         }
-      })
+      )
 
       return NextResponse.json(
         { error: 'Maximum number of API keys reached (10)' },
@@ -260,21 +275,23 @@ export async function POST(request: NextRequest) {
     keyHashStore.set(hash, keyId)
 
     // Audit log the creation
-    await auditLogger.log({
-      type: 'api.key.generated',
-      userId: session.user.id,
-      resourceType: 'api_key',
-      resourceId: keyId,
-      success: true,
-      metadata: {
-        name,
-        permissions,
-        expiresIn,
-        hasIpAllowlist: !!ipAllowlist,
-        rateLimit,
-        prefix: apiKey.prefix
+    await auditLogger.logEvent(
+      session.user,
+      'api.key.generate',
+      {
+        resourceType: 'api_key',
+        resourceId: keyId,
+        success: true,
+        metadata: {
+          name,
+          permissions,
+          expiresIn,
+          hasIpAllowlist: !!ipAllowlist,
+          rateLimit,
+          prefix: apiKey.prefix
+        }
       }
-    })
+    )
 
     // Return the key only once (it won't be retrievable again)
     return NextResponse.json({
@@ -291,16 +308,19 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('API key generation error:', error)
 
-    await auditLogger.log({
-      type: 'api.key.generate.error',
-      userId: 'system',
-      resourceType: 'api_key',
-      resourceId: 'unknown',
-      success: false,
-      metadata: {
-        error: error instanceof Error ? error.message : 'Unknown error'
+    await auditLogger.logEvent(
+      null,
+      'api.key.generate.failed',
+      {
+        resourceType: 'api_key',
+        resourceId: 'unknown',
+        success: false,
+        errorMessage: error instanceof Error ? error.message : 'Unknown error',
+        metadata: {
+          error: error instanceof Error ? error.message : 'Unknown error'
+        }
       }
-    })
+    )
 
     return NextResponse.json(
       { error: 'Failed to generate API key' },
@@ -335,16 +355,18 @@ export async function GET(request: NextRequest) {
       }))
 
     // Audit the list operation
-    await auditLogger.log({
-      type: 'api.key.list',
-      userId: session.user.id,
-      resourceType: 'api_key',
-      resourceId: 'all',
-      success: true,
-      metadata: {
-        count: userKeys.length
+    await auditLogger.logEvent(
+      session.user,
+      'api.key.list',
+      {
+        resourceType: 'api_key',
+        resourceId: 'all',
+        success: true,
+        metadata: {
+          count: userKeys.length
+        }
       }
-    })
+    )
 
     return NextResponse.json({ keys: userKeys })
 
@@ -392,17 +414,19 @@ export async function DELETE(request: NextRequest) {
     apiKeyStore.set(keyId, apiKey)
 
     // Audit the revocation
-    await auditLogger.log({
-      type: 'api.key.revoked',
-      userId: session.user.id,
-      resourceType: 'api_key',
-      resourceId: keyId,
-      success: true,
-      metadata: {
-        name: apiKey.name,
-        prefix: apiKey.prefix
+    await auditLogger.logEvent(
+      session.user,
+      'api.key.revoke',
+      {
+        resourceType: 'api_key',
+        resourceId: keyId,
+        success: true,
+        metadata: {
+          name: apiKey.name,
+          prefix: apiKey.prefix
+        }
       }
-    })
+    )
 
     return NextResponse.json({ success: true, message: 'API key revoked' })
 

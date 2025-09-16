@@ -21,6 +21,11 @@ export type AuditEventType =
   | 'security.csrf_failure'
   | 'security.rate_limit_exceeded'
   | 'security.unauthorized_access'
+  | 'api.key.generate'
+  | 'api.key.generate.failed'
+  | 'api.key.revoke'
+  | 'api.key.use'
+  | 'api.key.list'
 
 export interface AuditEvent {
   id: string
