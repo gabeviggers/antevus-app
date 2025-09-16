@@ -516,7 +516,7 @@ export default function APIPlaygroundPage() {
                           <div className="mb-4">
                             <h4 className="text-sm font-medium text-muted-foreground mb-2">Path Parameters</h4>
                             <div className="space-y-2">
-                              {('path' in currentEndpoint.params && currentEndpoint.params.path ? currentEndpoint.params.path : []).map((param: any, idx: number) => (
+                              {('path' in currentEndpoint.params && currentEndpoint.params.path ? currentEndpoint.params.path : []).map((param: { name: string; type: string; required: boolean; description: string }, idx: number) => (
                                 <div key={idx} className="flex items-start gap-3 p-3 bg-muted/50 rounded-md">
                                   <div className="flex-1">
                                     <div className="flex items-center gap-2">
@@ -544,7 +544,7 @@ export default function APIPlaygroundPage() {
                           <div className="mb-4">
                             <h4 className="text-sm font-medium text-muted-foreground mb-2">Query Parameters</h4>
                             <div className="space-y-2">
-                              {('query' in currentEndpoint.params && currentEndpoint.params.query ? currentEndpoint.params.query : []).map((param: any, idx: number) => (
+                              {('query' in currentEndpoint.params && currentEndpoint.params.query ? currentEndpoint.params.query : []).map((param: { name: string; type: string; required: boolean; description: string }, idx: number) => (
                                 <div key={idx} className="flex items-start gap-3 p-3 bg-muted/50 rounded-md">
                                   <div className="flex-1">
                                     <div className="flex items-center gap-2">
