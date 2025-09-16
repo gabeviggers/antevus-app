@@ -61,6 +61,7 @@ export function Sidebar({ sidebarOpen, setSidebarOpen, collapsed, setCollapsed }
 
       {/* Sidebar */}
       <aside
+        aria-expanded={!collapsed}
         className={`${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         } fixed inset-y-0 left-0 z-50 flex flex-col h-screen bg-card border-r border-border transition-all duration-300 lg:translate-x-0 ${

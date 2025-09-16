@@ -48,6 +48,7 @@ export default function RunHistoryPage() {
   const [currentPage, setCurrentPage] = useState(1)
   const [showFilters, setShowFilters] = useState(false)
   const [dateRange, setDateRange] = useState({ start: '', end: '' })
+  const [showExportMenu, setShowExportMenu] = useState(false)
 
   const itemsPerPage = 20
 
@@ -194,7 +195,7 @@ export default function RunHistoryPage() {
     const colors = {
       excellent: 'bg-green-50 text-green-600 dark:bg-green-900/30 dark:text-green-400 ring-1 ring-green-600/20 dark:ring-green-800/30',
       good: 'bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400 ring-1 ring-blue-600/20 dark:ring-blue-800/30',
-      fair: 'bg-amber-50 text-amber-600 dark:bg-yellow-900/30 dark:text-yellow-400 ring-1 ring-amber-600/20 dark:ring-yellow-800/30',
+      fair: 'bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400 ring-1 ring-amber-600/20 dark:ring-amber-800/30',
       poor: 'bg-red-50 text-red-600 dark:bg-red-900/30 dark:text-red-400 ring-1 ring-red-600/20 dark:ring-red-800/30'
     }
     return colors[quality as keyof typeof colors] || colors.fair
@@ -318,29 +319,45 @@ export default function RunHistoryPage() {
           </Button>
 
           {/* Export Dropdown */}
-          <div className="relative group">
-            <Button variant="outline" size="sm" disabled={!canExport}>
+          <div className="relative">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={!canExport}
+              onClick={() => setShowExportMenu(!showExportMenu)}
+              aria-expanded={showExportMenu}
+              aria-haspopup="menu"
+            >
               <Download className="h-4 w-4 mr-2" />
               Export
             </Button>
-            {canExport && (
-              <div className="absolute right-0 mt-1 w-48 bg-card border border-border rounded-md shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-10">
+            {canExport && showExportMenu && (
+              <div className="absolute right-0 mt-1 w-48 bg-card border border-border rounded-md shadow-lg z-10">
               <button
-                onClick={handleExportCSV}
+                onClick={() => {
+                  handleExportCSV()
+                  setShowExportMenu(false)
+                }}
                 className="block w-full text-left px-4 py-2 hover:bg-accent transition-colors"
               >
                 <FileText className="inline h-4 w-4 mr-2" />
                 Export as CSV
               </button>
               <button
-                onClick={handleExportJSON}
+                onClick={() => {
+                  handleExportJSON()
+                  setShowExportMenu(false)
+                }}
                 className="block w-full text-left px-4 py-2 hover:bg-accent transition-colors"
               >
                 <FileText className="inline h-4 w-4 mr-2" />
                 Export as JSON
               </button>
               <button
-                onClick={handleExportPDF}
+                onClick={() => {
+                  handleExportPDF()
+                  setShowExportMenu(false)
+                }}
                 className="block w-full text-left px-4 py-2 hover:bg-accent transition-colors"
               >
                 <FileText className="inline h-4 w-4 mr-2" />
@@ -429,7 +446,11 @@ export default function RunHistoryPage() {
 
       {/* Results Summary */}
       <div className="mb-4 text-sm text-muted-foreground">
-        Showing {((currentPage - 1) * itemsPerPage) + 1} - {Math.min(currentPage * itemsPerPage, filteredRuns.length)} of {filteredRuns.length} runs
+        Showing {filteredRuns.length ? ((currentPage - 1) * itemsPerPage) + 1 : 0}
+        {' - '}
+        {filteredRuns.length ? Math.min(currentPage * itemsPerPage, filteredRuns.length) : 0}
+        {' of '}
+        {filteredRuns.length} runs
       </div>
 
       {/* Runs Table */}

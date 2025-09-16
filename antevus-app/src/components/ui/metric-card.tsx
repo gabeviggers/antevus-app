@@ -49,27 +49,28 @@ export function MetricCard({
   className,
   disabled = false
 }: MetricCardProps) {
-  const Component = onClick && !disabled ? 'button' : 'div'
+  const isInteractive = Boolean(onClick) && !disabled
+  const Component = isInteractive ? 'button' : 'div'
 
   return (
     <Component
-      onClick={disabled ? undefined : onClick}
-      disabled={disabled}
+      {...(isInteractive ? { onClick, disabled } : {})}
       className={cn(
         'p-4 rounded-lg border transition-all',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
         {
-          'cursor-pointer': onClick && !disabled,
+          'cursor-pointer': isInteractive,
           'opacity-50 cursor-not-allowed': disabled,
           'border-primary bg-accent shadow-sm': isSelected && !disabled,
-          'border-border hover:border-primary/50 hover:bg-accent/50': !isSelected && onClick && !disabled,
-          'border-border': !isSelected && !onClick
+          'border-border hover:border-primary/50 hover:bg-accent/50': !isSelected && isInteractive,
+          'border-border': !isSelected && !isInteractive
         },
         status !== 'neutral' && !isSelected && statusBorderStyles[status],
         className
       )}
-      aria-selected={isSelected}
-      aria-disabled={disabled}
+      aria-pressed={isInteractive ? isSelected : undefined}
+      aria-selected={!isInteractive ? isSelected : undefined}
+      aria-disabled={disabled || undefined}
     >
       {/* Header */}
       <div className="flex items-center justify-between mb-2">
@@ -83,7 +84,7 @@ export function MetricCard({
             {title}
           </span>
         </div>
-        {trend && (
+        {trend && trend.value !== 0 && (
           <div className={cn(
             'text-xs font-medium',
             trend.isPositive ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
@@ -91,11 +92,20 @@ export function MetricCard({
             {trend.isPositive ? '↑' : '↓'} {Math.abs(trend.value)}%
           </div>
         )}
+        {trend && trend.value === 0 && (
+          <div className="text-xs font-medium text-muted-foreground">
+            — 0%
+          </div>
+        )}
       </div>
 
       {/* Value */}
       <div className="text-2xl font-bold text-foreground">
-        {typeof value === 'number' ? value.toFixed(2) : value}
+        {typeof value === 'number'
+          ? (Number.isInteger(value)
+              ? value.toLocaleString()
+              : value.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 }))
+          : value}
         {unit && (
           <span className="text-sm font-normal text-muted-foreground ml-1">
             {unit}
@@ -125,6 +135,7 @@ export function MetricStatusIcon({ status }: { status: MetricStatus }) {
   return (
     <div
       className={cn('h-2 w-2 rounded-full', styles[status])}
+      role="img"
       aria-label={`Status: ${status}`}
     />
   )
