@@ -512,11 +512,11 @@ export default function APIPlaygroundPage() {
                       <div>
                         <h3 className="font-semibold mb-3">Parameters</h3>
 
-                        {currentEndpoint.params.path && (
+                        {'path' in currentEndpoint.params && currentEndpoint.params.path && (
                           <div className="mb-4">
                             <h4 className="text-sm font-medium text-muted-foreground mb-2">Path Parameters</h4>
                             <div className="space-y-2">
-                              {currentEndpoint.params.path.map((param, idx) => (
+                              {('path' in currentEndpoint.params && currentEndpoint.params.path ? currentEndpoint.params.path : []).map((param: any, idx: number) => (
                                 <div key={idx} className="flex items-start gap-3 p-3 bg-muted/50 rounded-md">
                                   <div className="flex-1">
                                     <div className="flex items-center gap-2">
@@ -540,11 +540,11 @@ export default function APIPlaygroundPage() {
                           </div>
                         )}
 
-                        {currentEndpoint.params.query && (
+                        {'query' in currentEndpoint.params && currentEndpoint.params.query && (
                           <div className="mb-4">
                             <h4 className="text-sm font-medium text-muted-foreground mb-2">Query Parameters</h4>
                             <div className="space-y-2">
-                              {currentEndpoint.params.query.map((param, idx) => (
+                              {('query' in currentEndpoint.params && currentEndpoint.params.query ? currentEndpoint.params.query : []).map((param: any, idx: number) => (
                                 <div key={idx} className="flex items-start gap-3 p-3 bg-muted/50 rounded-md">
                                   <div className="flex-1">
                                     <div className="flex items-center gap-2">
@@ -568,12 +568,12 @@ export default function APIPlaygroundPage() {
                           </div>
                         )}
 
-                        {currentEndpoint.params.body && (
+                        {'body' in currentEndpoint.params && currentEndpoint.params.body && (
                           <div>
                             <h4 className="text-sm font-medium text-muted-foreground mb-2">Request Body</h4>
                             <div className="p-3 bg-muted/50 rounded-md">
                               <pre className="text-sm">
-                                <code>{JSON.stringify(currentEndpoint.params.body, null, 2)}</code>
+                                <code>{JSON.stringify('body' in currentEndpoint.params ? currentEndpoint.params.body : {}, null, 2)}</code>
                               </pre>
                             </div>
                           </div>
@@ -582,19 +582,19 @@ export default function APIPlaygroundPage() {
                     )}
 
                     {/* Response */}
-                    {currentEndpoint.response && (
+                    {'response' in currentEndpoint && currentEndpoint.response && (
                       <div>
                         <h3 className="font-semibold mb-3">Response</h3>
                         <div className="space-y-3">
                           <div className="flex items-center gap-2">
                             <Badge variant="default">
-                              {currentEndpoint.response.success.code}
+                              {'response' in currentEndpoint && currentEndpoint.response ? currentEndpoint.response.success.code : 200}
                             </Badge>
                             <span className="text-sm text-muted-foreground">Success</span>
                           </div>
                           <div className="p-3 bg-muted/50 rounded-md">
                             <pre className="text-sm overflow-x-auto">
-                              <code>{JSON.stringify(currentEndpoint.response.success.body, null, 2)}</code>
+                              <code>{JSON.stringify('response' in currentEndpoint && currentEndpoint.response ? currentEndpoint.response.success.body : {}, null, 2)}</code>
                             </pre>
                           </div>
                         </div>
