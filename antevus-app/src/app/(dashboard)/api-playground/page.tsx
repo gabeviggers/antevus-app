@@ -190,7 +190,7 @@ const API_ENDPOINTS = {
 }
 
 // Code examples generator
-const generateCodeExample = (endpoint: { method: string; path: string; params?: { body?: unknown } }, language: string, apiKey: string) => {
+const generateCodeExample = (endpoint: { method: string; path: string; params?: { body?: unknown; query?: unknown; path?: unknown } }, language: string, apiKey: string) => {
   const baseUrl = 'https://api.antevus.com'
   const fullPath = `${baseUrl}${endpoint.path}`
 
