@@ -616,7 +616,7 @@ export default function APIPlaygroundPage() {
 
                     <div className="p-4 bg-muted/50 rounded-md">
                       <p className="text-sm text-muted-foreground">
-                        Configure your request parameters above and click "Send Request" to test the endpoint.
+                        Configure your request parameters above and click &quot;Send Request&quot; to test the endpoint.
                         Responses will appear in the Response tab.
                       </p>
                     </div>

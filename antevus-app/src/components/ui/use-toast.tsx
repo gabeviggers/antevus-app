@@ -27,7 +27,6 @@ function genId() {
   return count.toString()
 }
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 type ActionType = typeof actionTypes
 
 type Action =
