@@ -81,19 +81,22 @@ export async function GET(request: NextRequest) {
     }
 
     // Audit log the API call
-    await auditLogger.log({
-      type: 'api.instruments.list',
-      userId: authResult.userId!,
-      resourceType: 'instruments',
-      resourceId: 'all',
-      success: true,
-      metadata: {
-        keyId: authResult.keyId,
-        filters: { status, type },
-        pagination: { offset, limit },
-        resultCount: paginatedInstruments.length
+    await auditLogger.logEvent(
+      null, // No user object available in API context
+      'api.instruments.list',
+      {
+        resourceType: 'instruments',
+        resourceId: 'all',
+        success: true,
+        metadata: {
+          userId: authResult.userId,
+          keyId: authResult.keyId,
+          filters: { status, type },
+          pagination: { offset, limit },
+          resultCount: paginatedInstruments.length
+        }
       }
-    })
+    )
 
     return NextResponse.json(response, {
       headers: {
@@ -108,16 +111,20 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error('Instruments API error:', error)
 
-    await auditLogger.log({
-      type: 'api.instruments.error',
-      userId: authResult.userId!,
-      resourceType: 'instruments',
-      resourceId: 'all',
-      success: false,
-      metadata: {
-        error: error instanceof Error ? error.message : 'Unknown error'
+    await auditLogger.logEvent(
+      null,
+      'api.instruments.error',
+      {
+        resourceType: 'instruments',
+        resourceId: 'all',
+        success: false,
+        errorMessage: error instanceof Error ? error.message : 'Unknown error',
+        metadata: {
+          userId: authResult.userId,
+          error: error instanceof Error ? error.message : 'Unknown error'
+        }
       }
-    })
+    )
 
     return NextResponse.json(
       { error: 'Internal server error' },
@@ -171,17 +178,20 @@ export async function POST(request: NextRequest) {
     }
 
     // Audit log the creation
-    await auditLogger.log({
-      type: 'api.instruments.create',
-      userId: authResult.userId!,
-      resourceType: 'instruments',
-      resourceId: newInstrument.id,
-      success: true,
-      metadata: {
-        keyId: authResult.keyId,
-        instrument: newInstrument
+    await auditLogger.logEvent(
+      null,
+      'api.instruments.create',
+      {
+        resourceType: 'instruments',
+        resourceId: newInstrument.id,
+        success: true,
+        metadata: {
+          userId: authResult.userId,
+          keyId: authResult.keyId,
+          instrument: newInstrument
+        }
       }
-    })
+    )
 
     return NextResponse.json(newInstrument, {
       status: 201,
@@ -196,16 +206,21 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Instrument creation error:', error)
 
-    await auditLogger.log({
-      type: 'api.instruments.create.error',
-      userId: authResult.userId!,
-      resourceType: 'instruments',
-      resourceId: 'new',
-      success: false,
-      metadata: {
-        error: error instanceof Error ? error.message : 'Unknown error'
+    await auditLogger.logEvent(
+      null,
+      'api.instruments.error',
+      {
+        resourceType: 'instruments',
+        resourceId: 'new',
+        success: false,
+        errorMessage: error instanceof Error ? error.message : 'Unknown error',
+        metadata: {
+          userId: authResult.userId,
+          operation: 'create',
+          error: error instanceof Error ? error.message : 'Unknown error'
+        }
       }
-    })
+    )
 
     return NextResponse.json(
       { error: 'Failed to create instrument' },

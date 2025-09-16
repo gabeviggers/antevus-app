@@ -26,6 +26,10 @@ export type AuditEventType =
   | 'api.key.revoke'
   | 'api.key.use'
   | 'api.key.list'
+  | 'api.instruments.list'
+  | 'api.instruments.get'
+  | 'api.instruments.create'
+  | 'api.instruments.error'
 
 export interface AuditEvent {
   id: string
