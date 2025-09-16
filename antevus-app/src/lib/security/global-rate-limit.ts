@@ -3,42 +3,38 @@
  * Provides system-wide rate limiting across all users
  */
 
-import { RateLimiterMemory, RateLimiterRes } from 'rate-limiter-flexible'
 import { logger } from '@/lib/logger'
+import { rateLimitRepository } from '@/lib/db/repositories/rate-limit.repository'
 
-// Global rate limiter configurations
-const globalRateLimiters = {
+// Global rate limit configurations
+const globalRateLimits = {
   // Overall system limit - total requests across all users
-  system: new RateLimiterMemory({
-    keyPrefix: 'global_system',
-    points: parseInt(process.env.GLOBAL_RATE_LIMIT || '10000'), // Total requests
-    duration: 60, // Per minute
-    blockDuration: 60 // Block for 1 minute when exceeded
-  }),
+  system: {
+    key: 'global_system',
+    limit: parseInt(process.env.GLOBAL_RATE_LIMIT || '10000'),
+    window: 60 * 1000 // 1 minute in milliseconds
+  },
 
   // Per-endpoint global limits
-  apiEndpoints: new RateLimiterMemory({
-    keyPrefix: 'global_api',
-    points: parseInt(process.env.GLOBAL_API_LIMIT || '5000'),
-    duration: 60,
-    blockDuration: 60
-  }),
+  apiEndpoints: {
+    key: 'global_api',
+    limit: parseInt(process.env.GLOBAL_API_LIMIT || '5000'),
+    window: 60 * 1000
+  },
 
   // Authentication endpoint global limit (stricter)
-  auth: new RateLimiterMemory({
-    keyPrefix: 'global_auth',
-    points: parseInt(process.env.GLOBAL_AUTH_LIMIT || '100'),
-    duration: 60,
-    blockDuration: 300 // Block for 5 minutes
-  }),
+  auth: {
+    key: 'global_auth',
+    limit: parseInt(process.env.GLOBAL_AUTH_LIMIT || '100'),
+    window: 60 * 1000
+  },
 
   // Data export global limit
-  export: new RateLimiterMemory({
-    keyPrefix: 'global_export',
-    points: parseInt(process.env.GLOBAL_EXPORT_LIMIT || '50'),
-    duration: 60,
-    blockDuration: 600 // Block for 10 minutes
-  })
+  export: {
+    key: 'global_export',
+    limit: parseInt(process.env.GLOBAL_EXPORT_LIMIT || '50'),
+    window: 60 * 1000
+  }
 }
 
 // Adaptive rate limiting based on system load
@@ -194,29 +190,27 @@ export const behaviorRateLimiter = new BehaviorBasedRateLimiter()
  * Check global rate limits
  */
 export async function checkGlobalRateLimit(
-  type: keyof typeof globalRateLimiters = 'system'
-): Promise<{ allowed: boolean; retryAfter?: number }> {
+  type: keyof typeof globalRateLimits = 'system'
+): Promise<{ allowed: boolean; retryAfter?: number; remaining?: number }> {
   try {
-    const limiter = globalRateLimiters[type]
-    await limiter.consume('global', 1)
+    const config = globalRateLimits[type]
+    const result = await rateLimitRepository.checkAndConsume(
+      config.key,
+      config.limit
+    )
 
-    return { allowed: true }
-  } catch (error) {
-    if (error instanceof RateLimiterRes) {
-      const retryAfter = Math.round(error.msBeforeNext / 1000) || 60
-
+    if (!result.allowed) {
+      const retryAfter = Math.ceil((result.resetAt.getTime() - Date.now()) / 1000)
       logger.warn('Global rate limit exceeded', {
         type,
         retryAfter,
-        remainingPoints: error.remainingPoints
+        remaining: result.remaining
       })
-
-      return {
-        allowed: false,
-        retryAfter
-      }
+      return { allowed: false, retryAfter, remaining: result.remaining }
     }
 
+    return { allowed: true, remaining: result.remaining }
+  } catch (error) {
     logger.error('Global rate limit check failed', error)
     return { allowed: true } // Fail open in case of error
   }
@@ -238,18 +232,12 @@ export async function checkAdaptiveGlobalLimit(): Promise<{ allowed: boolean; li
   const systemLoad = await getSystemLoad()
   const currentLimit = adaptiveRateLimiter.adjustForLoad(systemLoad)
 
-  try {
-    const limiter = new RateLimiterMemory({
-      keyPrefix: 'adaptive_global',
-      points: currentLimit,
-      duration: 60
-    })
+  const result = await rateLimitRepository.checkAndConsume(
+    'adaptive_global',
+    currentLimit
+  )
 
-    await limiter.consume('global', 1)
-    return { allowed: true, limit: currentLimit }
-  } catch {
-    return { allowed: false, limit: currentLimit }
-  }
+  return { allowed: result.allowed, limit: currentLimit }
 }
 
 /**
@@ -302,7 +290,7 @@ export async function checkCombinedRateLimit(
 
   // Check endpoint-specific limits if provided
   if (endpoint) {
-    let endpointType: keyof typeof globalRateLimiters = 'apiEndpoints'
+    let endpointType: keyof typeof globalRateLimits = 'apiEndpoints'
 
     if (endpoint.includes('auth')) {
       endpointType = 'auth'

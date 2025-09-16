@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { validateAPIKey } from '@/lib/api/auth'
+import { validateAPIKey } from '@/lib/api/auth-db'
 import { auditLogger } from '@/lib/audit/logger'
 import { mockInstruments } from '@/lib/mock-data/instruments'
 import { logger } from '@/lib/logger'

@@ -5,7 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/session'
-import { validateAPIKey } from '@/lib/api/auth'
+import { validateAPIKey } from '@/lib/api/auth-db'
 import { auditLogger } from '@/lib/audit/logger'
 import { logger } from '@/lib/logger'
 
