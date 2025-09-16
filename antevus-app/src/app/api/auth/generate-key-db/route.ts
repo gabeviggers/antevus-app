@@ -1,40 +1,19 @@
+/**
+ * API Key Generation with Database Backend
+ * Production-ready key generation using PostgreSQL
+ */
+
 import { NextRequest, NextResponse } from 'next/server'
-import crypto from 'crypto'
 import { z } from 'zod'
 import { getServerSession } from '@/lib/auth/session'
 import { auditLogger } from '@/lib/audit/logger'
 import { validateCSRFToken } from '@/lib/security/csrf'
 import { logger } from '@/lib/logger'
+import { apiKeyRepository } from '@/lib/db/repositories/api-key.repository'
 
-// Force Node.js runtime for crypto operations
+// Force Node.js runtime
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
-
-// AES-256-GCM encryption configuration
-const ALGORITHM = 'aes-256-gcm'
-const SALT_LENGTH = 64
-const IV_LENGTH = 16
-// const TAG_LENGTH = 16 // Reserved for future use
-const ITERATIONS = 100000
-
-// Get encryption key from environment
-function getEncryptionKey(): string {
-  const key = process.env.API_KEY_ENCRYPTION_KEY
-
-  if (!key) {
-    if (process.env.NODE_ENV !== 'production') {
-      console.warn('[API Keys] Using development encryption key')
-      return 'DEV_ONLY_KEY_' + crypto.randomBytes(24).toString('hex')
-    }
-    throw new Error('API_KEY_ENCRYPTION_KEY is required in production')
-  }
-
-  if (!/^[0-9a-fA-F]{64}$/.test(key)) {
-    throw new Error('API_KEY_ENCRYPTION_KEY must be a 64-character hex string')
-  }
-
-  return key
-}
 
 // API Key validation schema
 const GenerateKeySchema = z.object({
@@ -44,90 +23,6 @@ const GenerateKeySchema = z.object({
   ipAllowlist: z.array(z.string().regex(/^(\d{1,3}\.){3}\d{1,3}$/)).optional(),
   rateLimit: z.number().min(10).max(10000).optional()
 })
-
-// API Key storage structure
-interface APIKey {
-  id: string
-  userId: string
-  name: string
-  key: string // This will be hashed
-  prefix: string // Visible prefix for identification
-  permissions: string[]
-  ipAllowlist?: string[]
-  rateLimit: number
-  createdAt: string
-  expiresAt: string | null
-  lastUsedAt: string | null
-  usageCount: number
-  isActive: boolean
-}
-
-// In-memory storage (replace with database in production)
-const apiKeyStore = new Map<string, APIKey>()
-const keyHashStore = new Map<string, string>() // hash -> id mapping
-
-// Generate a secure API key
-function generateAPIKey(): { key: string; prefix: string; hash: string; displayPrefix: string } {
-  // Generate 32 bytes of random data
-  const keyBytes = crypto.randomBytes(32)
-  const prefix = 'ak_' + (process.env.NODE_ENV === 'production' ? 'live' : 'test')
-  const key = prefix + '_' + keyBytes.toString('base64url')
-
-  // Create a hash of the key for storage
-  const hash = crypto.createHash('sha256').update(key).digest('hex')
-
-  // Create a safe display prefix that doesn't expose the actual key
-  // Use first 4 chars of hash for identification, not the key itself
-  const displayPrefix = `${prefix}_${hash.substring(0, 8)}...`
-
-  return { key, prefix, hash, displayPrefix }
-}
-
-// Encrypt sensitive API key metadata
-// Encryption function reserved for future use
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-function encryptMetadata(data: unknown): { encrypted: string; salt: string; iv: string; authTag: string } {
-  const salt = crypto.randomBytes(SALT_LENGTH)
-  const key = crypto.pbkdf2Sync(getEncryptionKey(), salt, ITERATIONS, 32, 'sha256')
-  const iv = crypto.randomBytes(IV_LENGTH)
-
-  const cipher = crypto.createCipheriv(ALGORITHM, key, iv)
-
-  let encrypted = cipher.update(JSON.stringify(data), 'utf8', 'hex')
-  encrypted += cipher.final('hex')
-
-  const authTag = cipher.getAuthTag()
-
-  return {
-    encrypted,
-    salt: salt.toString('hex'),
-    iv: iv.toString('hex'),
-    authTag: authTag.toString('hex')
-  }
-}
-
-// Calculate expiration date
-function calculateExpiration(expiresIn: string): string | null {
-  if (expiresIn === 'never') return null
-
-  const now = new Date()
-  switch (expiresIn) {
-    case '7d':
-      now.setDate(now.getDate() + 7)
-      break
-    case '30d':
-      now.setDate(now.getDate() + 30)
-      break
-    case '90d':
-      now.setDate(now.getDate() + 90)
-      break
-    case '1y':
-      now.setFullYear(now.getFullYear() + 1)
-      break
-  }
-
-  return now.toISOString()
-}
 
 export async function POST(request: NextRequest) {
   let session: Awaited<ReturnType<typeof getServerSession>> | null = null
@@ -178,7 +73,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Check user permissions (must be Admin or have API access)
+    // Check user permissions (must be Admin or Scientist)
     if (session.user.role !== 'admin' && session.user.role !== 'scientist') {
       await auditLogger.logEvent(
         session.user,
@@ -229,57 +124,15 @@ export async function POST(request: NextRequest) {
 
     const { name, permissions, expiresIn = '30d', ipAllowlist, rateLimit = 1000 } = validation.data
 
-    // Check for existing keys limit (max 10 active keys per user)
-    const userKeys = Array.from(apiKeyStore.values()).filter(
-      k => k.userId === session.user.id && k.isActive
-    )
-
-    if (userKeys.length >= 10) {
-      await auditLogger.logEvent(
-        session.user,
-        'api.key.generate.failed',
-        {
-          resourceType: 'api_key',
-          resourceId: 'unknown',
-          success: false,
-          errorMessage: 'Key limit exceeded',
-          metadata: {
-            reason: 'Key limit exceeded',
-            currentKeys: userKeys.length
-          }
-        }
-      )
-
-      return NextResponse.json(
-        { error: 'Maximum number of API keys reached (10)' },
-        { status: 400 }
-      )
-    }
-
-    // Generate the API key
-    const { key, prefix, hash, displayPrefix } = generateAPIKey()
-    const keyId = 'apikey_' + crypto.randomBytes(16).toString('hex')
-
-    // Create API key record - NEVER store the actual key, only its hash
-    const apiKey: APIKey = {
-      id: keyId,
+    // Generate API key using database repository
+    const { key, apiKey } = await apiKeyRepository.create({
       userId: session.user.id,
       name,
-      key: hash, // Store only the hash - NEVER the plaintext key
-      prefix: displayPrefix, // Safe display prefix using hash, not actual key
       permissions,
       ipAllowlist,
       rateLimit,
-      createdAt: new Date().toISOString(),
-      expiresAt: calculateExpiration(expiresIn),
-      lastUsedAt: null,
-      usageCount: 0,
-      isActive: true
-    }
-
-    // Store the API key (encrypted in production)
-    apiKeyStore.set(keyId, apiKey)
-    keyHashStore.set(hash, keyId)
+      expiresIn
+    })
 
     // Audit log the creation
     await auditLogger.logEvent(
@@ -287,7 +140,7 @@ export async function POST(request: NextRequest) {
       'api.key.generate',
       {
         resourceType: 'api_key',
-        resourceId: keyId,
+        resourceId: apiKey.id,
         success: true,
         metadata: {
           name,
@@ -295,17 +148,17 @@ export async function POST(request: NextRequest) {
           expiresIn,
           hasIpAllowlist: !!ipAllowlist,
           rateLimit,
-          prefix: apiKey.prefix
+          prefix: apiKey.keyPrefix
         }
       }
     )
 
     // Return the key only once (it won't be retrievable again)
     return NextResponse.json({
-      id: keyId,
+      id: apiKey.id,
       key, // Full key returned only on creation - NEVER stored anywhere
       name,
-      prefix: displayPrefix, // Safe display prefix for UI
+      prefix: apiKey.keyPrefix,
       permissions,
       expiresAt: apiKey.expiresAt,
       createdAt: apiKey.createdAt,
@@ -313,10 +166,32 @@ export async function POST(request: NextRequest) {
     })
 
   } catch (error) {
+    // Check for specific errors
+    if (error instanceof Error && error.message.includes('Maximum number of API keys')) {
+      await auditLogger.logEvent(
+        session?.user || null,
+        'api.key.generate.failed',
+        {
+          resourceType: 'api_key',
+          resourceId: 'unknown',
+          success: false,
+          errorMessage: error.message,
+          metadata: {
+            reason: 'Key limit exceeded'
+          }
+        }
+      )
+
+      return NextResponse.json(
+        { error: error.message },
+        { status: 400 }
+      )
+    }
+
     logger.error('API key generation failed', error, { userId: session?.user?.id })
 
     await auditLogger.logEvent(
-      null,
+      session?.user || null,
       'api.key.generate.failed',
       {
         resourceType: 'api_key',
@@ -346,22 +221,23 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Get user's API keys
-    const userKeys = Array.from(apiKeyStore.values())
-      .filter(k => k.userId === session.user.id)
-      .map(k => ({
-        id: k.id,
-        name: k.name,
-        prefix: k.prefix,
-        permissions: k.permissions,
-        rateLimit: k.rateLimit,
-        createdAt: k.createdAt,
-        expiresAt: k.expiresAt,
-        lastUsedAt: k.lastUsedAt,
-        usageCount: k.usageCount,
-        isActive: k.isActive,
-        hasIpAllowlist: !!k.ipAllowlist
-      }))
+    // Get user's API keys from database
+    const userKeys = await apiKeyRepository.listByUser(session.user.id)
+
+    // Format for response (ensure no sensitive data)
+    const formattedKeys = userKeys.map(k => ({
+      id: k.id,
+      name: k.name,
+      prefix: k.keyPrefix,
+      permissions: k.permissions,
+      rateLimit: k.rateLimit,
+      createdAt: k.createdAt,
+      expiresAt: k.expiresAt,
+      lastUsedAt: k.lastUsedAt,
+      usageCount: k.usageCount,
+      isActive: k.isActive,
+      hasIpAllowlist: !!k.ipAllowlist && (k.ipAllowlist as string[]).length > 0
+    }))
 
     // Audit the list operation
     await auditLogger.logEvent(
@@ -372,12 +248,12 @@ export async function GET(request: NextRequest) {
         resourceId: 'all',
         success: true,
         metadata: {
-          count: userKeys.length
+          count: formattedKeys.length
         }
       }
     )
 
-    return NextResponse.json({ keys: userKeys })
+    return NextResponse.json({ keys: formattedKeys })
 
   } catch (error) {
     logger.error('API key listing failed', error, { userId: session?.user?.id })
@@ -414,15 +290,12 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Key ID required' }, { status: 400 })
     }
 
-    const apiKey = apiKeyStore.get(keyId)
+    // Revoke key using database repository
+    const revoked = await apiKeyRepository.revoke(keyId, session.user.id)
 
-    if (!apiKey || apiKey.userId !== session.user.id) {
+    if (!revoked) {
       return NextResponse.json({ error: 'API key not found' }, { status: 404 })
     }
-
-    // Mark as inactive instead of deleting (for audit trail)
-    apiKey.isActive = false
-    apiKeyStore.set(keyId, apiKey)
 
     // Audit the revocation
     await auditLogger.logEvent(
@@ -433,8 +306,7 @@ export async function DELETE(request: NextRequest) {
         resourceId: keyId,
         success: true,
         metadata: {
-          name: apiKey.name,
-          prefix: apiKey.prefix
+          keyId
         }
       }
     )

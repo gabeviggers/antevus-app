@@ -1,51 +1,14 @@
+/**
+ * API Authentication with Database Backend
+ * Production-ready authentication using PostgreSQL
+ */
+
 import { NextRequest } from 'next/server'
 import crypto from 'crypto'
 import { auditLogger } from '@/lib/audit/logger'
 import { logger } from '@/lib/logger'
-
-// API Key validation and rate limiting
-
-interface APIKey {
-  id: string
-  userId: string
-  name: string
-  key: string // Hashed
-  prefix: string
-  permissions: string[]
-  ipAllowlist?: string[]
-  rateLimit: number
-  createdAt: string
-  expiresAt: string | null
-  isActive: boolean
-  usageCount: number
-  lastUsedAt: string | null
-}
-
-interface RateLimitEntry {
-  count: number
-  resetAt: number
-}
-
-const rateLimitStore = new Map<string, RateLimitEntry>()
-const apiKeyStore = new Map<string, APIKey>() // Shared with generate-key route
-const keyHashStore = new Map<string, string>() // hash -> id mapping
-
-// Type augmentation for global object
-declare global {
-  var rateLimitCleanupInterval: NodeJS.Timeout | undefined
-}
-
-// Clean up expired rate limit entries periodically
-if (typeof global !== 'undefined' && !global.rateLimitCleanupInterval) {
-  global.rateLimitCleanupInterval = setInterval(() => {
-    const now = Date.now()
-    for (const [key, entry] of rateLimitStore.entries()) {
-      if (entry.resetAt < now) {
-        rateLimitStore.delete(key)
-      }
-    }
-  }, 60000) // Clean up every minute
-}
+import { apiKeyRepository } from '@/lib/db/repositories/api-key.repository'
+import { rateLimitRepository } from '@/lib/db/repositories/rate-limit.repository'
 
 export interface APIAuthResult {
   authenticated: boolean
@@ -71,7 +34,7 @@ function extractAPIKey(request: NextRequest): string | null {
     return apiKeyHeader
   }
 
-  // 3. Check query parameter
+  // 3. Check query parameter (not recommended for production)
   const url = new URL(request.url)
   const queryKey = url.searchParams.get('api_key')
   if (queryKey) {
@@ -83,7 +46,7 @@ function extractAPIKey(request: NextRequest): string | null {
   return null
 }
 
-// Get client IP address - FIXED: removed request.ip which doesn't exist
+// Get client IP address
 function getClientIP(request: NextRequest): string {
   return request.headers.get('x-forwarded-for')?.split(',')[0].trim() ||
     request.headers.get('x-real-ip') ||
@@ -92,52 +55,10 @@ function getClientIP(request: NextRequest): string {
     'unknown'
 }
 
-// Check rate limiting
-function checkRateLimit(keyId: string, limit: number): {
-  allowed: boolean
-  remaining: number
-  resetAt: number
-} {
-  const now = Date.now()
-  const resetAt = now + 60000 // 1 minute window
-
-  const entry = rateLimitStore.get(keyId)
-
-  if (!entry || entry.resetAt < now) {
-    // New window
-    rateLimitStore.set(keyId, {
-      count: 1,
-      resetAt
-    })
-
-    return {
-      allowed: true,
-      remaining: limit - 1,
-      resetAt
-    }
-  }
-
-  // Existing window
-  if (entry.count >= limit) {
-    return {
-      allowed: false,
-      remaining: 0,
-      resetAt: entry.resetAt
-    }
-  }
-
-  // Increment count
-  entry.count++
-  rateLimitStore.set(keyId, entry)
-
-  return {
-    allowed: true,
-    remaining: limit - entry.count,
-    resetAt: entry.resetAt
-  }
-}
-
-// Validate API key and check permissions
+/**
+ * Validate API key and check permissions
+ * Now uses database for all storage and lookups
+ */
 export async function validateAPIKey(
   request: NextRequest,
   requiredPermissions: string[] = []
@@ -172,9 +93,10 @@ export async function validateAPIKey(
     // Hash the provided key to compare with stored hashes
     const keyHash = crypto.createHash('sha256').update(providedKey).digest('hex')
 
-    // Look up the key
-    const keyId = keyHashStore.get(keyHash)
-    if (!keyId) {
+    // Validate key using database
+    const validationResult = await apiKeyRepository.validate(keyHash)
+
+    if (!validationResult.valid || !validationResult.apiKey) {
       await auditLogger.logEvent(
         null,
         'api.auth.failed',
@@ -182,10 +104,10 @@ export async function validateAPIKey(
           resourceType: 'api',
           resourceId: request.url,
           success: false,
-          errorMessage: 'Invalid API key',
+          errorMessage: validationResult.error || 'Invalid API key',
           metadata: {
-            reason: 'Invalid API key',
-            keyHashPrefix: keyHash.substring(0, 8) + '...', // Log hash prefix, not actual key
+            reason: validationResult.error || 'Invalid API key',
+            keyHashPrefix: keyHash.substring(0, 8) + '...',
             ip: getClientIP(request)
           }
         }
@@ -193,71 +115,14 @@ export async function validateAPIKey(
 
       return {
         authenticated: false,
-        error: 'Invalid API key'
+        error: validationResult.error || 'Invalid API key'
       }
     }
 
-    const apiKey = apiKeyStore.get(keyId)
-    if (!apiKey) {
-      return {
-        authenticated: false,
-        error: 'API key not found'
-      }
-    }
-
-    // Check if key is active
-    if (!apiKey.isActive) {
-      await auditLogger.logEvent(
-        null,
-        'api.auth.failed',
-        {
-          resourceType: 'api',
-          resourceId: request.url,
-          success: false,
-          errorMessage: 'API key revoked',
-          metadata: {
-            userId: apiKey.userId,
-            reason: 'API key revoked',
-            keyId: apiKey.id,
-            ip: getClientIP(request)
-          }
-        }
-      )
-
-      return {
-        authenticated: false,
-        error: 'API key has been revoked'
-      }
-    }
-
-    // Check expiration
-    if (apiKey.expiresAt && new Date(apiKey.expiresAt) < new Date()) {
-      await auditLogger.logEvent(
-        null,
-        'api.auth.failed',
-        {
-          resourceType: 'api',
-          resourceId: request.url,
-          success: false,
-          errorMessage: 'API key expired',
-          metadata: {
-            userId: apiKey.userId,
-            reason: 'API key expired',
-            keyId: apiKey.id,
-            expiresAt: apiKey.expiresAt,
-            ip: getClientIP(request)
-          }
-        }
-      )
-
-      return {
-        authenticated: false,
-        error: 'API key has expired'
-      }
-    }
+    const apiKey = validationResult.apiKey
 
     // Check IP allowlist
-    if (apiKey.ipAllowlist && apiKey.ipAllowlist.length > 0) {
+    if (apiKey.ipAllowlist && Array.isArray(apiKey.ipAllowlist) && apiKey.ipAllowlist.length > 0) {
       const clientIP = getClientIP(request)
       if (!apiKey.ipAllowlist.includes(clientIP)) {
         await auditLogger.logEvent(
@@ -286,9 +151,10 @@ export async function validateAPIKey(
     }
 
     // Check permissions
+    const keyPermissions = apiKey.permissions as string[]
     if (requiredPermissions.length > 0) {
       const hasPermissions = requiredPermissions.every(perm =>
-        apiKey.permissions.includes(perm)
+        keyPermissions.includes(perm)
       )
 
       if (!hasPermissions) {
@@ -305,7 +171,7 @@ export async function validateAPIKey(
               reason: 'Insufficient permissions',
               keyId: apiKey.id,
               required: requiredPermissions,
-              actual: apiKey.permissions
+              actual: keyPermissions
             }
           }
         )
@@ -317,8 +183,16 @@ export async function validateAPIKey(
       }
     }
 
-    // Check rate limiting
-    const rateLimitResult = checkRateLimit(apiKey.id, apiKey.rateLimit)
+    // Check rate limiting with multi-layer approach
+    const clientIP = getClientIP(request)
+    const rateLimitResult = await rateLimitRepository.checkMultiLayer({
+      keyId: apiKey.id,
+      keyLimit: apiKey.rateLimit,
+      userId: apiKey.userId,
+      userLimit: 10000, // 10K requests per minute per user
+      ipAddress: clientIP,
+      ipLimit: 100 // 100 requests per minute per IP
+    })
 
     if (!rateLimitResult.allowed) {
       await auditLogger.logEvent(
@@ -333,21 +207,24 @@ export async function validateAPIKey(
             userId: apiKey.userId,
             keyId: apiKey.id,
             limit: apiKey.rateLimit,
-            resetAt: new Date(rateLimitResult.resetAt).toISOString()
+            resetAt: rateLimitResult.resetAt.toISOString(),
+            ip: clientIP
           }
         }
       )
 
       return {
         authenticated: false,
-        error: 'Rate limit exceeded'
+        error: 'Rate limit exceeded',
+        rateLimitRemaining: 0,
+        rateLimitReset: rateLimitResult.resetAt.getTime()
       }
     }
 
-    // Update usage statistics
-    apiKey.lastUsedAt = new Date().toISOString()
-    apiKey.usageCount++
-    apiKeyStore.set(keyId, apiKey)
+    // Update usage statistics (async, don't wait)
+    apiKeyRepository.updateUsage(apiKey.id).catch(error => {
+      logger.error('Failed to update API key usage', error, { keyId: apiKey.id })
+    })
 
     // Log successful authentication
     await auditLogger.logEvent(
@@ -361,7 +238,7 @@ export async function validateAPIKey(
           userId: apiKey.userId,
           keyId: apiKey.id,
           keyName: apiKey.name,
-          permissions: apiKey.permissions,
+          permissions: keyPermissions,
           rateLimitRemaining: rateLimitResult.remaining,
           ip: getClientIP(request)
         }
@@ -372,9 +249,9 @@ export async function validateAPIKey(
       authenticated: true,
       keyId: apiKey.id,
       userId: apiKey.userId,
-      permissions: apiKey.permissions,
+      permissions: keyPermissions,
       rateLimitRemaining: rateLimitResult.remaining,
-      rateLimitReset: rateLimitResult.resetAt
+      rateLimitReset: rateLimitResult.resetAt.getTime()
     }
 
   } catch (error) {
@@ -400,6 +277,3 @@ export async function validateAPIKey(
     }
   }
 }
-
-// Export the stores for use in generate-key route
-export { apiKeyStore, keyHashStore }

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { validateAPIKey } from '@/lib/api/auth'
 import { auditLogger } from '@/lib/audit/logger'
 import { mockInstruments } from '@/lib/mock-data/instruments'
+import { logger } from '@/lib/logger'
 
 // Force Node.js runtime
 export const runtime = 'nodejs'
@@ -109,7 +110,7 @@ export async function GET(request: NextRequest) {
     })
 
   } catch (error) {
-    console.error('Instruments API error:', error)
+    logger.error('Instruments API failed', error, { userId: authResult.userId })
 
     await auditLogger.logEvent(
       null,
@@ -204,7 +205,7 @@ export async function POST(request: NextRequest) {
     })
 
   } catch (error) {
-    console.error('Instrument creation error:', error)
+    logger.error('Instrument creation failed', error, { userId: authResult.userId })
 
     await auditLogger.logEvent(
       null,

@@ -189,8 +189,9 @@ const API_ENDPOINTS = {
   }
 }
 
-// Code examples generator
-const generateCodeExample = (endpoint: { method: string; path: string; params?: { body?: unknown; query?: unknown; path?: unknown } }, language: string, apiKey: string) => {
+// Code examples generator - MOVED TO SERVER-SIDE
+// This function is kept for reference but should use server endpoint
+const generateCodeExample = (endpoint: { method: string; path: string; params?: { body?: unknown; query?: unknown; path?: unknown } }, language: string) => {
   const baseUrl = 'https://api.antevus.com'
   const fullPath = `${baseUrl}${endpoint.path}`
 
@@ -199,7 +200,7 @@ const generateCodeExample = (endpoint: { method: string; path: string; params?: 
       return `import requests
 
 headers = {
-    'Authorization': f'Bearer ${apiKey}',
+    'Authorization': f'Bearer ak_live_YOUR_API_KEY_HERE',
     'Content-Type': 'application/json'
 }
 
@@ -215,7 +216,7 @@ print(response.json())`
       return `const response = await fetch('${fullPath}', {
   method: '${endpoint.method}',
   headers: {
-    'Authorization': 'Bearer ${apiKey}',
+    'Authorization': 'Bearer ak_live_YOUR_API_KEY_HERE',
     'Content-Type': 'application/json'
   }${endpoint.params?.body ? `,
   body: JSON.stringify(${JSON.stringify(endpoint.params.body, null, 2).split('\n').join('\n  ')})` : ''}
@@ -226,7 +227,7 @@ console.log(data);`
 
     case 'curl':
       return `curl -X ${endpoint.method} '${fullPath}' \\
-  -H 'Authorization: Bearer ${apiKey}' \\
+  -H 'Authorization: Bearer ak_live_YOUR_API_KEY_HERE' \\
   -H 'Content-Type: application/json'${endpoint.params?.body ? ` \\
   -d '${JSON.stringify(endpoint.params.body)}'` : ''}`
 
@@ -238,27 +239,26 @@ console.log(data);`
 export default function APIPlaygroundPage() {
   const [selectedCategory, setSelectedCategory] = useState('instruments')
   const [selectedEndpoint, setSelectedEndpoint] = useState(0)
-  const [apiKey, setApiKey] = useState('')
-  const [showApiKey, setShowApiKey] = useState(false)
+  // API keys are now handled server-side only for security
+  const [hasApiKey, setHasApiKey] = useState(false)
   const [selectedLanguage, setSelectedLanguage] = useState('python')
   const [copiedCode, setCopiedCode] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [testMode, setTestMode] = useState(true)
   const [isGeneratingKey, setIsGeneratingKey] = useState(false)
 
-  // Generate a new API key (mock for now, will be server-side)
+  // Generate a new API key (server-side only for security)
   const generateApiKey = async () => {
     setIsGeneratingKey(true)
     try {
-      // In production, this would be a secure server-side operation
       const response = await fetch('/api/auth/generate-key', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-CSRF-Token': 'csrf_token_here' // CSRF protection
+          'X-CSRF-Token': 'csrf_token_here' // TODO: Implement CSRF
         },
         body: JSON.stringify({
-          name: 'Development Key',
+          name: 'API Playground Key',
           permissions: ['read', 'write'],
           expiresIn: '30d'
         })
@@ -266,22 +266,35 @@ export default function APIPlaygroundPage() {
 
       if (response.ok) {
         const data = await response.json()
-        setApiKey(data.key)
+        // CRITICAL: Show key ONCE in a secure way, then never again
+        setHasApiKey(true)
+
+        // Show the key securely in the toast notification
         toast({
-          title: 'API Key Generated',
-          description: 'Your new API key has been created securely.',
+          title: 'API Key Generated Successfully',
+          description: (
+            <div className="space-y-2">
+              <div className="font-mono p-3 bg-gray-100 dark:bg-gray-800 rounded border">
+                <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">Your API Key (save it now!):</p>
+                <code className="text-sm select-all break-all">{data.key}</code>
+              </div>
+              <p className="text-red-600 dark:text-red-400 font-semibold text-sm">
+                ⚠️ This key will never be shown again!
+              </p>
+            </div>
+          ),
+          duration: 30000 // Show for 30 seconds
         })
+      } else {
+        throw new Error('Failed to generate key')
       }
-    } catch {
-      // For demo, generate a mock key
-      const mockKey = 'ak_live_' + Array.from({ length: 32 }, () =>
-        '0123456789abcdef'[Math.floor(Math.random() * 16)]
-      ).join('')
-      setApiKey(mockKey)
+    } catch (error) {
       toast({
-        title: 'Demo API Key Generated',
-        description: 'This is a demo key for testing purposes.',
+        title: 'Error',
+        description: 'Failed to generate API key. Please try again.',
+        variant: 'destructive'
       })
+      setHasApiKey(false)
     } finally {
       setIsGeneratingKey(false)
     }
@@ -298,7 +311,7 @@ export default function APIPlaygroundPage() {
   }
 
   const currentEndpoint = API_ENDPOINTS[selectedCategory as keyof typeof API_ENDPOINTS].endpoints[selectedEndpoint]
-  const codeExample = generateCodeExample(currentEndpoint, selectedLanguage, apiKey || 'YOUR_API_KEY')
+  const codeExample = generateCodeExample(currentEndpoint, selectedLanguage)
 
   // Filter endpoints based on search
   const filteredCategories = Object.entries(API_ENDPOINTS).filter(([, category]) =>
@@ -381,20 +394,20 @@ export default function APIPlaygroundPage() {
           </div>
 
           <div className="flex gap-3">
-            <div className="flex-1 relative">
-              <Input
-                type={showApiKey ? 'text' : 'password'}
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                placeholder="Enter your API key or generate a new one"
-                className="pr-10"
-              />
-              <button
-                onClick={() => setShowApiKey(!showApiKey)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-              >
-                {showApiKey ? <Lock className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
-              </button>
+            {/* API Key input removed for security - keys are managed server-side */}
+            <div className="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md">
+              <div className="flex items-start gap-2">
+                <Shield className="h-5 w-5 text-amber-600 dark:text-amber-400 mt-0.5" />
+                <div className="text-sm text-amber-800 dark:text-amber-200">
+                  <p className="font-semibold">Secure API Key Management</p>
+                  <p className="mt-1">API keys are securely stored server-side and never exposed to the browser.</p>
+                  {hasApiKey && (
+                    <p className="mt-2 text-green-700 dark:text-green-400">
+                      ✓ You have an active API key
+                    </p>
+                  )}
+                </div>
+              </div>
             </div>
             <Button
               onClick={generateApiKey}

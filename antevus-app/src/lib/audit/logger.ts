@@ -92,13 +92,17 @@ class AuditLogger {
 
     // Store locally (in production, send to server)
     this.events.push(event)
-    // Also log to console for debugging
-    console.log('[AUDIT]', {
-      type: eventType,
-      user: user?.email,
-      success: event.success,
-      details: details?.metadata
-    })
+    // In development only, log sanitized audit events
+    if (process.env.NODE_ENV === 'development') {
+      // Use structured logging without exposing sensitive data
+      console.log('[AUDIT]', {
+        type: eventType,
+        userId: user?.id || 'anonymous',
+        success: event.success,
+        // Don't log raw metadata which might contain sensitive data
+        hasMetadata: !!details?.metadata
+      })
+    }
 
     // In production, send to backend
     // await fetch('/api/audit', { method: 'POST', body: JSON.stringify(event) })
