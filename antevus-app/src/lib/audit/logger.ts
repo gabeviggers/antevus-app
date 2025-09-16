@@ -30,6 +30,9 @@ export type AuditEventType =
   | 'api.instruments.get'
   | 'api.instruments.create'
   | 'api.instruments.error'
+  | 'api.auth.success'
+  | 'api.auth.failed'
+  | 'api.auth.rate_limit'
 
 export interface AuditEvent {
   id: string
