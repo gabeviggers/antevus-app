@@ -13,19 +13,24 @@ export interface RateLimitCheck {
 }
 
 export class RateLimitRepository {
-  private windowDuration = 60000 // 1 minute window in milliseconds
+  private defaultWindowDuration = 60000 // 1 minute window in milliseconds (default)
 
   /**
    * Check and consume rate limit
    * Uses database transaction for atomic operations
+   * @param keyId - The rate limit key identifier
+   * @param limit - The maximum number of requests allowed in the window
+   * @param windowMs - The window duration in milliseconds (optional, defaults to 60000)
    */
   async checkAndConsume(
     keyId: string,
-    limit: number
+    limit: number,
+    windowMs?: number
   ): Promise<RateLimitCheck> {
+    const windowDuration = windowMs || this.defaultWindowDuration
     const now = new Date()
-    const windowStart = new Date(Math.floor(now.getTime() / this.windowDuration) * this.windowDuration)
-    const resetAt = new Date(windowStart.getTime() + this.windowDuration)
+    const windowStart = new Date(Math.floor(now.getTime() / windowDuration) * windowDuration)
+    const resetAt = new Date(windowStart.getTime() + windowDuration)
 
     try {
       // Use transaction for atomicity
@@ -101,24 +106,27 @@ export class RateLimitRepository {
   async checkMultiLayer(checks: {
     keyId?: string
     keyLimit?: number
+    keyWindow?: number
     userId?: string
     userLimit?: number
+    userWindow?: number
     ipAddress?: string
     ipLimit?: number
+    ipWindow?: number
   }): Promise<RateLimitCheck> {
     const results: RateLimitCheck[] = []
 
-    // Check each layer
+    // Check each layer with their specific windows
     if (checks.keyId && checks.keyLimit) {
-      results.push(await this.checkAndConsume(checks.keyId, checks.keyLimit))
+      results.push(await this.checkAndConsume(checks.keyId, checks.keyLimit, checks.keyWindow))
     }
 
     if (checks.userId && checks.userLimit) {
-      results.push(await this.checkAndConsume(`user:${checks.userId}`, checks.userLimit))
+      results.push(await this.checkAndConsume(`user:${checks.userId}`, checks.userLimit, checks.userWindow))
     }
 
     if (checks.ipAddress && checks.ipLimit) {
-      results.push(await this.checkAndConsume(`ip:${checks.ipAddress}`, checks.ipLimit))
+      results.push(await this.checkAndConsume(`ip:${checks.ipAddress}`, checks.ipLimit, checks.ipWindow))
     }
 
     // Return most restrictive result
@@ -134,10 +142,13 @@ export class RateLimitRepository {
 
   /**
    * Reset rate limit for a key (admin operation)
+   * @param keyId - The rate limit key identifier
+   * @param windowMs - The window duration in milliseconds (optional)
    */
-  async reset(keyId: string): Promise<void> {
+  async reset(keyId: string, windowMs?: number): Promise<void> {
+    const windowDuration = windowMs || this.defaultWindowDuration
     const now = new Date()
-    const windowStart = new Date(Math.floor(now.getTime() / this.windowDuration) * this.windowDuration)
+    const windowStart = new Date(Math.floor(now.getTime() / windowDuration) * windowDuration)
 
     await prisma.rateLimit.deleteMany({
       where: {
@@ -150,9 +161,11 @@ export class RateLimitRepository {
   /**
    * Clean up old rate limit entries
    * Should be run periodically (e.g., every hour)
+   * @param windowMs - The window duration to use for cleanup (optional)
    */
-  async cleanup(): Promise<number> {
-    const cutoff = new Date(Date.now() - 2 * this.windowDuration) // Keep 2 windows
+  async cleanup(windowMs?: number): Promise<number> {
+    const windowDuration = windowMs || this.defaultWindowDuration
+    const cutoff = new Date(Date.now() - 2 * windowDuration) // Keep 2 windows
 
     const result = await prisma.rateLimit.deleteMany({
       where: {
@@ -167,15 +180,18 @@ export class RateLimitRepository {
 
   /**
    * Get current usage for a key
+   * @param keyId - The rate limit key identifier
+   * @param windowMs - The window duration in milliseconds (optional)
    */
-  async getCurrentUsage(keyId: string): Promise<{
+  async getCurrentUsage(keyId: string, windowMs?: number): Promise<{
     count: number
     windowStart: Date
     resetAt: Date
   }> {
+    const windowDuration = windowMs || this.defaultWindowDuration
     const now = new Date()
-    const windowStart = new Date(Math.floor(now.getTime() / this.windowDuration) * this.windowDuration)
-    const resetAt = new Date(windowStart.getTime() + this.windowDuration)
+    const windowStart = new Date(Math.floor(now.getTime() / windowDuration) * windowDuration)
+    const resetAt = new Date(windowStart.getTime() + windowDuration)
 
     const rateLimit = await prisma.rateLimit.findUnique({
       where: {

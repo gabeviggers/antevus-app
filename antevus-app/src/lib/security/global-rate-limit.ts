@@ -1,41 +1,229 @@
 /**
  * Global Rate Limiting Configuration
  * Provides system-wide rate limiting across all users
+ * Uses database-backed implementation for distributed systems
  */
 
 import { logger } from '@/lib/logger'
 import { rateLimitRepository } from '@/lib/db/repositories/rate-limit.repository'
+import { config, validateEnvironment } from '@/lib/config/env-parser'
 
-// Global rate limit configurations
+// Validate environment on module load
+if (process.env.NODE_ENV === 'production') {
+  validateEnvironment()
+}
+
+// Route configuration type
+interface RouteRateLimit {
+  key: string
+  limit: number
+  window: number
+  blockDuration: number
+}
+
+// Global rate limit configurations using safe parsed values
 const globalRateLimits = {
   // Overall system limit - total requests across all users
   system: {
-    key: 'global_system',
-    limit: parseInt(process.env.GLOBAL_RATE_LIMIT || '10000'),
-    window: 60 * 1000 // 1 minute in milliseconds
+    key: 'global:system',
+    limit: config.rateLimits.global,
+    window: config.windows.rateLimit,
+    blockDuration: 60 * 1000 // Block for 1 minute when exceeded
   },
 
   // Per-endpoint global limits
   apiEndpoints: {
-    key: 'global_api',
-    limit: parseInt(process.env.GLOBAL_API_LIMIT || '5000'),
-    window: 60 * 1000
+    key: 'global:api',
+    limit: config.rateLimits.globalApi,
+    window: config.windows.rateLimit,
+    blockDuration: 60 * 1000
   },
 
   // Authentication endpoint global limit (stricter)
   auth: {
-    key: 'global_auth',
-    limit: parseInt(process.env.GLOBAL_AUTH_LIMIT || '100'),
-    window: 60 * 1000
+    key: 'global:auth',
+    limit: config.rateLimits.globalAuth,
+    window: config.windows.rateLimit,
+    blockDuration: 5 * 60 * 1000 // Block for 5 minutes
   },
 
   // Data export global limit
   export: {
-    key: 'global_export',
-    limit: parseInt(process.env.GLOBAL_EXPORT_LIMIT || '50'),
-    window: 60 * 1000
+    key: 'global:export',
+    limit: config.rateLimits.globalExport,
+    window: config.windows.rateLimit,
+    blockDuration: 10 * 60 * 1000 // Block for 10 minutes
   }
 }
+
+// Route-specific rate limit configurations
+const routeRateLimits: Map<string, RouteRateLimit> = new Map([
+  // Auth routes - strictest limits
+  ['/api/auth/login', {
+    key: 'route:/api/auth/login',
+    limit: 20,
+    window: config.windows.rateLimit,
+    blockDuration: 15 * 60 * 1000 // 15 minutes
+  }],
+  ['/api/auth/register', {
+    key: 'route:/api/auth/register',
+    limit: 10,
+    window: config.windows.rateLimit,
+    blockDuration: 30 * 60 * 1000 // 30 minutes
+  }],
+  ['/api/auth/generate-key', {
+    key: 'route:/api/auth/generate-key',
+    limit: 5,
+    window: config.windows.rateLimit,
+    blockDuration: 60 * 60 * 1000 // 1 hour
+  }],
+
+  // Data export routes - resource-intensive
+  ['/api/export', {
+    key: 'route:/api/export',
+    limit: config.rateLimits.globalExport,
+    window: config.windows.rateLimit,
+    blockDuration: 10 * 60 * 1000
+  }],
+  ['/api/backup', {
+    key: 'route:/api/backup',
+    limit: 5,
+    window: config.windows.rateLimit,
+    blockDuration: 30 * 60 * 1000
+  }],
+
+  // API v1 routes - moderate limits
+  ['/api/v1/instruments', {
+    key: 'route:/api/v1/instruments',
+    limit: 1000,
+    window: config.windows.rateLimit,
+    blockDuration: 60 * 1000
+  }],
+  ['/api/v1/runs', {
+    key: 'route:/api/v1/runs',
+    limit: 500,
+    window: config.windows.rateLimit,
+    blockDuration: 60 * 1000
+  }],
+
+  // Internal routes
+  ['/api/internal', {
+    key: 'route:/api/internal',
+    limit: 100,
+    window: config.windows.rateLimit,
+    blockDuration: 5 * 60 * 1000
+  }]
+])
+
+/**
+ * Normalize endpoint path for rate limiting
+ * Removes query strings, normalizes IDs, and lowercases
+ */
+function normalizeEndpoint(endpoint: string): string {
+  // Remove query string
+  let normalized = endpoint.split('?')[0]
+
+  // Lowercase for consistency
+  normalized = normalized.toLowerCase()
+
+  // Replace UUIDs with placeholder
+  normalized = normalized.replace(
+    /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi,
+    ':id'
+  )
+
+  // Replace numeric IDs with placeholder
+  normalized = normalized.replace(/\/\d+/g, '/:id')
+
+  // Replace common ID patterns
+  normalized = normalized.replace(/\/(inst|run|key|user)_[a-zA-Z0-9]+/g, '/:id')
+
+  return normalized
+}
+
+/**
+ * Get rate limit configuration for an endpoint
+ */
+function getEndpointRateLimit(endpoint: string): RouteRateLimit {
+  const normalized = normalizeEndpoint(endpoint)
+
+  // Check exact match first
+  if (routeRateLimits.has(normalized)) {
+    return routeRateLimits.get(normalized)!
+  }
+
+  // Check prefix matches for grouped routes
+  for (const [route, config] of routeRateLimits) {
+    if (normalized.startsWith(route)) {
+      return config
+    }
+  }
+
+  // Categorize by path segments for fallback
+  if (normalized.includes('/auth/')) {
+    return globalRateLimits.auth
+  }
+  if (normalized.includes('/export') || normalized.includes('/backup')) {
+    return globalRateLimits.export
+  }
+
+  // Default to general API limits
+  return globalRateLimits.apiEndpoints
+}
+
+// Track blocked IPs/keys in database for distributed blocking
+class DistributedBlockList {
+  private readonly BLOCK_KEY_PREFIX = 'blocked:'
+
+  async isBlocked(identifier: string): Promise<boolean> {
+    try {
+      // Check if identifier is in block list using database
+      const blockKey = `${this.BLOCK_KEY_PREFIX}${identifier}`
+      // Use a 1 hour window for block checks
+      const result = await rateLimitRepository.checkAndConsume(blockKey, 0, 3600000)
+      return !result.allowed
+    } catch (error) {
+      // Use same fail-closed logic for block list checks
+      const failOpen = process.env.FAIL_OPEN_RATE_LIMIT === 'true'
+      const isDevelopment = process.env.NODE_ENV !== 'production'
+      const shouldFailOpen = failOpen && isDevelopment
+
+      logger.error('Failed to check block list', error, {
+        identifier,
+        failureMode: shouldFailOpen ? 'fail-open' : 'fail-closed',
+        decision: shouldFailOpen ? 'NOT BLOCKED (fail-open)' : 'ASSUMED BLOCKED (fail-closed)'
+      })
+
+      // In production, assume blocked (fail-closed) for security
+      return !shouldFailOpen
+    }
+  }
+
+  async addToBlockList(identifier: string, durationMs: number): Promise<void> {
+    try {
+      const blockKey = `${this.BLOCK_KEY_PREFIX}${identifier}`
+      // Use rate limit with 0 allowed requests to effectively block
+      // Pass the duration as the window to control how long the block lasts
+      await rateLimitRepository.checkAndConsume(blockKey, 0, durationMs)
+      logger.info('Added to block list', { identifier, durationMs })
+    } catch (error) {
+      logger.error('Failed to add to block list', error, { identifier })
+    }
+  }
+
+  async removeFromBlockList(identifier: string): Promise<void> {
+    try {
+      const blockKey = `${this.BLOCK_KEY_PREFIX}${identifier}`
+      // Reset the rate limit to unblock
+      await rateLimitRepository.reset(blockKey)
+      logger.info('Removed from block list', { identifier })
+    } catch (error) {
+      logger.error('Failed to remove from block list', error, { identifier })
+    }
+  }
+}
+
+export const blockList = new DistributedBlockList()
 
 // Adaptive rate limiting based on system load
 class AdaptiveRateLimiter {
@@ -49,7 +237,11 @@ class AdaptiveRateLimiter {
   }
 
   constructor(basePoints: number) {
-    this.basePoints = basePoints
+    // Validate basePoints
+    if (isNaN(basePoints) || basePoints <= 0) {
+      throw new Error(`Invalid basePoints: ${basePoints}`)
+    }
+    this.basePoints = Math.floor(basePoints)
   }
 
   /**
@@ -181,39 +373,103 @@ class BehaviorBasedRateLimiter {
 
 // Export instances
 export const adaptiveRateLimiter = new AdaptiveRateLimiter(
-  parseInt(process.env.GLOBAL_RATE_LIMIT || '10000')
+  config.rateLimits.global
 )
 
 export const behaviorRateLimiter = new BehaviorBasedRateLimiter()
 
 /**
- * Check global rate limits
+ * Check rate limits with flexible configuration
  */
-export async function checkGlobalRateLimit(
-  type: keyof typeof globalRateLimits = 'system'
-): Promise<{ allowed: boolean; retryAfter?: number; remaining?: number }> {
+export async function checkRateLimit(
+  configOrKey: RouteRateLimit | string,
+  identifier?: string
+): Promise<{ allowed: boolean; retryAfter?: number; remaining?: number; blocked?: boolean }> {
+  // Check if rate limiting is enabled
+  if (!config.features.enableRateLimiting) {
+    return { allowed: true }
+  }
+
+  // Determine configuration
+  let limitConfig: RouteRateLimit
+  if (typeof configOrKey === 'string') {
+    // Legacy support for predefined types
+    if (configOrKey in globalRateLimits) {
+      limitConfig = globalRateLimits[configOrKey as keyof typeof globalRateLimits]
+    } else {
+      // Treat as endpoint path
+      limitConfig = getEndpointRateLimit(configOrKey)
+    }
+  } else {
+    limitConfig = configOrKey
+  }
+
   try {
-    const config = globalRateLimits[type]
+    // Check block list first if identifier provided
+    if (identifier && await blockList.isBlocked(identifier)) {
+      logger.warn('Request blocked by block list', { identifier })
+      return { allowed: false, blocked: true, retryAfter: 300 }
+    }
+
     const result = await rateLimitRepository.checkAndConsume(
-      config.key,
-      config.limit
+      limitConfig.key,
+      limitConfig.limit,
+      limitConfig.window
     )
 
     if (!result.allowed) {
       const retryAfter = Math.ceil((result.resetAt.getTime() - Date.now()) / 1000)
-      logger.warn('Global rate limit exceeded', {
-        type,
+
+      // Add to block list if repeatedly hitting limits
+      if (identifier && result.remaining < -10) {
+        await blockList.addToBlockList(identifier, limitConfig.blockDuration)
+      }
+
+      logger.warn('Rate limit exceeded', {
+        key: limitConfig.key,
+        limit: limitConfig.limit,
         retryAfter,
         remaining: result.remaining
       })
+
       return { allowed: false, retryAfter, remaining: result.remaining }
     }
 
     return { allowed: true, remaining: result.remaining }
   } catch (error) {
-    logger.error('Global rate limit check failed', error)
-    return { allowed: true } // Fail open in case of error
+    // Determine whether to fail open or closed based on environment
+    const failOpen = process.env.FAIL_OPEN_RATE_LIMIT === 'true'
+    const isDevelopment = process.env.NODE_ENV !== 'production'
+
+    // Only fail open if explicitly enabled AND not in production
+    const shouldFailOpen = failOpen && isDevelopment
+    const allowed = shouldFailOpen
+
+    logger.error('Rate limit check failed', error, {
+      key: limitConfig.key,
+      failureMode: allowed ? 'fail-open' : 'fail-closed',
+      environment: process.env.NODE_ENV,
+      failOpenFlag: failOpen,
+      decision: allowed ? 'ALLOWING request due to error (fail-open)' : 'BLOCKING request due to error (fail-closed)'
+    })
+
+    // In production, default to fail-closed for security
+    // In development, allow fail-open only if explicitly enabled
+    return {
+      allowed,
+      retryAfter: allowed ? undefined : 60
+    }
   }
+}
+
+/**
+ * Check global rate limits (backward compatibility)
+ */
+export async function checkGlobalRateLimit(
+  type: keyof typeof globalRateLimits = 'system',
+  identifier?: string
+): Promise<{ allowed: boolean; retryAfter?: number; remaining?: number; blocked?: boolean }> {
+  return checkRateLimit(type, identifier)
 }
 
 /**
@@ -228,16 +484,34 @@ export async function getSystemLoad(): Promise<number> {
 /**
  * Apply adaptive global rate limiting
  */
-export async function checkAdaptiveGlobalLimit(): Promise<{ allowed: boolean; limit: number }> {
-  const systemLoad = await getSystemLoad()
-  const currentLimit = adaptiveRateLimiter.adjustForLoad(systemLoad)
+export async function checkAdaptiveGlobalLimit(): Promise<{ allowed: boolean; limit: number; error?: string }> {
+  try {
+    const systemLoad = await getSystemLoad()
+    const currentLimit = adaptiveRateLimiter.adjustForLoad(systemLoad)
 
-  const result = await rateLimitRepository.checkAndConsume(
-    'adaptive_global',
-    currentLimit
-  )
+    const result = await rateLimitRepository.checkAndConsume(
+      'adaptive_global',
+      currentLimit,
+      config.windows.rateLimit
+    )
 
-  return { allowed: result.allowed, limit: currentLimit }
+    return { allowed: result.allowed, limit: currentLimit }
+  } catch (error) {
+    const failOpen = process.env.FAIL_OPEN_RATE_LIMIT === 'true'
+    const isDevelopment = process.env.NODE_ENV !== 'production'
+    const shouldFailOpen = failOpen && isDevelopment
+
+    logger.error('Adaptive rate limit check failed', error, {
+      failureMode: shouldFailOpen ? 'fail-open' : 'fail-closed',
+      decision: shouldFailOpen ? 'ALLOWING (fail-open)' : 'BLOCKING (fail-closed)'
+    })
+
+    return {
+      allowed: shouldFailOpen,
+      limit: 0,
+      error: 'Adaptive rate limit check failed'
+    }
+  }
 }
 
 /**
@@ -245,7 +519,8 @@ export async function checkAdaptiveGlobalLimit(): Promise<{ allowed: boolean; li
  */
 export async function checkCombinedRateLimit(
   userId?: string,
-  endpoint?: string
+  endpoint?: string,
+  ipAddress?: string
 ): Promise<{
   allowed: boolean
   reason?: string
@@ -254,16 +529,18 @@ export async function checkCombinedRateLimit(
     global: boolean
     adaptive: boolean
     behavior: boolean
+    endpoint: boolean
   }
 }> {
   const results = {
     global: true,
     adaptive: true,
-    behavior: true
+    behavior: true,
+    endpoint: true
   }
 
   // Check global system limit
-  const globalCheck = await checkGlobalRateLimit('system')
+  const globalCheck = await checkRateLimit('system', ipAddress)
   results.global = globalCheck.allowed
 
   if (!globalCheck.allowed) {
@@ -290,21 +567,57 @@ export async function checkCombinedRateLimit(
 
   // Check endpoint-specific limits if provided
   if (endpoint) {
-    let endpointType: keyof typeof globalRateLimits = 'apiEndpoints'
-
-    if (endpoint.includes('auth')) {
-      endpointType = 'auth'
-    } else if (endpoint.includes('export')) {
-      endpointType = 'export'
-    }
-
-    const endpointCheck = await checkGlobalRateLimit(endpointType)
+    // Use normalized endpoint-specific rate limiting
+    const endpointConfig = getEndpointRateLimit(endpoint)
+    const endpointCheck = await checkRateLimit(endpointConfig, ipAddress)
+    results.endpoint = endpointCheck.allowed
 
     if (!endpointCheck.allowed) {
+      const normalized = normalizeEndpoint(endpoint)
       return {
         allowed: false,
-        reason: `Endpoint rate limit exceeded: ${endpointType}`,
+        reason: `Endpoint rate limit exceeded: ${normalized}`,
         retryAfter: endpointCheck.retryAfter,
+        limits: results
+      }
+    }
+  }
+
+  // Check per-user limits if userId provided
+  if (userId) {
+    const userConfig: RouteRateLimit = {
+      key: `user:${userId}`,
+      limit: config.rateLimits.perUser,
+      window: config.windows.rateLimit,
+      blockDuration: 5 * 60 * 1000
+    }
+    const userCheck = await checkRateLimit(userConfig)
+
+    if (!userCheck.allowed) {
+      return {
+        allowed: false,
+        reason: 'User rate limit exceeded',
+        retryAfter: userCheck.retryAfter,
+        limits: results
+      }
+    }
+  }
+
+  // Check per-IP limits if IP provided
+  if (ipAddress) {
+    const ipConfig: RouteRateLimit = {
+      key: `ip:${ipAddress}`,
+      limit: config.rateLimits.perIp,
+      window: config.windows.rateLimit,
+      blockDuration: 15 * 60 * 1000
+    }
+    const ipCheck = await checkRateLimit(ipConfig)
+
+    if (!ipCheck.allowed) {
+      return {
+        allowed: false,
+        reason: 'IP rate limit exceeded',
+        retryAfter: ipCheck.retryAfter,
         limits: results
       }
     }
@@ -316,6 +629,9 @@ export async function checkCombinedRateLimit(
   }
 }
 
+// Export utility functions
+export { normalizeEndpoint, getEndpointRateLimit }
+
 // Export for monitoring
 export function getGlobalRateLimitStats(): {
   system: number
@@ -323,12 +639,33 @@ export function getGlobalRateLimitStats(): {
   auth: number
   export: number
   adaptive: number
+  enabled: boolean
 } {
   return {
-    system: parseInt(process.env.GLOBAL_RATE_LIMIT || '10000'),
-    api: parseInt(process.env.GLOBAL_API_LIMIT || '5000'),
-    auth: parseInt(process.env.GLOBAL_AUTH_LIMIT || '100'),
-    export: parseInt(process.env.GLOBAL_EXPORT_LIMIT || '50'),
-    adaptive: adaptiveRateLimiter.getCurrentLimit()
+    system: config.rateLimits.global,
+    api: config.rateLimits.globalApi,
+    auth: config.rateLimits.globalAuth,
+    export: config.rateLimits.globalExport,
+    adaptive: adaptiveRateLimiter.getCurrentLimit(),
+    enabled: config.features.enableRateLimiting
   }
+}
+
+/**
+ * Initialize rate limiting system
+ */
+export async function initializeRateLimiting(): Promise<void> {
+  if (!config.features.enableRateLimiting) {
+    logger.info('Rate limiting is disabled')
+    return
+  }
+
+  logger.info('Initializing global rate limiting', getGlobalRateLimitStats())
+
+  // Log configuration at startup
+  logger.info('Rate limit configuration:', {
+    limits: config.rateLimits,
+    windows: config.windows,
+    features: config.features
+  })
 }
