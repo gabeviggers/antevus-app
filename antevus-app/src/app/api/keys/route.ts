@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import crypto from 'crypto'
 
 export const runtime = 'nodejs'
+
+// TODO: Import getServerSession from '@/lib/auth/session' once authentication is fully implemented
+// This will replace all IS_DEMO checks with proper session validation
 // In production, this would be stored in a secure database
 // For demo purposes, we're using in-memory storage
 const apiKeysStore = new Map<string, {
@@ -12,9 +15,6 @@ const apiKeysStore = new Map<string, {
   created: string
   lastUsed: string
   permissions: string
-  // Store the full key only temporarily for initial display
-  tempFullKey?: string
-  tempFullKeyExpiry?: number
 }>()
 
 // Demo mode flag - in production this should be false
@@ -34,42 +34,86 @@ function generateApiKey(): string {
   return prefix + randomBytes
 }
 
-export async function GET(request: NextRequest) {
+export async function GET() {
+  // TODO: Replace IS_DEMO check with getServerSession from src/lib/auth/session.ts
+  // once real authentication is implemented
+  if (!IS_DEMO) {
+    return NextResponse.json(
+      { error: 'API keys management is only available in demo mode' },
+      {
+        status: 403,
+        headers: {
+          'Cache-Control': 'no-store',
+          'Vary': 'Authorization'
+        }
+      }
+    )
+  }
+
   try {
     // Return keys without sensitive data
     const keys = Array.from(apiKeysStore.values()).map(key => {
-      const { tempFullKey, tempFullKeyExpiry, hashedKey, ...safeData } = key
-
-      // Check if temp key is still valid (1 minute window)
-      const canShowFull = IS_DEMO &&
-        tempFullKey &&
-        tempFullKeyExpiry &&
-        Date.now() < tempFullKeyExpiry
+      const { hashedKey, ...safeData } = key
 
       return {
         ...safeData,
-        hashedDigest: hashedKey.substring(0, 8),
-        canReveal: IS_DEMO
+        hashedDigest: hashedKey.substring(0, 8), // First 8 chars of hash
+        canReveal: IS_DEMO // Only allow reveal in demo mode
       }
     })
 
-    return NextResponse.json({ keys }, { headers: { 'Cache-Control': 'no-store' } })
+    return NextResponse.json(
+      { keys },
+      {
+        headers: {
+          'Cache-Control': 'no-store',
+          'Vary': 'Authorization'
+        }
+      }
+    )
   } catch (error) {
     return NextResponse.json(
       { error: 'Failed to fetch API keys' },
-      { status: 500 }
+      {
+        status: 500,
+        headers: {
+          'Cache-Control': 'no-store',
+          'Vary': 'Authorization'
+        }
+      }
     )
   }
 }
 
 export async function POST(request: NextRequest) {
+  // TODO: Replace IS_DEMO check with getServerSession from src/lib/auth/session.ts
+  // once real authentication is implemented
+  if (!IS_DEMO) {
+    return NextResponse.json(
+      { error: 'API keys management is only available in demo mode' },
+      {
+        status: 403,
+        headers: {
+          'Cache-Control': 'no-store',
+          'Vary': 'Authorization'
+        }
+      }
+    )
+  }
+
   try {
     const { name, permissions = 'All' } = await request.json()
 
     if (!name) {
       return NextResponse.json(
         { error: 'Name is required' },
-        { status: 400 }
+        {
+          status: 400,
+          headers: {
+            'Cache-Control': 'no-store',
+            'Vary': 'Authorization'
+          }
+        }
       )
     }
 
@@ -89,36 +133,62 @@ export async function POST(request: NextRequest) {
         year: 'numeric'
       }),
       lastUsed: 'Never',
-      permissions,
-      // Store full key temporarily (1 minute) for initial display only
-      tempFullKey: fullKey,
-      tempFullKeyExpiry: Date.now() + 60000 // 1 minute
+      permissions
     }
 
     apiKeysStore.set(id, keyData)
 
     // Return the full key only once during creation
-    return NextResponse.json({
-      id,
-      name,
-      last4,
-      created: keyData.created,
-      lastUsed: keyData.lastUsed,
-      permissions,
-      hashedDigest: hashedKey.substring(0, 8),
-      // Only return full key once, immediately after creation
-      fullKey: fullKey,
-      message: 'Store this key securely. It will not be shown again.'
-    })
+    return NextResponse.json(
+      {
+        id,
+        name,
+        last4,
+        created: keyData.created,
+        lastUsed: keyData.lastUsed,
+        permissions,
+        hashedDigest: hashedKey.substring(0, 8),
+        // Only return full key once, immediately after creation
+        fullKey: fullKey,
+        message: 'Store this key securely. It will not be shown again.'
+      },
+      {
+        headers: {
+          'Cache-Control': 'no-store',
+          'Vary': 'Authorization'
+        }
+      }
+    )
   } catch (error) {
     return NextResponse.json(
       { error: 'Failed to create API key' },
-      { status: 500 }
+      {
+        status: 500,
+        headers: {
+          'Cache-Control': 'no-store',
+          'Vary': 'Authorization'
+        }
+      }
     )
   }
 }
 
 export async function DELETE(request: NextRequest) {
+  // TODO: Replace IS_DEMO check with getServerSession from src/lib/auth/session.ts
+  // once real authentication is implemented
+  if (!IS_DEMO) {
+    return NextResponse.json(
+      { error: 'API keys management is only available in demo mode' },
+      {
+        status: 403,
+        headers: {
+          'Cache-Control': 'no-store',
+          'Vary': 'Authorization'
+        }
+      }
+    )
+  }
+
   try {
     const { searchParams } = new URL(request.url)
     const id = searchParams.get('id')
@@ -126,62 +196,116 @@ export async function DELETE(request: NextRequest) {
     if (!id) {
       return NextResponse.json(
         { error: 'ID is required' },
-        { status: 400 }
+        {
+          status: 400,
+          headers: {
+            'Cache-Control': 'no-store',
+            'Vary': 'Authorization'
+          }
+        }
       )
     }
 
     if (!apiKeysStore.has(id)) {
       return NextResponse.json(
         { error: 'API key not found' },
-        { status: 404 }
+        {
+          status: 404,
+          headers: {
+            'Cache-Control': 'no-store',
+            'Vary': 'Authorization'
+          }
+        }
       )
     }
 
     apiKeysStore.delete(id)
 
-    return NextResponse.json({
-      success: true,
-      message: 'API key deleted successfully'
-    })
+    return NextResponse.json(
+      {
+        success: true,
+        message: 'API key deleted successfully'
+      },
+      {
+        headers: {
+          'Cache-Control': 'no-store',
+          'Vary': 'Authorization'
+        }
+      }
+    )
   } catch (error) {
     return NextResponse.json(
       { error: 'Failed to delete API key' },
-      { status: 500 }
+      {
+        status: 500,
+        headers: {
+          'Cache-Control': 'no-store',
+          'Vary': 'Authorization'
+        }
+      }
     )
   }
 }
 
 // Endpoint to reveal key (demo mode only)
 export async function PUT(request: NextRequest) {
+  // TODO: Replace IS_DEMO check with getServerSession from src/lib/auth/session.ts
+  // once real authentication is implemented
+  if (!IS_DEMO) {
+    return NextResponse.json(
+      { error: 'Key reveal is only available in demo mode' },
+      {
+        status: 403,
+        headers: {
+          'Cache-Control': 'no-store',
+          'Vary': 'Authorization'
+        }
+      }
+    )
+  }
+
   try {
     const { id } = await request.json()
-
-    if (!IS_DEMO) {
-      return NextResponse.json(
-        { error: 'Key reveal is only available in demo mode' },
-        { status: 403 }
-      )
-    }
 
     const key = apiKeysStore.get(id)
     if (!key) {
       return NextResponse.json(
         { error: 'API key not found' },
-        { status: 404 }
+        {
+          status: 404,
+          headers: {
+            'Cache-Control': 'no-store',
+            'Vary': 'Authorization'
+          }
+        }
       )
     }
 
     // In demo mode, return a mock key for display
     const demoKey = `av_demo_${key.last4}_EXAMPLE_KEY_${crypto.randomBytes(8).toString('hex')}`
 
-    return NextResponse.json({
-      demoKey,
-      message: 'This is a demo key for display purposes only'
-    })
+    return NextResponse.json(
+      {
+        demoKey,
+        message: 'This is a demo key for display purposes only'
+      },
+      {
+        headers: {
+          'Cache-Control': 'no-store',
+          'Vary': 'Authorization'
+        }
+      }
+    )
   } catch (error) {
     return NextResponse.json(
       { error: 'Failed to reveal API key' },
-      { status: 500 }
+      {
+        status: 500,
+        headers: {
+          'Cache-Control': 'no-store',
+          'Vary': 'Authorization'
+        }
+      }
     )
   }
 }
