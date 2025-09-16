@@ -30,6 +30,11 @@ const rateLimitStore = new Map<string, RateLimitEntry>()
 const apiKeyStore = new Map<string, APIKey>() // Shared with generate-key route
 const keyHashStore = new Map<string, string>() // hash -> id mapping
 
+// Type augmentation for global object
+declare global {
+  var rateLimitCleanupInterval: NodeJS.Timeout | undefined
+}
+
 // Clean up expired rate limit entries periodically
 if (typeof global !== 'undefined' && !global.rateLimitCleanupInterval) {
   global.rateLimitCleanupInterval = setInterval(() => {
