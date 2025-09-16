@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useAuth } from '@/contexts/auth-context'
 import { auditLogger } from '@/lib/audit/logger'
 import {
@@ -90,13 +90,21 @@ export default function RunHistoryPage() {
     currentPage * itemsPerPage
   )
 
-  // Status counts
+  // Clamp currentPage when result size shrinks
+  useEffect(() => {
+    if (totalPages > 0 && currentPage > totalPages) {
+      setCurrentPage(totalPages)
+    }
+  }, [totalPages, currentPage])
+
+  // Status counts (respect current filters)
+  const countsSource = filteredRuns
   const statusCounts = {
-    all: runs.length,
-    completed: runs.filter(r => r.status === 'completed').length,
-    failed: runs.filter(r => r.status === 'failed').length,
-    aborted: runs.filter(r => r.status === 'aborted').length,
-    in_progress: runs.filter(r => r.status === 'in_progress').length
+    all: countsSource.length,
+    completed: countsSource.filter(r => r.status === 'completed').length,
+    failed: countsSource.filter(r => r.status === 'failed').length,
+    aborted: countsSource.filter(r => r.status === 'aborted').length,
+    in_progress: countsSource.filter(r => r.status === 'in_progress').length
   }
 
   // Check if user has export permissions
@@ -127,7 +135,7 @@ export default function RunHistoryPage() {
     a.href = url
     a.download = `run_history_${new Date().toISOString().split('T')[0]}.csv`
     a.click()
-    URL.revokeObjectURL(url)
+    setTimeout(() => URL.revokeObjectURL(url), 0)
   }
 
   const handleExportJSON = () => {
@@ -154,7 +162,7 @@ export default function RunHistoryPage() {
     a.href = url
     a.download = `run_history_${new Date().toISOString().split('T')[0]}.json`
     a.click()
-    URL.revokeObjectURL(url)
+    setTimeout(() => URL.revokeObjectURL(url), 0)
   }
 
   const handleExportPDF = () => {
@@ -321,19 +329,30 @@ export default function RunHistoryPage() {
           {/* Export Dropdown */}
           <div className="relative">
             <Button
+              id="export-menu-button"
               variant="outline"
               size="sm"
               disabled={!canExport}
               onClick={() => setShowExportMenu(!showExportMenu)}
               aria-expanded={showExportMenu}
               aria-haspopup="menu"
+              aria-controls={showExportMenu ? 'export-menu' : undefined}
             >
               <Download className="h-4 w-4 mr-2" />
               Export
             </Button>
             {canExport && showExportMenu && (
-              <div className="absolute right-0 mt-1 w-48 bg-card border border-border rounded-md shadow-lg z-10">
+              <div
+                id="export-menu"
+                role="menu"
+                aria-labelledby="export-menu-button"
+                tabIndex={-1}
+                onKeyDown={(e) => { if (e.key === 'Escape') setShowExportMenu(false) }}
+                onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setShowExportMenu(false) }}
+                className="absolute right-0 mt-1 w-48 bg-card border border-border rounded-md shadow-lg z-10"
+              >
               <button
+                role="menuitem"
                 onClick={() => {
                   handleExportCSV()
                   setShowExportMenu(false)
@@ -344,6 +363,7 @@ export default function RunHistoryPage() {
                 Export as CSV
               </button>
               <button
+                role="menuitem"
                 onClick={() => {
                   handleExportJSON()
                   setShowExportMenu(false)
@@ -354,6 +374,7 @@ export default function RunHistoryPage() {
                 Export as JSON
               </button>
               <button
+                role="menuitem"
                 onClick={() => {
                   handleExportPDF()
                   setShowExportMenu(false)
@@ -550,16 +571,12 @@ export default function RunHistoryPage() {
             {/* Page numbers */}
             <div className="flex gap-1">
               {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                let pageNum: number
-                if (totalPages <= 5) {
-                  pageNum = i + 1
-                } else if (currentPage <= 3) {
-                  pageNum = i + 1
-                } else if (currentPage >= totalPages - 2) {
-                  pageNum = totalPages - 4 + i
-                } else {
-                  pageNum = currentPage - 2 + i
-                }
+                const startPage =
+                  totalPages <= 5 ? 1 :
+                  currentPage <= 3 ? 1 :
+                  currentPage >= totalPages - 2 ? totalPages - 4 :
+                  currentPage - 2
+                const pageNum = startPage + i
 
                 return (
                   <Button

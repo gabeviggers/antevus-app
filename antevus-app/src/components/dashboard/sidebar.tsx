@@ -61,7 +61,7 @@ export function Sidebar({ sidebarOpen, setSidebarOpen, collapsed, setCollapsed }
 
       {/* Sidebar */}
       <aside
-        aria-expanded={!collapsed}
+        id="primary-sidebar"
         className={`${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         } fixed inset-y-0 left-0 z-50 flex flex-col h-screen bg-card border-r border-border transition-all duration-300 lg:translate-x-0 ${
@@ -77,6 +77,8 @@ export function Sidebar({ sidebarOpen, setSidebarOpen, collapsed, setCollapsed }
                 onClick={() => setCollapsed(false)}
                 className="p-2 rounded-md hover:bg-accent transition-colors"
                 aria-label="Expand sidebar"
+                aria-controls="primary-sidebar"
+                aria-expanded={false}
                 title="Expand sidebar"
               >
                 <Menu className="h-5 w-5" />
@@ -110,6 +112,8 @@ export function Sidebar({ sidebarOpen, setSidebarOpen, collapsed, setCollapsed }
                   className="hidden lg:block p-1.5 rounded-md hover:bg-accent transition-colors"
                   aria-label="Collapse sidebar"
                   title="Collapse sidebar"
+                  aria-controls="primary-sidebar"
+                  aria-expanded={!collapsed}
                 >
                   <ChevronLeft className="h-4 w-4" />
                 </button>
@@ -118,6 +122,8 @@ export function Sidebar({ sidebarOpen, setSidebarOpen, collapsed, setCollapsed }
                   onClick={() => setSidebarOpen(false)}
                   className="lg:hidden p-1.5 rounded-md hover:bg-accent transition-colors"
                   aria-label="Close sidebar"
+                  aria-controls="primary-sidebar"
+                  aria-expanded={false}
                 >
                   <X className="h-4 w-4" />
                 </button>
