@@ -28,7 +28,7 @@ export function middleware(request: NextRequest) {
     // Script policy: Use strict-dynamic in production for better security while keeping compatibility
     isDevelopment
       ? `script-src 'self' 'unsafe-inline' 'unsafe-eval'`
-      : `script-src 'self' 'unsafe-inline' 'strict-dynamic'`,
+      : `script-src 'self' 'unsafe-inline'`,
     // Style policy: Keep unsafe-inline for styles (required for styled-jsx and emotion)
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: https:",
