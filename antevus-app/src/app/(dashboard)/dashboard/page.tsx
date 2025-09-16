@@ -4,9 +4,10 @@ import { useState, useEffect } from 'react'
 import { InstrumentCard } from '@/components/instruments/instrument-card'
 import { InstrumentDetailModal } from '@/components/instruments/instrument-detail-modal'
 import { mockInstruments, type Instrument, type InstrumentStatus } from '@/lib/mock-data/instruments'
-import { Search, Filter, RefreshCw, Plus, Grid3x3, List, Bell } from 'lucide-react'
+import { Search, Filter, RefreshCw, Plus, Grid3x3, List, Bell, Activity, Power, AlertTriangle, Wrench } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ThemeToggle } from '@/components/theme-toggle'
+import { MetricCard } from '@/components/ui/metric-card'
 
 export default function InstrumentsDashboard() {
   const [instruments, setInstruments] = useState<Instrument[]>(mockInstruments)
@@ -106,61 +107,50 @@ export default function InstrumentsDashboard() {
 
       {/* Stats Overview */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
-        <button
+        <MetricCard
+          title="Total Instruments"
+          value={statusCounts.all}
+          icon={<Activity className="h-4 w-4" />}
+          status="neutral"
+          isSelected={statusFilter === 'all'}
           onClick={() => setStatusFilter('all')}
-          className={`p-4 rounded-lg border transition-all ${
-            statusFilter === 'all'
-              ? 'bg-primary text-primary-foreground border-primary'
-              : 'bg-card border-border hover:bg-accent'
-          }`}
-        >
-          <div className="text-2xl font-bold">{statusCounts.all}</div>
-          <div className="text-sm">Total Instruments</div>
-        </button>
-        <button
+        />
+        <MetricCard
+          title="Running"
+          value={statusCounts.running}
+          icon={<Activity className="h-4 w-4" />}
+          status="pass"
+          statusText={statusCounts.running > 0 ? 'Active' : 'None active'}
+          isSelected={statusFilter === 'running'}
           onClick={() => setStatusFilter('running')}
-          className={`p-4 rounded-lg border transition-all ${
-            statusFilter === 'running'
-              ? 'bg-green-500 text-white border-green-500'
-              : 'bg-card border-border hover:bg-accent'
-          }`}
-        >
-          <div className="text-2xl font-bold">{statusCounts.running}</div>
-          <div className="text-sm">Running</div>
-        </button>
-        <button
+        />
+        <MetricCard
+          title="Idle"
+          value={statusCounts.idle}
+          icon={<Power className="h-4 w-4" />}
+          status="neutral"
+          statusText="Available"
+          isSelected={statusFilter === 'idle'}
           onClick={() => setStatusFilter('idle')}
-          className={`p-4 rounded-lg border transition-all ${
-            statusFilter === 'idle'
-              ? 'bg-gray-500 text-white border-gray-500'
-              : 'bg-card border-border hover:bg-accent'
-          }`}
-        >
-          <div className="text-2xl font-bold">{statusCounts.idle}</div>
-          <div className="text-sm">Idle</div>
-        </button>
-        <button
+        />
+        <MetricCard
+          title="Error"
+          value={statusCounts.error}
+          icon={<AlertTriangle className="h-4 w-4" />}
+          status={statusCounts.error > 0 ? 'error' : 'pass'}
+          statusText={statusCounts.error > 0 ? 'Attention required' : 'No errors'}
+          isSelected={statusFilter === 'error'}
           onClick={() => setStatusFilter('error')}
-          className={`p-4 rounded-lg border transition-all ${
-            statusFilter === 'error'
-              ? 'bg-red-500 text-white border-red-500'
-              : 'bg-card border-border hover:bg-accent'
-          }`}
-        >
-          <div className="text-2xl font-bold">{statusCounts.error}</div>
-          <div className="text-sm">Error</div>
-        </button>
-        <button
+        />
+        <MetricCard
+          title="Maintenance"
+          value={statusCounts.maintenance}
+          icon={<Wrench className="h-4 w-4" />}
+          status={statusCounts.maintenance > 0 ? 'warning' : 'pass'}
+          statusText={statusCounts.maintenance > 0 ? 'Service needed' : 'All operational'}
+          isSelected={statusFilter === 'maintenance'}
           onClick={() => setStatusFilter('maintenance')}
-          className={`p-4 rounded-lg border transition-all ${
-            statusFilter === 'maintenance'
-              ? 'bg-yellow-500 text-white border-yellow-500'
-              : 'bg-card border-border hover:bg-accent'
-          }`}
-        >
-          <div className="text-2xl font-bold">{statusCounts.maintenance}</div>
-          <div className="text-sm">Maintenance</div>
-        </button>
+        />
       </div>
 
       {/* Controls Bar */}

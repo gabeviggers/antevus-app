@@ -30,10 +30,13 @@ import {
   XCircle,
   AlertCircle,
   Clock,
-  Bell
+  Bell,
+  Activity,
+  Pause
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ThemeToggle } from '@/components/theme-toggle'
+import { MetricCard } from '@/components/ui/metric-card'
 
 export default function RunHistoryPage() {
   const { user, hasPermission } = useAuth()
@@ -232,61 +235,58 @@ export default function RunHistoryPage() {
 
       {/* Stats Cards */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
-        <button
+        <MetricCard
+          title="Total Runs"
+          value={statusCounts.all}
+          icon={<FileText className="h-4 w-4" />}
+          status="neutral"
+          isSelected={statusFilter === 'all'}
           onClick={() => { setStatusFilter('all'); setCurrentPage(1) }}
-          className={`p-4 rounded-lg border transition-all ${
-            statusFilter === 'all'
-              ? 'bg-primary text-primary-foreground border-primary'
-              : 'bg-card border-border hover:bg-accent'
-          }`}
-        >
-          <div className="text-2xl font-bold">{statusCounts.all}</div>
-          <div className="text-sm">Total Runs</div>
-        </button>
-        <button
+        />
+        <MetricCard
+          title="Completed"
+          value={statusCounts.completed}
+          icon={<CheckCircle className="h-4 w-4" />}
+          status="pass"
+          statusText={statusCounts.completed > 0 ? 'Successful runs' : 'No completions'}
+          isSelected={statusFilter === 'completed'}
           onClick={() => { setStatusFilter('completed'); setCurrentPage(1) }}
-          className={`p-4 rounded-lg border transition-all ${
-            statusFilter === 'completed'
-              ? 'bg-green-500 text-white border-green-500'
-              : 'bg-card border-border hover:bg-accent'
-          }`}
-        >
-          <div className="text-2xl font-bold">{statusCounts.completed}</div>
-          <div className="text-sm">Completed</div>
-        </button>
-        <button
+          trend={statusCounts.all > 0 ? {
+            value: Math.round((statusCounts.completed / statusCounts.all) * 100),
+            isPositive: true
+          } : undefined}
+        />
+        <MetricCard
+          title="In Progress"
+          value={statusCounts.in_progress}
+          icon={<Activity className="h-4 w-4" />}
+          status={statusCounts.in_progress > 0 ? 'warning' : 'neutral'}
+          statusText={statusCounts.in_progress > 0 ? 'Currently running' : 'None active'}
+          isSelected={statusFilter === 'in_progress'}
           onClick={() => { setStatusFilter('in_progress'); setCurrentPage(1) }}
-          className={`p-4 rounded-lg border transition-all ${
-            statusFilter === 'in_progress'
-              ? 'bg-blue-500 text-white border-blue-500'
-              : 'bg-card border-border hover:bg-accent'
-          }`}
-        >
-          <div className="text-2xl font-bold">{statusCounts.in_progress}</div>
-          <div className="text-sm">In Progress</div>
-        </button>
-        <button
+        />
+        <MetricCard
+          title="Failed"
+          value={statusCounts.failed}
+          icon={<XCircle className="h-4 w-4" />}
+          status={statusCounts.failed > 0 ? 'error' : 'pass'}
+          statusText={statusCounts.failed > 0 ? 'Review required' : 'No failures'}
+          isSelected={statusFilter === 'failed'}
           onClick={() => { setStatusFilter('failed'); setCurrentPage(1) }}
-          className={`p-4 rounded-lg border transition-all ${
-            statusFilter === 'failed'
-              ? 'bg-red-500 text-white border-red-500'
-              : 'bg-card border-border hover:bg-accent'
-          }`}
-        >
-          <div className="text-2xl font-bold">{statusCounts.failed}</div>
-          <div className="text-sm">Failed</div>
-        </button>
-        <button
+          trend={statusCounts.all > 0 ? {
+            value: Math.round((statusCounts.failed / statusCounts.all) * 100),
+            isPositive: false
+          } : undefined}
+        />
+        <MetricCard
+          title="Aborted"
+          value={statusCounts.aborted}
+          icon={<Pause className="h-4 w-4" />}
+          status={statusCounts.aborted > 0 ? 'warning' : 'neutral'}
+          statusText={statusCounts.aborted > 0 ? 'User stopped' : 'None aborted'}
+          isSelected={statusFilter === 'aborted'}
           onClick={() => { setStatusFilter('aborted'); setCurrentPage(1) }}
-          className={`p-4 rounded-lg border transition-all ${
-            statusFilter === 'aborted'
-              ? 'bg-yellow-500 text-white border-yellow-500'
-              : 'bg-card border-border hover:bg-accent'
-          }`}
-        >
-          <div className="text-2xl font-bold">{statusCounts.aborted}</div>
-          <div className="text-sm">Aborted</div>
-        </button>
+        />
       </div>
 
       {/* Controls Bar */}
@@ -529,7 +529,7 @@ export default function RunHistoryPage() {
             {/* Page numbers */}
             <div className="flex gap-1">
               {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                let pageNum
+                let pageNum: number
                 if (totalPages <= 5) {
                   pageNum = i + 1
                 } else if (currentPage <= 3) {
