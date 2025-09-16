@@ -1,6 +1,13 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
+// Generate a secure nonce for CSP using Web Crypto API (Edge Runtime compatible)
+function generateNonce(): string {
+  const array = new Uint8Array(16)
+  crypto.getRandomValues(array)
+  return Buffer.from(array).toString('base64')
+}
+
 // Middleware for security headers and password protection
 export function middleware(request: NextRequest) {
   // Add security headers to all responses
@@ -12,32 +19,41 @@ export function middleware(request: NextRequest) {
   // X-XSS-Protection is obsolete in modern browsers, but kept for legacy support
   response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin')
   response.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()')
-  // Content Security Policy - relaxed for development
-  const isDevelopment = process.env.NODE_ENV === 'development'
 
-  response.headers.set(
-    'Content-Security-Policy',
-    "default-src 'self'; " +
-    const csp = [
-      "default-src 'self'",
-      "base-uri 'none'",
-      "object-src 'none'",
-      "form-action 'self'",
-      `script-src 'self' 'unsafe-inline'${isDevelopment ? " 'unsafe-eval'" : ''}`,
-      "style-src 'self' 'unsafe-inline'",
-      "img-src 'self' data: https:",
-      "font-src 'self' data:",
-      `connect-src 'self'${isDevelopment ? ' ws: wss:' : ''}`, // Allow WebSocket in dev
-      "frame-ancestors 'none'",
-    ].join('; ') + ';'
-    response.headers.set('Content-Security-Policy', csp)
-    `script-src 'self' 'unsafe-inline'${isDevelopment ? " 'unsafe-eval'" : ''}; ` +
-    "style-src 'self' 'unsafe-inline'; " +
-    "img-src 'self' data: https:; " +
-    "font-src 'self' data:; " +
-    `connect-src 'self'${isDevelopment ? ' ws: wss:' : ''}; ` + // Allow WebSocket in dev
-    "frame-ancestors 'none';"
-  )
+  // Content Security Policy configuration
+  const isDevelopment = process.env.NODE_ENV === 'development'
+  const isProduction = process.env.NODE_ENV === 'production' || process.env.VERCEL_ENV === 'production'
+
+  // Generate a nonce for this request (production only)
+  const nonce = isProduction ? generateNonce() : null
+
+  // Build CSP directives
+  const cspDirectives = [
+    "default-src 'self'",
+    "base-uri 'none'",
+    "object-src 'none'",
+    "form-action 'self'",
+    // In production use nonce, in development allow unsafe-inline and unsafe-eval
+    isProduction
+      ? `script-src 'self' 'nonce-${nonce}'`
+      : `script-src 'self' 'unsafe-inline' 'unsafe-eval'`,
+    // In production use nonce for styles, in development allow unsafe-inline
+    isProduction
+      ? `style-src 'self' 'nonce-${nonce}'`
+      : "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: https:",
+    "font-src 'self' data:",
+    `connect-src 'self'${isDevelopment ? ' ws: wss:' : ''}`, // Allow WebSocket in dev
+    "frame-ancestors 'none'",
+  ]
+
+  const csp = cspDirectives.join('; ') + ';'
+  response.headers.set('Content-Security-Policy', csp)
+
+  // Store nonce in header for Next.js to use (production only)
+  if (nonce) {
+    response.headers.set('x-csp-nonce', nonce)
+  }
 
   // HSTS for production
   if (process.env.NODE_ENV === 'production' || process.env.VERCEL_ENV === 'production') {
@@ -74,7 +90,6 @@ export function middleware(request: NextRequest) {
 
   // Check if already authenticated
   const authCookie = request.cookies.get('antevus-app-auth')
-  const isProduction = process.env.VERCEL_ENV === 'production'
 
   // Require auth for production
   if (isProduction && authCookie?.value !== process.env.AUTH_PASSWORD) {
@@ -101,6 +116,9 @@ export function middleware(request: NextRequest) {
     }
 
     // Show password prompt page
+    // Need to generate a nonce for this response's inline styles
+    const promptNonce = generateNonce()
+
     const promptResponse = new NextResponse(
       `
       <!DOCTYPE html>
@@ -108,7 +126,7 @@ export function middleware(request: NextRequest) {
         <head>
           <title>Antevus App - Authentication Required</title>
           <meta name="viewport" content="width=device-width, initial-scale=1">
-          <style>
+          <style nonce="${promptNonce}">
             * {
               margin: 0;
               padding: 0;
@@ -218,9 +236,26 @@ export function middleware(request: NextRequest) {
         headers: { 'Content-Type': 'text/html' },
       }
     )
-    // Apply security headers to the password prompt
+    // Apply security headers to the password prompt with custom CSP for nonce
     for (const [key, value] of response.headers) {
-      promptResponse.headers.set(key, value)
+      if (key.toLowerCase() === 'content-security-policy') {
+        // Update CSP to include the nonce for this specific response
+        const promptCsp = [
+          "default-src 'self'",
+          "base-uri 'none'",
+          "object-src 'none'",
+          "form-action 'self'",
+          `script-src 'self' 'nonce-${promptNonce}'`,
+          `style-src 'self' 'nonce-${promptNonce}'`,
+          "img-src 'self' data: https:",
+          "font-src 'self' data:",
+          "connect-src 'self'",
+          "frame-ancestors 'none'",
+        ].join('; ') + ';'
+        promptResponse.headers.set('Content-Security-Policy', promptCsp)
+      } else {
+        promptResponse.headers.set(key, value)
+      }
     }
     return promptResponse
   }
