@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import crypto from 'crypto'
 
+export const runtime = 'nodejs'
 // In production, this would be stored in a secure database
 // For demo purposes, we're using in-memory storage
 const apiKeysStore = new Map<string, {
@@ -17,8 +18,9 @@ const apiKeysStore = new Map<string, {
 }>()
 
 // Demo mode flag - in production this should be false
-const IS_DEMO = process.env.NEXT_PUBLIC_DEMO === 'true'
-
+const IS_DEMO =
+  process.env.DEMO_MODE === 'true' ||
+  process.env.NEXT_PUBLIC_DEMO === 'true'
 function hashApiKey(key: string): string {
   return crypto.createHash('sha256').update(key).digest('hex')
 }
@@ -46,14 +48,12 @@ export async function GET(request: NextRequest) {
 
       return {
         ...safeData,
-        hashedDigest: hashedKey.substring(0, 8), // First 8 chars of hash
-        canReveal: IS_DEMO, // Only allow reveal in demo mode
-        // Only include full key if within the temporary window AND in demo mode
-        ...(canShowFull && { fullKey: tempFullKey })
+        hashedDigest: hashedKey.substring(0, 8),
+        canReveal: IS_DEMO
       }
     })
 
-    return NextResponse.json({ keys })
+    return NextResponse.json({ keys }, { headers: { 'Cache-Control': 'no-store' } })
   } catch (error) {
     return NextResponse.json(
       { error: 'Failed to fetch API keys' },
