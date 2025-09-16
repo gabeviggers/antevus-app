@@ -9,6 +9,11 @@ const inter = Inter({ subsets: ["latin"] });
 export const metadata: Metadata = {
   title: "Antevus - Universal Laboratory Instrument API Platform",
   description: "The Plaid for Labs - Connect, normalize, and control all your laboratory instruments through a single API",
+  icons: {
+    icon: '/icon.svg',
+    shortcut: '/icon.svg',
+    apple: '/icon.svg',
+  },
 };
 
 export default function RootLayout({

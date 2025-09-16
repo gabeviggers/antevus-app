@@ -18,7 +18,8 @@ import {
   Users,
   FlaskConical,
   Sliders,
-  ArrowLeft
+  ArrowLeft,
+  X
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -145,71 +146,208 @@ const SIDEBAR_CONTENT: Record<string, NavItem[]> = {
   ]
 }
 
+// Type for secure API key data
+interface SecureApiKey {
+  id: string
+  name: string
+  last4: string
+  hashedDigest: string
+  created: string
+  lastUsed: string
+  permissions: string
+  canReveal?: boolean
+}
+
 export default function APIPlayground() {
   const { toast } = useToast()
   const router = useRouter()
   const [activeTab, setActiveTab] = useState<'dashboard' | 'docs' | 'reference'>('dashboard')
   const [selectedItem, setSelectedItem] = useState('api-keys')
   const [searchQuery, setSearchQuery] = useState('')
+  const searchInputRef = React.useRef<HTMLInputElement>(null)
 
-  // API Key Management State
-  const [apiKeys, setApiKeys] = useState([
-    {
-      id: '1',
-      name: 'Production Key',
-      key: 'av_live_...k3j4',
-      created: 'Dec 10, 2024',
-      lastUsed: 'Dec 15, 2024',
-      permissions: 'All'
-    },
-    {
-      id: '2',
-      name: 'Test Key',
-      key: 'av_test_...m9n2',
-      created: 'Dec 12, 2024',
-      lastUsed: 'Never',
-      permissions: 'Read only'
-    }
-  ])
-  const [showKey, setShowKey] = useState<string | null>(null)
+  // API Key Management State - Only store non-sensitive metadata
+  const [apiKeys, setApiKeys] = useState<SecureApiKey[]>([])
+  const [revealedKeys, setRevealedKeys] = useState<Map<string, string>>(new Map()) // Temporary display only
   const [newKeyName, setNewKeyName] = useState('')
   const [isCreatingKey, setIsCreatingKey] = useState(false)
+  const [justCreatedKey, setJustCreatedKey] = useState<{ id: string; fullKey: string } | null>(null)
+  const isDemoMode = process.env.NEXT_PUBLIC_DEMO === 'true'
 
-  const handleCreateKey = () => {
-    if (!newKeyName) return
+  // Load API keys on mount
+  React.useEffect(() => {
+    fetchApiKeys()
+  }, [])
 
-    const newKey = {
-      id: Date.now().toString(),
-      name: newKeyName,
-      key: `av_test_${Math.random().toString(36).substring(2, 15)}`,
-      created: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-      lastUsed: 'Never',
-      permissions: 'All'
+  // Keyboard shortcut for search (Cmd/Ctrl + K)
+  React.useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key === 'k') {
+        event.preventDefault()
+        searchInputRef.current?.focus()
+      }
     }
 
-    setApiKeys([...apiKeys, newKey])
-    setNewKeyName('')
-    setIsCreatingKey(false)
-    toast({
-      title: 'API key created',
-      description: 'Your new API key has been generated.',
-    })
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [])
+
+  const fetchApiKeys = async () => {
+    try {
+      const response = await fetch('/api/keys')
+      const data = await response.json()
+      if (data.keys) {
+        setApiKeys(data.keys)
+      }
+    } catch (error) {
+      console.error('Failed to fetch API keys:', error)
+    }
   }
 
-  const handleDeleteKey = (id: string) => {
-    setApiKeys(apiKeys.filter(key => key.id !== id))
-    toast({
-      title: 'API key deleted',
-      description: 'The API key has been permanently removed.',
-    })
+  const handleCreateKey = async () => {
+    if (!newKeyName) return
+
+    try {
+      const response = await fetch('/api/keys', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newKeyName })
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        // Add the new key to the list (without the full key)
+        const { fullKey, message, ...keyMetadata } = data
+        setApiKeys([...apiKeys, keyMetadata])
+
+        // Temporarily store the full key for immediate display/copy
+        if (fullKey) {
+          setJustCreatedKey({ id: keyMetadata.id, fullKey })
+          // Clear after 30 seconds
+          setTimeout(() => {
+            setJustCreatedKey(null)
+          }, 30000)
+        }
+
+        setNewKeyName('')
+        setIsCreatingKey(false)
+
+        toast({
+          title: 'API key created',
+          description: message || 'Store this key securely. It will not be shown again.',
+        })
+      } else {
+        throw new Error(data.error || 'Failed to create key')
+      }
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to create API key',
+        variant: 'destructive'
+      })
+    }
   }
 
-  const handleCopyCode = (text: string) => {
-    navigator.clipboard.writeText(text)
-    toast({
-      title: 'Copied',
-      description: 'Copied to clipboard.',
-    })
+  const handleDeleteKey = async (id: string) => {
+    try {
+      const response = await fetch(`/api/keys?id=${id}`, {
+        method: 'DELETE'
+      })
+
+      if (response.ok) {
+        setApiKeys(apiKeys.filter(key => key.id !== id))
+        // Clean up any revealed keys
+        const newRevealed = new Map(revealedKeys)
+        newRevealed.delete(id)
+        setRevealedKeys(newRevealed)
+
+        toast({
+          title: 'API key deleted',
+          description: 'The API key has been permanently removed.',
+        })
+      } else {
+        throw new Error('Failed to delete key')
+      }
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to delete API key',
+        variant: 'destructive'
+      })
+    }
+  }
+
+  const handleRevealKey = async (id: string) => {
+    // Only allow in demo mode
+    if (!isDemoMode) {
+      toast({
+        title: 'Not available',
+        description: 'Key reveal is only available in demo mode',
+        variant: 'destructive'
+      })
+      return
+    }
+
+    try {
+      const response = await fetch('/api/keys', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id })
+      })
+
+      const data = await response.json()
+
+      if (response.ok && data.demoKey) {
+        // Temporarily show the demo key
+        const newRevealed = new Map(revealedKeys)
+        newRevealed.set(id, data.demoKey)
+        setRevealedKeys(newRevealed)
+
+        // Auto-hide after 5 seconds
+        setTimeout(() => {
+          const updated = new Map(revealedKeys)
+          updated.delete(id)
+          setRevealedKeys(updated)
+        }, 5000)
+      }
+    } catch (error) {
+      console.error('Failed to reveal key:', error)
+    }
+  }
+
+  const handleCopyCode = async (id: string) => {
+    let textToCopy: string | null = null
+
+    // Check if this is a just-created key
+    if (justCreatedKey?.id === id) {
+      textToCopy = justCreatedKey.fullKey
+    } else if (revealedKeys.has(id)) {
+      // Or a temporarily revealed demo key
+      textToCopy = revealedKeys.get(id) || null
+    }
+
+    if (textToCopy) {
+      try {
+        await navigator.clipboard.writeText(textToCopy)
+        toast({
+          title: 'Copied',
+          description: 'API key copied to clipboard.',
+        })
+      } catch {
+        toast({
+          title: 'Copy failed',
+          description: 'Clipboard access denied. Try selecting and copying manually.',
+          variant: 'destructive'
+        })
+      }
+    } else {
+      toast({
+        title: 'Cannot copy',
+        description: 'Key is not available for copying',
+        variant: 'destructive'
+      })
+    }
   }
 
   const renderContent = () => {
@@ -231,7 +369,7 @@ export default function APIPlayground() {
             <div className="flex items-center justify-between mb-6">
               <div>
                 <p className="text-sm text-muted-foreground">
-                  View usage per API key on the <a href="#" className="underline">Usage page</a>.
+                  View usage per API key on the <button onClick={() => { setActiveTab('dashboard'); setSelectedItem('usage'); }} className="underline">Usage page</button>.
                 </p>
               </div>
               <Button onClick={() => setIsCreatingKey(true)}>
@@ -260,6 +398,55 @@ export default function APIPlayground() {
               </div>
             )}
 
+            {/* Display newly created key with warning */}
+            {justCreatedKey && (
+              <div className="mb-6 p-4 border-2 border-green-500 rounded-lg bg-green-50 dark:bg-green-950">
+                <div className="flex items-start gap-3">
+                  <div className="flex-1">
+                    <h4 className="font-semibold text-green-800 dark:text-green-200 mb-2">
+                      API Key Created Successfully
+                    </h4>
+                    <p className="text-sm text-green-700 dark:text-green-300 mb-3">
+                      Store this key securely. It will not be shown again after you leave this page.
+                    </p>
+                    <div className="flex items-center gap-2 p-3 bg-white dark:bg-gray-900 rounded border">
+                      <code className="flex-1 font-mono text-sm break-all">
+                        {justCreatedKey.fullKey}
+                      </code>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={async () => {
+                          try {
+                            await navigator.clipboard.writeText(justCreatedKey.fullKey)
+                            toast({
+                              title: 'Copied',
+                              description: 'API key copied to clipboard',
+                            })
+                          } catch {
+                            toast({
+                              title: 'Copy failed',
+                              description: 'Clipboard access denied.',
+                              variant: 'destructive'
+                            })
+                          }
+                        }}
+                      >
+                        <Copy className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setJustCreatedKey(null)}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            )}
+
             <div className="border rounded-lg">
               <table className="w-full">
                 <thead>
@@ -279,20 +466,58 @@ export default function APIPlayground() {
                       <td className="p-4">{apiKey.name}</td>
                       <td className="p-4">
                         <div className="flex items-center gap-2">
-                          <code className="text-sm">
-                            {showKey === apiKey.id ? apiKey.key : `${apiKey.key.substring(0, 7)}...${apiKey.key.slice(-4)}`}
+                          <code className="text-sm font-mono">
+                            {/* Show full key if just created */}
+                            {justCreatedKey?.id === apiKey.id ? (
+                              <span className="text-green-600 dark:text-green-400">
+                                {justCreatedKey.fullKey}
+                              </span>
+                            ) : revealedKeys.has(apiKey.id) ? (
+                              /* Show revealed demo key */
+                              <span className="text-yellow-600 dark:text-yellow-400">
+                                {revealedKeys.get(apiKey.id)}
+                              </span>
+                            ) : (
+                              /* Show masked version */
+                              <span className="text-muted-foreground">
+                                {apiKey.hashedDigest}...{apiKey.last4}
+                              </span>
+                            )}
                           </code>
+                          {/* Only show reveal button in demo mode and if not already revealed */}
+                          {isDemoMode && !revealedKeys.has(apiKey.id) && justCreatedKey?.id !== apiKey.id && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleRevealKey(apiKey.id)}
+                              aria-label="Reveal demo key"
+                              title="Reveal demo key (demo mode only)"
+                            >
+                              <Eye className="h-3 w-3" />
+                            </Button>
+                          )}
+                          {/* Hide button if currently revealed */}
+                          {revealedKeys.has(apiKey.id) && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                const newRevealed = new Map(revealedKeys)
+                                newRevealed.delete(apiKey.id)
+                                setRevealedKeys(newRevealed)
+                              }}
+                              aria-label="Hide key"
+                            >
+                              <EyeOff className="h-3 w-3" />
+                            </Button>
+                          )}
+                          {/* Copy button only enabled if key is available */}
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => setShowKey(showKey === apiKey.id ? null : apiKey.id)}
-                          >
-                            {showKey === apiKey.id ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleCopyCode(apiKey.key)}
+                            onClick={() => handleCopyCode(apiKey.id)}
+                            disabled={!justCreatedKey?.id && !revealedKeys.has(apiKey.id)}
+                            aria-label="Copy secret key"
                           >
                             <Copy className="h-3 w-3" />
                           </Button>
@@ -307,6 +532,7 @@ export default function APIPlayground() {
                           variant="ghost"
                           size="sm"
                           onClick={() => handleDeleteKey(apiKey.id)}
+                          aria-label={`Delete ${apiKey.name}`}
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
@@ -356,7 +582,7 @@ export default function APIPlayground() {
                 <div className="w-full bg-muted rounded-full h-2 mt-4">
                   <div className="bg-primary h-2 rounded-full" style={{ width: '16.5%' }}></div>
                 </div>
-                <p className="text-sm text-muted-foreground mt-2">Resets in 15 days. <a href="#" className="underline">Edit budget</a></p>
+                <p className="text-sm text-muted-foreground mt-2">Resets in 15 days. <button className="underline">Edit budget</button></p>
               </div>
               <div className="mt-6 pt-6 border-t">
                 <p className="text-sm text-muted-foreground">Total tokens</p>
@@ -425,7 +651,7 @@ export default function APIPlayground() {
   }
 
   return (
-    <div className="h-screen bg-background flex flex-col">
+    <div className="min-h-svh bg-background flex flex-col">
       {/* Top Navigation Bar - Like OpenAI's Dashboard/Docs/API Reference tabs */}
       <div className="h-16 flex items-center justify-between px-4 border-b">
         <div className="flex items-center gap-6">
@@ -434,6 +660,7 @@ export default function APIPlayground() {
             size="icon"
             onClick={() => router.back()}
             className="mr-2"
+            aria-label="Go back"
           >
             <ArrowLeft className="h-5 w-5" />
           </Button>
@@ -486,10 +713,10 @@ export default function APIPlayground() {
           </div>
 
           <div className="flex items-center gap-3">
-            <Button variant="ghost" size="icon">
+            <Button variant="ghost" size="icon" aria-label="Settings">
               <Settings className="h-4 w-4" />
             </Button>
-            <Button variant="ghost" size="icon">
+            <Button variant="ghost" size="icon" aria-label="Members">
               <Users className="h-4 w-4" />
             </Button>
             <ThemeToggle />
@@ -505,6 +732,7 @@ export default function APIPlayground() {
             <div className="relative">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
+                ref={searchInputRef}
                 placeholder="Search"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -519,8 +747,8 @@ export default function APIPlayground() {
 
           {/* Navigation Items */}
           <nav className="p-3">
-            {SIDEBAR_CONTENT[activeTab]?.map((section, idx) => (
-              <div key={idx} className="mb-6">
+            {SIDEBAR_CONTENT[activeTab]?.map((section) => (
+              <div key={section.title || 'section'} className="mb-6">
                 {section.title && (
                   <h3 className="mb-2 px-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                     {section.title}
