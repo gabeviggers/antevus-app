@@ -1,13 +1,6 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
-// Generate a secure nonce for CSP using Web Crypto API (Edge Runtime compatible)
-function generateNonce(): string {
-  const array = new Uint8Array(16)
-  crypto.getRandomValues(array)
-  return Buffer.from(array).toString('base64')
-}
-
 // Middleware for security headers and password protection
 export function middleware(request: NextRequest) {
   // Add security headers to all responses
@@ -24,23 +17,20 @@ export function middleware(request: NextRequest) {
   const isDevelopment = process.env.NODE_ENV === 'development'
   const isProduction = process.env.NODE_ENV === 'production' || process.env.VERCEL_ENV === 'production'
 
-  // Generate a nonce for this request (production only)
-  const nonce = isProduction ? generateNonce() : null
-
   // Build CSP directives
+  // Note: Next.js requires 'unsafe-inline' for its hydration scripts
+  // We keep it but add strict-dynamic in production for better security
   const cspDirectives = [
     "default-src 'self'",
     "base-uri 'none'",
     "object-src 'none'",
     "form-action 'self'",
-    // In production use nonce, in development allow unsafe-inline and unsafe-eval
-    isProduction
-      ? `script-src 'self' 'nonce-${nonce}'`
-      : `script-src 'self' 'unsafe-inline' 'unsafe-eval'`,
-    // In production use nonce for styles, in development allow unsafe-inline
-    isProduction
-      ? `style-src 'self' 'nonce-${nonce}'`
-      : "style-src 'self' 'unsafe-inline'",
+    // Script policy: Use strict-dynamic in production for better security while keeping compatibility
+    isDevelopment
+      ? `script-src 'self' 'unsafe-inline' 'unsafe-eval'`
+      : `script-src 'self' 'unsafe-inline' 'strict-dynamic'`,
+    // Style policy: Keep unsafe-inline for styles (required for styled-jsx and emotion)
+    "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: https:",
     "font-src 'self' data:",
     `connect-src 'self'${isDevelopment ? ' ws: wss:' : ''}`, // Allow WebSocket in dev
@@ -49,11 +39,6 @@ export function middleware(request: NextRequest) {
 
   const csp = cspDirectives.join('; ') + ';'
   response.headers.set('Content-Security-Policy', csp)
-
-  // Store nonce in header for Next.js to use (production only)
-  if (nonce) {
-    response.headers.set('x-csp-nonce', nonce)
-  }
 
   // HSTS for production
   if (process.env.NODE_ENV === 'production' || process.env.VERCEL_ENV === 'production') {
@@ -116,9 +101,6 @@ export function middleware(request: NextRequest) {
     }
 
     // Show password prompt page
-    // Need to generate a nonce for this response's inline styles
-    const promptNonce = generateNonce()
-
     const promptResponse = new NextResponse(
       `
       <!DOCTYPE html>
@@ -126,7 +108,7 @@ export function middleware(request: NextRequest) {
         <head>
           <title>Antevus App - Authentication Required</title>
           <meta name="viewport" content="width=device-width, initial-scale=1">
-          <style nonce="${promptNonce}">
+          <style>
             * {
               margin: 0;
               padding: 0;
@@ -236,26 +218,9 @@ export function middleware(request: NextRequest) {
         headers: { 'Content-Type': 'text/html' },
       }
     )
-    // Apply security headers to the password prompt with custom CSP for nonce
+    // Apply security headers to the password prompt
     for (const [key, value] of response.headers) {
-      if (key.toLowerCase() === 'content-security-policy') {
-        // Update CSP to include the nonce for this specific response
-        const promptCsp = [
-          "default-src 'self'",
-          "base-uri 'none'",
-          "object-src 'none'",
-          "form-action 'self'",
-          `script-src 'self' 'nonce-${promptNonce}'`,
-          `style-src 'self' 'nonce-${promptNonce}'`,
-          "img-src 'self' data: https:",
-          "font-src 'self' data:",
-          "connect-src 'self'",
-          "frame-ancestors 'none'",
-        ].join('; ') + ';'
-        promptResponse.headers.set('Content-Security-Policy', promptCsp)
-      } else {
-        promptResponse.headers.set(key, value)
-      }
+      promptResponse.headers.set(key, value)
     }
     return promptResponse
   }
