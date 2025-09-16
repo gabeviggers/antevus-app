@@ -12,7 +12,7 @@ import { validateCSRFToken, createCSRFTokenForUser } from '@/lib/security/csrf'
 // AES-256-GCM encryption configuration
 const ALGORITHM = 'aes-256-gcm'
 const SALT_LENGTH = 64 // Longer salt for key derivation
-const TAG_LENGTH = 16
+// const TAG_LENGTH = 16 // Currently unused
 const IV_LENGTH = 16
 const ITERATIONS = 100000 // PBKDF2 iterations
 
@@ -297,7 +297,7 @@ export async function GET(
           'X-CSRF-Token': csrfToken
         }
       })
-    } catch (error) {
+    } catch {
       // If decryption fails, still indicate credentials exist
       return NextResponse.json({
         configured: true,

@@ -1,0 +1,167 @@
+// This is your Prisma schema file
+// Learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// User model for authentication
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  passwordHash  String
+  name          String
+  role          String    @default("viewer")
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  lastLoginAt   DateTime?
+  isActive      Boolean   @default(true)
+
+  // Relations
+  apiKeys       ApiKey[]
+  sessions      Session[]
+  auditEvents   AuditEvent[]
+
+  @@index([email])
+}
+
+// Session management
+model Session {
+  id            String    @id @default(cuid())
+  userId        String
+  token         String    @unique
+  ipAddress     String?
+  userAgent     String?
+  createdAt     DateTime  @default(now())
+  expiresAt     DateTime
+
+  // Relations
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([userId])
+}
+
+// API Key management - CRITICAL for security
+model ApiKey {
+  id            String    @id @default(cuid())
+  userId        String
+  keyHash       String    @unique // SHA-256 hash of the actual key
+  keyPrefix     String    // Safe display prefix (e.g., "ak_live_abc...")
+  name          String
+  permissions   Json      @default("[]") // Array of permission strings
+  ipAllowlist   Json?     // Array of allowed IP addresses
+  rateLimit     Int       @default(1000)
+  createdAt     DateTime  @default(now())
+  expiresAt     DateTime?
+  lastUsedAt    DateTime?
+  usageCount    Int       @default(0)
+  isActive      Boolean   @default(true)
+
+  // Relations
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rateLimits    RateLimit[]
+
+  @@index([keyHash])
+  @@index([userId, isActive])
+}
+
+// Rate limiting tracking
+model RateLimit {
+  id            String    @id @default(cuid())
+  keyId         String
+  windowStart   DateTime
+  requestCount  Int       @default(0)
+
+  // Relations
+  apiKey        ApiKey    @relation(fields: [keyId], references: [id], onDelete: Cascade)
+
+  @@unique([keyId, windowStart])
+  @@index([keyId])
+}
+
+// Audit logging for compliance
+model AuditEvent {
+  id            String    @id @default(cuid())
+  timestamp     DateTime  @default(now())
+  userId        String?
+  eventType     String
+  resourceType  String?
+  resourceId    String?
+  success       Boolean   @default(true)
+  errorMessage  String?
+  ipAddress     String?
+  userAgent     String?
+  metadata      Json?     // Additional event-specific data
+  signature     String?   // HMAC signature for tamper detection
+  previousHash  String?   // For blockchain-style chaining
+
+  // Relations
+  user          User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([eventType])
+  @@index([timestamp])
+}
+
+// Instruments (for the API)
+model Instrument {
+  id            String    @id @default(cuid())
+  name          String
+  type          String
+  status        String    @default("idle")
+  location      String
+  model         String?
+  serialNumber  String?
+  firmware      String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  lastSeenAt    DateTime?
+  createdBy     String?
+
+  // Relations
+  runs          Run[]
+
+  @@index([status])
+  @@index([type])
+}
+
+// Run data from instruments
+model Run {
+  id            String    @id @default(cuid())
+  instrumentId  String
+  status        String    @default("pending")
+  startedAt     DateTime?
+  completedAt   DateTime?
+  dataUrl       String?   // S3/GCS URL for raw data
+  metadata      Json?
+  createdAt     DateTime  @default(now())
+
+  // Relations
+  instrument    Instrument @relation(fields: [instrumentId], references: [id], onDelete: Cascade)
+
+  @@index([instrumentId])
+  @@index([status])
+  @@index([startedAt])
+}
+
+// Webhook subscriptions
+model Webhook {
+  id            String    @id @default(cuid())
+  userId        String
+  url           String
+  events        Json      // Array of event types to subscribe to
+  secret        String    // For HMAC signing
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  lastTriggered DateTime?
+  failureCount  Int       @default(0)
+
+  @@index([userId])
+  @@index([isActive])
+}

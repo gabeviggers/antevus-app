@@ -21,7 +21,7 @@ const navigation = [
   { name: 'Monitoring', href: '/monitoring', icon: Activity },
   { name: 'Run History', href: '/runs', icon: History },
   { name: 'Integrations', href: '/integrations', icon: Plug },
-  { name: 'API Playground', href: '/dashboard/api-playground', icon: Code2 },
+  { name: 'API Playground', href: '/api-playground', icon: Code2 },
 ]
 
 interface SidebarProps {
