@@ -89,7 +89,7 @@ export async function createSecureSession(
     }
 
     const secret = getSessionSecret()
-    const token = await new SignJWT(sessionData)
+    const token = await new SignJWT({ ...sessionData })
       .setProtectedHeader({ alg: 'HS256' })
       .setExpirationTime(SESSION_EXPIRY)
       .setIssuedAt()
@@ -122,16 +122,19 @@ export async function verifySession(token: string): Promise<SessionData | null> 
     const secret = getSessionSecret()
     const { payload } = await jwtVerify(token, secret)
 
+    // Cast payload to unknown first, then to SessionData
+    const sessionData = payload as unknown as SessionData
+
     // Verify session still exists in database
     const dbSession = await prisma.session.findUnique({
-      where: { id: (payload as SessionData).sessionId }
+      where: { id: sessionData.sessionId }
     })
 
     if (!dbSession || dbSession.expiresAt < new Date()) {
       return null
     }
 
-    return payload as SessionData
+    return sessionData
   } catch (error) {
     logger.debug('Session verification failed', { error })
     return null
@@ -142,7 +145,7 @@ export async function verifySession(token: string): Promise<SessionData | null> 
  * Get session from cookies
  */
 export async function getSessionFromCookies(): Promise<SessionData | null> {
-  const cookieStore = cookies()
+  const cookieStore = await cookies()
   const sessionCookie = cookieStore.get(SESSION_COOKIE_NAME)
 
   if (!sessionCookie) {

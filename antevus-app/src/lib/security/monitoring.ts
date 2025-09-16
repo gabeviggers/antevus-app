@@ -307,7 +307,7 @@ export class SecurityMonitoringService {
         resourceId: fullEvent.id,
         success: false,
         errorMessage: `Security event: ${fullEvent.type}`,
-        metadata: fullEvent
+        metadata: { ...fullEvent } as Record<string, unknown>
       }
     )
 
@@ -327,8 +327,8 @@ export class SecurityMonitoringService {
 
         if (result.detected) {
           await this.logSecurityEvent({
-            type: result.type,
-            severity: result.severity,
+            type: result.type || 'api.suspicious_pattern',
+            severity: result.severity || 'medium',
             details: {
               ...result.details,
               detectedBy: rule.name

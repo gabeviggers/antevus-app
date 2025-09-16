@@ -109,7 +109,7 @@ export class DataIntegrityService {
 
     // Log verification attempt
     if (!valid) {
-      logger.warn('Data integrity verification failed', result)
+      logger.warn('Data integrity verification failed', { ...result })
     }
 
     return result
@@ -191,7 +191,7 @@ export class DataIntegrityService {
       const backupId = `backup_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
 
       // Create integrity metadata
-      const integrityMetadata = this.createIntegrityMetadata(data, userId, 'backup')
+      const integrityMetadata = this.createIntegrityMetadata(data as string | object | Buffer, userId, 'backup')
 
       // Prepare backup data
       const backupData = {

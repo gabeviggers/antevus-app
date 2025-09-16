@@ -136,7 +136,7 @@ class SecureLogger {
       timestamp,
       level,
       message: this.sanitize(message),
-      ...sanitizedContext,
+      ...(typeof sanitizedContext === 'object' && sanitizedContext !== null ? sanitizedContext : { context: sanitizedContext }),
       environment: process.env.NODE_ENV
     }
 

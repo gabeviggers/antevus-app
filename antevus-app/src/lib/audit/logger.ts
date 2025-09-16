@@ -22,6 +22,7 @@ export type AuditEventType =
   | 'security.rate_limit_exceeded'
   | 'security.unauthorized_access'
   | 'security.authorization'
+  | 'security.event'
   | 'api.key.generate'
   | 'api.key.generate.failed'
   | 'api.key.revoke'
