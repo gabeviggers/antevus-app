@@ -52,6 +52,19 @@ export default function RunHistoryPage() {
 
   const itemsPerPage = 20
 
+  // Helper to convert UserContext to User format for audit logging
+  const getAuditUser = () => {
+    return user ? {
+      id: user.id,
+      email: user.email,
+      name: user.email, // Use email as name if not available
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      role: user.roles[0] as any, // Use first role
+      organization: 'Antevus Labs', // Default organization
+      createdAt: new Date().toISOString()
+    } : null
+  }
+
   // Apply filters and search
   const filteredRuns = useMemo(() => {
     let filtered = [...runs]
@@ -118,7 +131,7 @@ export default function RunHistoryPage() {
     }
 
     // Log audit event
-    auditLogger.logEvent(user, 'data.export', {
+    auditLogger.logEvent(getAuditUser(), 'data.export', {
       resourceType: 'runs',
       success: true,
       metadata: {
@@ -145,7 +158,7 @@ export default function RunHistoryPage() {
     }
 
     // Log audit event
-    auditLogger.logEvent(user, 'data.export', {
+    auditLogger.logEvent(getAuditUser(), 'data.export', {
       resourceType: 'runs',
       success: true,
       metadata: {
@@ -172,7 +185,7 @@ export default function RunHistoryPage() {
     }
 
     // Log audit event
-    auditLogger.logEvent(user, 'data.export', {
+    auditLogger.logEvent(getAuditUser(), 'data.export', {
       resourceType: 'runs',
       success: true,
       metadata: {
