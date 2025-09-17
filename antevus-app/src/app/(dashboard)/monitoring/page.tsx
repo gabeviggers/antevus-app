@@ -55,6 +55,19 @@ export default function MonitoringPage() {
   const [showThresholds, setShowThresholds] = useState(true)
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
+  // Helper to convert UserContext to User format for audit logging
+  const getAuditUser = () => {
+    return user ? {
+      id: user.id,
+      email: user.email,
+      name: user.email, // Use email as name if not available
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      role: user.roles[0] as any, // Use first role
+      organization: 'Antevus Labs', // Default organization
+      createdAt: new Date().toISOString()
+    } : null
+  }
+
   // Simulate WebSocket connection status changes
   useEffect(() => {
     const connectionInterval = setInterval(() => {
@@ -270,7 +283,7 @@ export default function MonitoringPage() {
               return
             }
             try {
-              auditLogger.logEvent(user, 'data.export', {
+              auditLogger.logEvent(getAuditUser(), 'data.export', {
                 resourceType: 'monitoring',
                 success: true,
                 metadata: {
