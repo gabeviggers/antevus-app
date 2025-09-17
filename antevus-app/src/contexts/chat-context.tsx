@@ -63,6 +63,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     if (threads.length > 0) {
       saveToLocalStorage()
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [threads])
 
   const activeThread = threads.find(t => t.id === activeThreadId) || null
@@ -224,9 +225,21 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       const saved = localStorage.getItem(STORAGE_KEY)
       if (saved) {
         const parsed = JSON.parse(saved)
-        const loadedThreads = parsed.threads.map((thread: any) => ({
+        const loadedThreads = parsed.threads.map((thread: {
+          id: string
+          title: string
+          messages: Array<{
+            id: string
+            role: 'user' | 'assistant' | 'system'
+            content: string
+            timestamp: string
+            isStreaming?: boolean
+          }>
+          createdAt: string
+          updatedAt: string
+        }) => ({
           ...thread,
-          messages: thread.messages.map((msg: any) => ({
+          messages: thread.messages.map((msg) => ({
             ...msg,
             timestamp: new Date(msg.timestamp)
           })),
