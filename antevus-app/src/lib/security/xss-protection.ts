@@ -125,7 +125,7 @@ export function sanitizeJson<T>(data: unknown): T | null {
  * Create safe HTML attributes object
  * Filters out dangerous attributes and event handlers
  */
-export function safeAttributes(attrs: Record<string, any>): Record<string, string> {
+export function safeAttributes(attrs: Record<string, unknown>): Record<string, string> {
   const safe: Record<string, string> = {}
 
   for (const [key, value] of Object.entries(attrs)) {

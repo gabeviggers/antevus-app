@@ -67,10 +67,13 @@ class SecureChatStorage {
     })
   }
 
-  private logAudit(_action: string, _details: Record<string, unknown>): void {
+  private logAudit(action: string, details: Record<string, unknown>): void {
     if (this.config.enableAuditLog) {
       // Audit logs stored internally without console output
       // In production: Send to secure audit log service
+      // Currently unused but will be implemented with audit service
+      void action // Mark as intentionally unused
+      void details // Mark as intentionally unused
     }
   }
 

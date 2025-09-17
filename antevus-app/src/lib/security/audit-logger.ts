@@ -268,10 +268,10 @@ class AuditLogger {
     outcome?: 'SUCCESS' | 'FAILURE' | 'PENDING'
     resourceType?: string
     resourceId?: string
-    previousValue?: any
-    newValue?: any
+    previousValue?: unknown
+    newValue?: unknown
     reason?: string
-    metadata?: Record<string, any>
+    metadata?: Record<string, unknown>
     userId?: string | null
     containsPII?: boolean
     containsPHI?: boolean
@@ -429,7 +429,7 @@ class AuditLogger {
   /**
    * Convenience methods for common operations
    */
-  logChatMessage(action: 'sent' | 'received' | 'edited' | 'deleted', messageId: string, threadId: string, metadata?: any): void {
+  logChatMessage(action: 'sent' | 'received' | 'edited' | 'deleted', messageId: string, threadId: string, metadata?: Record<string, unknown>): void {
     const eventTypeMap = {
       sent: AuditEventType.CHAT_MESSAGE_SENT,
       received: AuditEventType.CHAT_MESSAGE_RECEIVED,
@@ -450,7 +450,7 @@ class AuditLogger {
     })
   }
 
-  logThreadOperation(action: 'created' | 'accessed' | 'renamed' | 'deleted' | 'cleared', threadId: string, metadata?: any): void {
+  logThreadOperation(action: 'created' | 'accessed' | 'renamed' | 'deleted' | 'cleared', threadId: string, metadata?: Record<string, unknown>): void {
     const eventTypeMap = {
       created: AuditEventType.CHAT_THREAD_CREATED,
       accessed: AuditEventType.CHAT_THREAD_ACCESSED,
@@ -469,7 +469,7 @@ class AuditLogger {
     })
   }
 
-  logSecurityEvent(type: 'suspicious' | 'rateLimit' | 'invalidToken' | 'csrf' | 'xss', details: any): void {
+  logSecurityEvent(type: 'suspicious' | 'rateLimit' | 'invalidToken' | 'csrf' | 'xss', details: Record<string, unknown>): void {
     const eventTypeMap = {
       suspicious: AuditEventType.SECURITY_SUSPICIOUS_ACTIVITY,
       rateLimit: AuditEventType.SECURITY_RATE_LIMIT_EXCEEDED,

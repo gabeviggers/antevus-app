@@ -126,7 +126,7 @@ export class DataClassificationService {
   /**
    * Classify content based on sensitivity patterns
    */
-  classify(content: string, context?: Record<string, any>): ClassificationResult {
+  classify(content: string, context?: Record<string, unknown>): ClassificationResult {
     const detectedPatterns: string[] = []
     let containsPHI = false
     let containsPII = false

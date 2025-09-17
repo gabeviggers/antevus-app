@@ -336,7 +336,7 @@ export interface UserContext {
   id: string
   email: string
   roles: UserRole[]
-  attributes?: Record<string, any>
+  attributes?: Record<string, unknown>
   sessionId?: string
 }
 
@@ -347,7 +347,7 @@ export interface AuthorizationRequest {
   user: UserContext
   resource: Resource | string
   action: Action | string
-  context?: Record<string, any>
+  context?: Record<string, unknown>
 }
 
 /**
