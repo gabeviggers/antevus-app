@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { useAuth } from '@/contexts/auth-context'
+import { useSession } from '@/contexts/session-context'
 import { useChat } from '@/contexts/chat-context'
 import { useState } from 'react'
 import { cn } from '@/lib/utils'
@@ -46,7 +46,7 @@ interface SidebarProps {
 export function Sidebar({ sidebarOpen, setSidebarOpen, collapsed, setCollapsed }: SidebarProps) {
   const pathname = usePathname()
   const router = useRouter()
-  const { user, logout } = useAuth()
+  const { logout } = useSession()
   const { threads, activeThreadId, switchThread, deleteThread, renameThread, searchThreads, saveToLocalStorage } = useChat()
   const [searchQuery, setSearchQuery] = useState('')
   const [editingThreadId, setEditingThreadId] = useState<string | null>(null)
@@ -55,13 +55,6 @@ export function Sidebar({ sidebarOpen, setSidebarOpen, collapsed, setCollapsed }
 
   // Check if we're on the assistant page
   const isAssistantPage = pathname === '/assistant'
-
-  // Get user initials for avatar
-  const userInitials = user?.name
-    ?.split(' ')
-    .map(n => n[0])
-    .join('')
-    .toUpperCase() || 'U'
 
   // Find the most specific active route
   // This prevents parent routes from being active when on child routes
@@ -350,64 +343,39 @@ export function Sidebar({ sidebarOpen, setSidebarOpen, collapsed, setCollapsed }
 
         {/* Bottom Section - Always visible */}
         <div className="mt-auto border-t border-border bg-card">
-          {/* Settings */}
-          <Link
-            href="/dashboard/settings"
-            className={`flex items-center gap-3 px-4 py-2.5 hover:bg-accent hover:text-accent-foreground transition-colors group relative ${
-              collapsed ? 'justify-center' : ''
-            }`}
-            title={collapsed ? 'Settings' : undefined}
-          >
-            <Settings className="h-4 w-4 flex-shrink-0" />
-            {!collapsed && <span className="text-sm font-medium">Settings</span>}
-            {collapsed && (
-              <div className="absolute left-full ml-2 px-2 py-1 bg-popover text-popover-foreground text-xs rounded-md opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all whitespace-nowrap z-50 shadow-lg">
-                Settings
-              </div>
-            )}
-          </Link>
-
-          {/* User Section */}
-          <div className={`px-3 py-2.5 border-t border-border ${collapsed ? 'flex flex-col items-center gap-2' : ''}`}>
-            {!collapsed ? (
-              <>
-                <div className="flex items-center gap-2 mb-2">
-                  <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                    <span className="text-xs font-medium">{userInitials}</span>
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium truncate">{user?.name || 'User'}</p>
-                    <p className="text-xs text-muted-foreground truncate">{user?.email || 'email@example.com'}</p>
-                    <p className="text-xs text-muted-foreground capitalize">{user?.role?.replace('_', ' ') || 'role'}</p>
-                  </div>
+            {/* Settings */}
+            <Link
+              href="/dashboard/settings"
+              className={`flex items-center gap-3 px-4 py-2 hover:bg-accent hover:text-accent-foreground transition-colors group relative block ${
+                collapsed ? 'justify-center' : ''
+              }`}
+              title={collapsed ? 'Settings' : undefined}
+            >
+              <Settings className="h-4 w-4 flex-shrink-0" />
+              {!collapsed && <span className="text-sm font-medium">Settings</span>}
+              {collapsed && (
+                <div className="absolute left-full ml-2 px-2 py-1 bg-popover text-popover-foreground text-xs rounded-md opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all whitespace-nowrap z-50 shadow-lg">
+                  Settings
                 </div>
-                <button
-                  onClick={logout}
-                  className="flex items-center gap-2 w-full px-2 py-1.5 rounded-md hover:bg-accent hover:text-accent-foreground transition-colors"
-                >
-                  <LogOut className="h-4 w-4 flex-shrink-0" />
-                  <span className="text-sm">Sign out</span>
-                </button>
-              </>
-            ) : (
-              <>
-                <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
-                  <span className="text-xs font-medium">{userInitials}</span>
-                </div>
-                <button
-                  onClick={logout}
-                  className="p-2 rounded-md hover:bg-accent hover:text-accent-foreground transition-colors group relative"
-                  title="Sign out"
-                >
-                  <LogOut className="h-4 w-4" />
-                  <div className="absolute left-full ml-2 px-2 py-1 bg-popover text-popover-foreground text-xs rounded-md opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all whitespace-nowrap z-50 shadow-lg">
-                    Sign out
-                  </div>
-                </button>
-              </>
-            )}
-          </div>
+              )}
+            </Link>
 
+            {/* Sign Out Button */}
+            <button
+              onClick={logout}
+              className={`flex items-center gap-3 px-4 py-2 hover:bg-accent hover:text-accent-foreground transition-colors group relative w-full ${
+                collapsed ? 'justify-center' : ''
+              }`}
+              title={collapsed ? 'Sign out' : undefined}
+            >
+              <LogOut className="h-4 w-4 flex-shrink-0" />
+              {!collapsed && <span className="text-sm font-medium">Sign out</span>}
+              {collapsed && (
+                <div className="absolute left-full ml-2 px-2 py-1 bg-popover text-popover-foreground text-xs rounded-md opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all whitespace-nowrap z-50 shadow-lg">
+                  Sign out
+                </div>
+              )}
+            </button>
         </div>
       </aside>
     </>

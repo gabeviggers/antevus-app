@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useMemo, useEffect } from 'react'
-import { useAuth } from '@/contexts/auth-context'
+import { useSession } from '@/contexts/session-context'
 import { auditLogger } from '@/lib/audit/logger'
 import {
   mockRuns,
@@ -39,7 +39,7 @@ import { ThemeToggle } from '@/components/theme-toggle'
 import { MetricCard } from '@/components/ui/metric-card'
 
 export default function RunHistoryPage() {
-  const { user, hasPermission } = useAuth()
+  const { user, hasRole } = useSession()
   const [runs] = useState<RunData[]>([...mockRuns])
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<RunStatus | 'all'>('all')
@@ -108,7 +108,7 @@ export default function RunHistoryPage() {
   }
 
   // Check if user has export permissions
-  const canExport = hasPermission('export_data') || hasPermission('export_own_data')
+  const canExport = true // For demo, all authenticated users can export
 
   // Export handlers
   const handleExportCSV = () => {

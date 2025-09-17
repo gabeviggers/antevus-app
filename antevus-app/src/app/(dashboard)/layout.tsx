@@ -16,7 +16,7 @@ export default function DashboardLayout({
   return (
     <ProtectedRoute>
       <ChatProvider>
-        <div className="min-h-screen flex bg-background relative">
+          <div className="min-h-screen flex bg-background relative">
           {/* Sidebar */}
           <Sidebar
             sidebarOpen={sidebarOpen}

@@ -2,31 +2,40 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { ThemeToggle } from '@/components/theme-toggle'
+import { useSession } from '@/contexts/session-context'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState('')
+  const { login } = useSession()
+  const router = useRouter()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
+    setError('')
 
-    // Mock authentication
-    setTimeout(() => {
-      window.location.href = '/dashboard'
-    }, 1500)
+    try {
+      await login(email, password)
+      router.push('/dashboard')
+    } catch (err) {
+      setError('Invalid credentials. Please try again.')
+      setIsLoading(false)
+    }
   }
 
   // Quick fill for demo personas
   const fillDemoCredentials = (role: string) => {
     const credentials = {
-      admin: { email: 'admin@antevus.com', password: 'admin123' },
-      scientist: { email: 'scientist@antevus.com', password: 'science123' },
-      operator: { email: 'operator@antevus.com', password: 'operate123' },
-      viewer: { email: 'viewer@antevus.com', password: 'view123' }
+      admin: { email: 'admin@antevus.com', password: 'demo123' },
+      scientist: { email: 'scientist@antevus.com', password: 'demo123' },
+      director: { email: 'director@antevus.com', password: 'demo123' },
+      technician: { email: 'technician@antevus.com', password: 'demo123' }
     }
 
     const cred = credentials[role as keyof typeof credentials]
@@ -77,6 +86,12 @@ export default function LoginPage() {
 
           {/* Login Form */}
           <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
+            {error && (
+              <div className="bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 px-4 py-3 rounded-md text-sm">
+                {error}
+              </div>
+            )}
+
             <div className="space-y-4">
               <div>
                 <label htmlFor="email" className="block text-sm font-medium mb-2">
@@ -169,18 +184,18 @@ export default function LoginPage() {
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => fillDemoCredentials('operator')}
-                title="Operator Demo Account"
+                onClick={() => fillDemoCredentials('director')}
+                title="Lab Director Demo Account"
               >
-                🔧 Operator
+                🔬 Director
               </Button>
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => fillDemoCredentials('viewer')}
-                title="Viewer Demo Account"
+                onClick={() => fillDemoCredentials('technician')}
+                title="Technician Demo Account"
               >
-                👁️ Viewer
+                🔧 Technician
               </Button>
             </div>
 

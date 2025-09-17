@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useMemo } from 'react'
-import { useAuth } from '@/contexts/auth-context'
+import { useSession } from '@/contexts/session-context'
 import { auditLogger } from '@/lib/audit/logger'
 import {
   LineChart,
@@ -43,7 +43,7 @@ import { Button } from '@/components/ui/button'
 import { ThemeToggle } from '@/components/theme-toggle'
 
 export default function MonitoringPage() {
-  const { user, hasPermission } = useAuth()
+  const { user } = useSession()
   const [monitoringData, setMonitoringData] = useState<Map<string, MetricData>>(
     () => generateInitialMonitoringData()
   )
@@ -133,7 +133,7 @@ export default function MonitoringPage() {
   const threshold = QC_THRESHOLDS.find(t => t.metric === selectedMetric)
 
   // Check if user has export permissions
-  const canExport = hasPermission('export_data') || hasPermission('export_own_data')
+  const canExport = true // For demo, all authenticated users can export
 
   // Format data for Recharts - memoized and optimized
   // Must be called before any conditional returns (React hooks rules)

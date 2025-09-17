@@ -1,10 +1,19 @@
 'use client'
 
 import { useState, useRef, useEffect, useMemo } from 'react'
-import { Send, Sparkles, Beaker, Activity, FileText, AlertCircle, ArrowLeft, MessageSquare } from 'lucide-react'
+import { Send, Sparkles, Beaker, Activity, FileText, AlertCircle, Share2, MoreVertical, Archive, Flag, Pencil, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { useChat } from '@/contexts/chat-context'
+import { sanitizeInput } from '@/lib/security/xss-protection'
+import { SafeMessageContent } from '@/components/chat/safe-message-content'
+import { auditLogger, AuditEventType } from '@/lib/security/audit-logger'
+import { authorizationService, Resource, Action } from '@/lib/security/authorization'
+import { useSession } from '@/contexts/session-context'
+import { PermissionDenied } from '@/components/auth/permission-denied'
+import { SensitivityIndicator } from '@/components/chat/sensitivity-indicator'
+import { ChatErrorBoundary } from '@/components/chat/chat-error-boundary'
+import { useRouter } from 'next/navigation'
 
 interface SuggestedPrompt {
   icon: React.ReactNode
@@ -12,13 +21,20 @@ interface SuggestedPrompt {
   prompt: string
 }
 
-export default function AssistantPage() {
-  const { activeThread, addMessage, updateMessage, switchThread } = useChat()
+function AssistantPageContent() {
+  const { activeThread, addMessage, updateMessage, switchThread, renameThread, deleteThread } = useChat()
+  const { user, isLoading: sessionLoading } = useSession()
+  const router = useRouter()
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [hasPermission, setHasPermission] = useState<boolean | null>(null)
+  const [authError, setAuthError] = useState<{ requiredRole?: string; message?: string } | null>(null)
+  const [showMenu, setShowMenu] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const currentThreadIdRef = useRef<string | null>(null)
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
 
   // Use activeThread messages directly, no local state
   const messages = useMemo(() => activeThread?.messages || [], [activeThread?.messages])
@@ -28,11 +44,87 @@ export default function AssistantPage() {
     currentThreadIdRef.current = activeThread?.id || null
   }, [activeThread?.id])
 
-  const handleNewChat = () => {
-    switchThread('') // Clear active thread
-    setInput('')
-    setIsLoading(false)
-  }
+  // Cleanup timeouts on unmount
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current)
+      }
+    }
+  }, [])
+
+  // Close menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setShowMenu(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  // Check authorization when user changes
+  useEffect(() => {
+    const checkAuthorization = async () => {
+      if (!user) {
+        setHasPermission(false)
+        setAuthError({ message: 'You must be logged in to use the Lab Assistant' })
+        return
+      }
+
+      const result = await authorizationService.can({
+        user,
+        resource: Resource.ASSISTANT,
+        action: Action.EXECUTE
+      })
+
+      setHasPermission(result.allowed)
+
+      if (!result.allowed) {
+        setAuthError({
+          requiredRole: result.requiredRole,
+          message: result.reason || 'You do not have permission to use the Lab Assistant'
+        })
+      } else {
+        setAuthError(null)
+      }
+    }
+
+    if (!sessionLoading) {
+      checkAuthorization()
+    }
+  }, [user, sessionLoading])
+
+  // Audit log: Track page access (only if authorized)
+  useEffect(() => {
+    if (hasPermission && user) {
+      auditLogger.log({
+        eventType: AuditEventType.CHAT_HISTORY_VIEWED,
+        action: 'Lab Assistant page accessed',
+        userId: user.id,
+        metadata: {
+          activeThreadId: activeThread?.id || null,
+          threadCount: messages.length,
+          userRole: user.roles
+        }
+      })
+
+      return () => {
+        // Log when user leaves the page
+        auditLogger.log({
+          eventType: AuditEventType.CHAT_HISTORY_VIEWED,
+          action: 'Lab Assistant page exited',
+          userId: user.id,
+          metadata: {
+            activeThreadId: activeThread?.id || null,
+            sessionDuration: 'tracked_server_side'
+          }
+        })
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasPermission, user])
 
   const suggestedPrompts: SuggestedPrompt[] = [
     {
@@ -80,13 +172,23 @@ export default function AssistantPage() {
   const simulateStreaming = async (threadId: string, messageId: string, responseText: string) => {
     const words = responseText.split(' ')
     let currentText = ''
+    const streamingTimeouts: NodeJS.Timeout[] = []
 
-    for (let i = 0; i < words.length; i++) {
-      currentText += (i === 0 ? '' : ' ') + words[i]
-      const isStreaming = i < words.length - 1
+    try {
+      for (let i = 0; i < words.length; i++) {
+        currentText += (i === 0 ? '' : ' ') + words[i]
+        const isStreaming = i < words.length - 1
 
-      updateMessage(threadId, messageId, currentText, isStreaming)
-      await new Promise(resolve => setTimeout(resolve, 30))
+        updateMessage(threadId, messageId, currentText, isStreaming)
+        // Use smaller delay for smoother streaming
+        await new Promise<void>(resolve => {
+          const timeout = setTimeout(resolve, 20)
+          streamingTimeouts.push(timeout)
+        })
+      }
+    } finally {
+      // Clean up any remaining timeouts
+      streamingTimeouts.forEach(timeout => clearTimeout(timeout))
     }
   }
 
@@ -94,7 +196,21 @@ export default function AssistantPage() {
     e.preventDefault()
     if (!input.trim() || isLoading) return
 
-    const userContent = input.trim()
+    const originalInput = input.trim()
+    // Sanitize user input to prevent XSS
+    const userContent = sanitizeInput(originalInput)
+
+    // Audit log: Check if XSS was prevented
+    if (originalInput !== userContent) {
+      auditLogger.logSecurityEvent('xss', {
+        action: 'Input sanitization applied',
+        originalLength: originalInput.length,
+        sanitizedLength: userContent.length,
+        difference: originalInput.length - userContent.length,
+        source: 'chat_input'
+      })
+    }
+
     setInput('')
     setIsLoading(true)
 
@@ -105,46 +221,194 @@ export default function AssistantPage() {
         content: userContent
       })
 
-      const threadId = userMessageResult?.threadId
+      if (!userMessageResult) {
+        setIsLoading(false)
+        return
+      }
 
-      // Wait for state to update with new thread
-      setTimeout(async () => {
-        // Add empty assistant message first (thinking state) and get its ID
-        const assistantMessageResult = addMessage({
-          role: 'assistant',
-          content: '',
-          isStreaming: true
-        })
+      const threadId = userMessageResult.threadId
 
-        if (!threadId || !assistantMessageResult) {
-          console.error('No thread or assistant message available')
-          setIsLoading(false)
-          return
-        }
+      if (!threadId) {
+        console.error('No threadId returned from user message')
+        setIsLoading(false)
+        return
+      }
 
-        const assistantMessageId = assistantMessageResult.messageId
+      console.log('User message added with threadId:', threadId)
 
-        // Generate response based on input
-        let response = "I'll help you with that request. "
+      // Clear any existing timeout
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current)
+      }
 
-        if (userContent.toLowerCase().includes('running') || userContent.toLowerCase().includes('status')) {
-          response = "Currently, 2 instruments are running:\n\n• **qPCR System (PCR-001)**: COVID-19 Detection protocol, 23 minutes remaining\n• **MiSeq (SEQ-003)**: 16S rRNA Sequencing, 4 hours 12 minutes remaining\n\nAll other instruments are idle and ready for use."
-        } else if (userContent.toLowerCase().includes('elisa')) {
-          response = "I'll prepare to start the ELISA protocol on plate reader PR-07. Here's what will happen:\n\n**Protocol**: ELISA_v3\n**Instrument**: PR-07 (Plate Reader)\n**Estimated Duration**: 45 minutes\n**Status**: ✅ Instrument ready\n\nPlease confirm to begin the protocol execution."
-        } else if (userContent.toLowerCase().includes('report') || userContent.toLowerCase().includes('summarize')) {
-          response = "Here's today's qPCR summary:\n\n**Total Runs**: 12\n**Successful**: 10 (83%)\n**Failed**: 2 (17%)\n\n**Failed Tests**:\n1. Sample QC-2341: Ct value out of range (>35)\n2. Sample QC-2355: Negative control contamination detected\n\n**Average Ct Value**: 24.3\n**Total Runtime**: 6 hours 45 minutes\n\nWould you like me to export this report or send it to the QA team?"
-        } else if (userContent.toLowerCase().includes('error') || userContent.toLowerCase().includes('maintenance')) {
-          response = "I found 2 instruments requiring attention:\n\n**⚠️ Errors (1)**:\n• **HPLC-002**: Pressure sensor fault detected. Last error: 2 hours ago\n\n**🔧 Maintenance Required (1)**:\n• **MS-001**: Scheduled calibration overdue by 3 days\n\nWould you like to create maintenance tickets for these issues?"
-        }
+      // Delay adding assistant message to show thinking animation first
+      const currentThreadId = threadId // Capture in closure
 
-        // Wait a moment then stream the response
-        setTimeout(async () => {
-          await simulateStreaming(threadId, assistantMessageId, response)
-          setIsLoading(false)
-        }, 500)
-      }, 150) // Delay to ensure thread is created
+      // Add assistant message after delay
+      timeoutRef.current = setTimeout(() => {
+        console.log('Adding assistant message to thread:', currentThreadId)
+
+        // Ensure thread is active
+        switchThread(currentThreadId)
+
+        // Use a small delay to ensure state has updated
+        setTimeout(() => {
+            // Try adding assistant message after state update
+            const assistantMessageResult = addMessage({
+              role: 'assistant',
+              content: '',
+              isStreaming: true
+            })
+
+            console.log('Assistant message result:', assistantMessageResult)
+
+            if (!assistantMessageResult) {
+              console.error('Failed to add assistant message')
+              setIsLoading(false)
+              return
+            }
+
+            const assistantMessageId = assistantMessageResult.messageId
+            const assistantThreadId = assistantMessageResult.threadId
+
+            console.log('Assistant IDs:', { assistantMessageId, assistantThreadId })
+
+            // Generate response based on input
+            let response = ""
+
+            // Check for specific demo prompts first (exact matches from suggested prompts)
+            if (userContent === "What instruments are currently running?") {
+              response = `Currently monitoring 5 active instruments:
+
+• **HPLC System A** - Running protocol "Protein_Purification_v2" (45% complete, ~23 min remaining)
+• **Mass Spectrometer MS-03** - Idle, last run completed 2 hours ago
+• **PCR Thermocycler TC-01** - Running "COVID_Detection_96well" (72% complete, ~8 min remaining)
+• **Liquid Handler LH-02** - Preparing samples for next run (queue: 3 protocols)
+• **Plate Reader PR-04** - Running ELISA assay (12% complete, ~35 min remaining)
+
+All instruments operating within normal parameters. No errors detected.`
+          } else if (userContent === "Generate a QC report for today's runs") {
+            response = `# Quality Control Report - ${new Date().toLocaleDateString()}
+
+## Summary Statistics
+- **Total Runs Today**: 42
+- **Success Rate**: 95.2%
+- **Average Runtime**: 1h 23min
+- **Samples Processed**: 384
+
+## Instrument Performance
+| Instrument | Uptime | Efficiency | Status |
+|-----------|---------|------------|---------|
+| HPLC-A | 98.5% | 92% | ✅ Optimal |
+| MS-03 | 99.1% | 88% | ✅ Optimal |
+| TC-01 | 96.2% | 94% | ⚠️ Maintenance due |
+| LH-02 | 99.8% | 91% | ✅ Optimal |
+
+## Failed Runs Analysis
+- 2 failures due to sample preparation errors
+- 1 failure due to power fluctuation at 14:23
+
+## Recommendations
+1. Schedule maintenance for TC-01 within next 48 hours
+2. Review sample prep protocol for consistency
+3. All critical metrics within acceptable range`
+          } else if (userContent === "Show recent failed experiments") {
+            response = `Found 3 failed experiments in the last 7 days:
+
+1. **EXP-2024-0187** (2 days ago)
+   - Protocol: Protein Expression Optimization
+   - Failure: Temperature deviation detected at hour 6
+   - Root Cause: Incubator cooling system malfunction
+   - Action Taken: Maintenance completed, system recalibrated
+
+2. **EXP-2024-0181** (4 days ago)
+   - Protocol: qPCR Viral Detection
+   - Failure: No amplification in positive controls
+   - Root Cause: Expired master mix reagent
+   - Action Taken: New reagents ordered and validated
+
+3. **EXP-2024-0175** (6 days ago)
+   - Protocol: Cell Culture Expansion
+   - Failure: Contamination detected
+   - Root Cause: HEPA filter replacement overdue
+   - Action Taken: Filter replaced, workspace decontaminated
+
+Would you like detailed logs for any of these experiments?`
+          } else if (userContent === "Help optimize ELISA protocol efficiency") {
+            response = `Based on your historical ELISA data, here are optimization recommendations:
+
+## Current Protocol Analysis
+- Average CV: 12.3% (target: <10%)
+- Signal/Background Ratio: 8.5:1
+- Time to completion: 4.5 hours
+
+## Optimization Suggestions
+
+### 1. Blocking Buffer Enhancement
+Change from 3% BSA to 5% non-fat milk in PBS-T
+- Expected improvement: 15% reduction in background
+- Validated on similar assays
+
+### 2. Incubation Time Adjustment
+- Primary antibody: Reduce from 2h to 1.5h at room temp
+- Secondary antibody: Maintain at 1h
+- This saves 30 min without signal loss
+
+### 3. Wash Protocol Optimization
+- Increase wash cycles from 3x to 5x
+- Add 0.1% Tween-20 to wash buffer
+- Expected CV improvement: ~3%
+
+### 4. Detection Enhancement
+- Switch to TMB Ultra substrate
+- 20% signal increase observed in pilot tests
+
+**Estimated new metrics after optimization:**
+- CV: <9%
+- S/B Ratio: 12:1
+- Time: 3.5 hours
+
+Would you like me to generate the updated protocol document?`
+          }
+          // Fallback to keyword matching for other queries
+          else if (userContent.toLowerCase().includes('running') || userContent.toLowerCase().includes('status')) {
+            response = "Currently, 2 instruments are running:\n\n• **qPCR System (PCR-001)**: COVID-19 Detection protocol, 23 minutes remaining\n• **MiSeq (SEQ-003)**: 16S rRNA Sequencing, 4 hours 12 minutes remaining\n\nAll other instruments are idle and ready for use."
+          } else if (userContent.toLowerCase().includes('elisa')) {
+            response = "I'll prepare to start the ELISA protocol on plate reader PR-07. Here's what will happen:\n\n**Protocol**: ELISA_v3\n**Instrument**: PR-07 (Plate Reader)\n**Estimated Duration**: 45 minutes\n**Status**: ✅ Instrument ready\n\nPlease confirm to begin the protocol execution."
+          } else if (userContent.toLowerCase().includes('report') || userContent.toLowerCase().includes('qc')) {
+            response = "Here's today's qPCR summary:\n\n**Total Runs**: 12\n**Successful**: 10 (83%)\n**Failed**: 2 (17%)\n\n**Failed Tests**:\n1. Sample QC-2341: Ct value out of range (>35)\n2. Sample QC-2355: Negative control contamination detected\n\n**Average Ct Value**: 24.3\n**Total Runtime**: 6 hours 45 minutes\n\nWould you like me to export this report or send it to the QA team?"
+          } else if (userContent.toLowerCase().includes('error') || userContent.toLowerCase().includes('maintenance')) {
+            response = "I found 2 instruments requiring attention:\n\n**⚠️ Errors (1)**:\n• **HPLC-002**: Pressure sensor fault detected. Last error: 2 hours ago\n\n**🔧 Maintenance Required (1)**:\n• **MS-001**: Scheduled calibration overdue by 3 days\n\nWould you like to create maintenance tickets for these issues?"
+          } else {
+            // Default response for unmatched queries
+            response = `I understand you're asking about: "${userContent}"
+
+I can help you with various lab operations including:
+- Monitoring instrument status and runs
+- Generating QC and compliance reports
+- Troubleshooting failed experiments
+- Optimizing protocols for efficiency
+- Managing maintenance schedules
+
+How can I assist you with your lab operations today?`
+            }
+
+            // Debug logging
+            console.log('Streaming response:', {
+              threadId: assistantThreadId,
+              messageId: assistantMessageId,
+              responseLength: response.length,
+              responsePreview: response.substring(0, 50)
+            })
+
+            // Stream the response immediately
+            simulateStreaming(assistantThreadId, assistantMessageId, response).then(() => {
+              setIsLoading(false)
+            })
+        }, 100) // Small delay for state update
+      }, 500) // Show thinking for 500ms
     } catch (error) {
-      console.error('Failed to submit message:', error)
+      // Error handled internally
       setIsLoading(false)
     }
   }
@@ -156,31 +420,137 @@ export default function AssistantPage() {
     }
   }
 
+  // Show loading state
+  if (sessionLoading || hasPermission === null) {
+    return (
+      <div className="flex items-center justify-center h-[calc(100vh-4rem)] md:h-[calc(100vh-0rem)]">
+        <div className="text-center space-y-4">
+          <div className="h-8 w-8 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto" />
+          <p className="text-sm text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Show permission denied if user doesn't have access
+  if (!hasPermission) {
+    return (
+      <PermissionDenied
+        resource="Lab Assistant"
+        action="use the Lab Assistant"
+        requiredRole={authError?.requiredRole as any}
+        currentRole={user?.roles[0]}
+        message={authError?.message}
+        onBack={() => router.push('/dashboard')}
+      />
+    )
+  }
+
+  const handleShare = async () => {
+    if (!activeThread) return
+
+    // Create shareable content
+    const shareContent = messages.map(m =>
+      `${m.role === 'user' ? 'You' : 'Assistant'}: ${m.content}`
+    ).join('\n\n')
+
+    try {
+      await navigator.clipboard.writeText(shareContent)
+      // You could show a toast here
+    } catch (err) {
+      console.error('Failed to copy:', err)
+    }
+  }
+
+  const handleArchive = () => {
+    if (!activeThread) return
+    // Archive functionality - you can implement this in the chat context
+    setShowMenu(false)
+  }
+
+  const handleReport = () => {
+    if (!activeThread) return
+    // Report functionality
+    setShowMenu(false)
+  }
+
+  const handleRename = () => {
+    if (!activeThread) return
+    const newTitle = prompt('Enter new title:', activeThread.title)
+    if (newTitle && newTitle !== activeThread.title) {
+      renameThread(activeThread.id, newTitle)
+    }
+    setShowMenu(false)
+  }
+
+  const handleDelete = () => {
+    if (!activeThread) return
+    if (confirm('Are you sure you want to delete this conversation?')) {
+      deleteThread(activeThread.id)
+      router.push('/assistant')
+    }
+    setShowMenu(false)
+  }
+
   return (
-    <div className="flex flex-col h-[calc(100vh-4rem)] md:h-[calc(100vh-0rem)]">
-      {/* Header with thread info when chat is active */}
+    <div className="flex flex-col h-[calc(100vh-4rem)] md:h-[calc(100vh-0rem)] relative">
+      {/* Action buttons when chat is active */}
       {activeThread && messages.length > 0 && (
-        <div className="h-16 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-          <div className="flex items-center h-full gap-3 px-3 md:px-4">
+        <div className="absolute top-3 right-3 z-10 flex items-center gap-2">
+          <Button
+            onClick={handleShare}
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 rounded-lg hover:bg-accent"
+            title="Share conversation"
+          >
+            <Share2 className="h-4 w-4" />
+          </Button>
+
+          <div className="relative" ref={menuRef}>
             <Button
-              onClick={handleNewChat}
+              onClick={() => setShowMenu(!showMenu)}
               variant="ghost"
               size="icon"
-              className="h-9 w-9 rounded-lg text-muted-foreground hover:text-foreground"
+              className="h-8 w-8 rounded-lg hover:bg-accent"
+              title="More options"
             >
-              <ArrowLeft className="h-4 w-4" />
+              <MoreVertical className="h-4 w-4" />
             </Button>
 
-            <div className="flex items-center gap-2 flex-1 min-w-0">
-              <MessageSquare className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-              <span className="text-sm font-medium text-foreground truncate">
-                {activeThread.title}
-              </span>
-            </div>
-
-            <span className="text-xs text-muted-foreground hidden sm:block">
-              {activeThread.messages.length} message{activeThread.messages.length !== 1 ? 's' : ''}
-            </span>
+            {showMenu && (
+              <div className="absolute right-0 mt-2 w-48 bg-popover border border-border rounded-lg shadow-lg overflow-hidden">
+                <button
+                  onClick={handleArchive}
+                  className="flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-accent w-full text-left transition-colors"
+                >
+                  <Archive className="h-4 w-4" />
+                  Archive
+                </button>
+                <button
+                  onClick={handleReport}
+                  className="flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-accent w-full text-left transition-colors"
+                >
+                  <Flag className="h-4 w-4" />
+                  Report
+                </button>
+                <button
+                  onClick={handleRename}
+                  className="flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-accent w-full text-left transition-colors"
+                >
+                  <Pencil className="h-4 w-4" />
+                  Rename
+                </button>
+                <div className="border-t border-border" />
+                <button
+                  onClick={handleDelete}
+                  className="flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-destructive/10 text-destructive w-full text-left transition-colors"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Delete
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -251,17 +621,28 @@ export default function AssistantPage() {
                   message.role === 'user' ? 'text-right' : ''
                 )}>
                   <div className={cn(
-                    "inline-block px-3 md:px-4 py-2 rounded-2xl max-w-[85%] md:max-w-full text-sm",
+                    "inline-block px-3 md:px-4 py-2 rounded-2xl max-w-[85%] md:max-w-full text-sm relative",
                     message.role === 'user'
                       ? "bg-primary text-primary-foreground"
                       : "bg-muted text-foreground"
                   )}>
-                    <div className="whitespace-pre-wrap break-words">
-                      {message.content}
-                      {message.isStreaming && (
-                        <span className="inline-block w-1 h-4 ml-1 bg-current animate-pulse" />
-                      )}
-                    </div>
+                    {/* Sensitivity indicator */}
+                    {message.sensitivity && (
+                      <div className="absolute -top-2 -right-2">
+                        <SensitivityIndicator
+                          sensitivity={message.sensitivity}
+                          categories={message.categories}
+                          containsPHI={message.containsPHI}
+                          containsPII={message.containsPII}
+                          size="sm"
+                        />
+                      </div>
+                    )}
+                    <SafeMessageContent
+                      content={message.containsPHI || message.containsPII ? message.redactedContent || message.content : message.content}
+                      isStreaming={message.isStreaming}
+                      renderMarkdown={message.role === 'assistant'}
+                    />
                   </div>
                 </div>
               </div>
@@ -284,7 +665,7 @@ export default function AssistantPage() {
       </div>
 
       {/* Input Area */}
-      <div className="border-t border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      <div className="bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <form onSubmit={handleSubmit} className="max-w-3xl mx-auto w-full p-3 md:p-4">
           <div className="relative flex items-end gap-2 bg-muted rounded-xl md:rounded-2xl px-3 md:px-4 py-2 shadow-sm transition-shadow focus-within:shadow-md">
             <textarea
@@ -322,5 +703,14 @@ export default function AssistantPage() {
         </form>
       </div>
     </div>
+  )
+}
+
+// Wrap the component with error boundary
+export default function AssistantPage() {
+  return (
+    <ChatErrorBoundary>
+      <AssistantPageContent />
+    </ChatErrorBoundary>
   )
 }

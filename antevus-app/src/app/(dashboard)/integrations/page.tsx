@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useMemo, useEffect } from 'react'
-import { useAuth } from '@/contexts/auth-context'
+import { useSession } from '@/contexts/session-context'
 import { auditLogger } from '@/lib/audit/logger'
 import { IntegrationErrorBoundary } from '@/components/error-boundary'
 import {
@@ -29,7 +29,7 @@ import { ThemeToggle } from '@/components/theme-toggle'
 const ITEMS_PER_PAGE = 9 // 3x3 grid
 
 export default function IntegrationsPage() {
-  const { user } = useAuth()
+  const { user } = useSession()
   const [integrations, setIntegrations] = useState<Integration[]>(mockIntegrations)
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedCategory, setSelectedCategory] = useState<IntegrationCategory | 'all'>('all')

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { useAuth } from '@/contexts/auth-context'
+import { useSession } from '@/contexts/session-context'
 import { useRouter } from 'next/navigation'
 import { Eye, EyeOff, AlertCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -14,7 +14,7 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
 
-  const { login } = useAuth()
+  const { login } = useSession()
   const router = useRouter()
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -22,12 +22,11 @@ export default function LoginPage() {
     setError('')
     setIsLoading(true)
 
-    const result = await login({ email, password })
-
-    if (result.success) {
+    try {
+      await login(email, password)
       router.push('/dashboard')
-    } else {
-      setError(result.error || 'Login failed')
+    } catch (err: any) {
+      setError(err.message || 'Login failed')
       setIsLoading(false)
     }
   }
@@ -36,19 +35,19 @@ export default function LoginPage() {
     switch (role) {
       case 'admin':
         setEmail('admin@antevus.com')
-        setPassword('admin123')
+        setPassword('demo123')
         break
       case 'scientist':
-        setEmail('john.doe@lab.com')
-        setPassword('scientist123')
+        setEmail('scientist@antevus.com')
+        setPassword('demo123')
         break
       case 'manager':
-        setEmail('sarah.manager@lab.com')
-        setPassword('manager123')
+        setEmail('director@antevus.com')
+        setPassword('demo123')
         break
       case 'viewer':
-        setEmail('viewer@lab.com')
-        setPassword('viewer123')
+        setEmail('guest@antevus.com')
+        setPassword('demo123')
         break
     }
   }
