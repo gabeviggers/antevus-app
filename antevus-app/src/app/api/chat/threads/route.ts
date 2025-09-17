@@ -180,9 +180,11 @@ export async function POST(request: NextRequest) {
     let containsPHI = false
     let containsPII = false
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     threads.forEach((thread: any) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       thread.messages?.forEach((message: any) => {
-        const classification = dataClassifier.classifyData(message.content || '')
+        const classification = dataClassifier.classify(message.content || '')
         if (classification.containsPHI) containsPHI = true
         if (classification.containsPII) containsPII = true
       })
