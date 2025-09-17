@@ -1,6 +1,6 @@
 'use client'
 
-import { Shield, ShieldAlert, ShieldCheck, Info, Lock } from 'lucide-react'
+import { Shield, ShieldAlert, ShieldCheck, Lock } from 'lucide-react'
 import {
   DataSensitivity,
   DataCategory,

@@ -197,6 +197,7 @@ class AuditLogger {
   /**
    * Redact PII/PHI from data
    */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private redactSensitiveData(data: any): any {
     if (!this.config.redactPII) {
       return data
@@ -212,6 +213,7 @@ class AuditLogger {
     }
 
     if (typeof data === 'object' && data !== null) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const redacted: any = Array.isArray(data) ? [] : {}
       for (const key in data) {
         if (data.hasOwnProperty(key)) {

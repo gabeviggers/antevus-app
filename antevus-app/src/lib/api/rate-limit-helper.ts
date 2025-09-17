@@ -26,7 +26,7 @@ export interface RateLimitResult {
  * Get client identifier for rate limiting
  * Uses IP address or a fallback identifier
  */
-function getClientIdentifier(request: NextRequest): string {
+async function getClientIdentifier(request: NextRequest): Promise<string> {
   // Try to get real IP from various headers
   const forwardedFor = request.headers.get('x-forwarded-for')
   const realIp = request.headers.get('x-real-ip')
@@ -37,8 +37,8 @@ function getClientIdentifier(request: NextRequest): string {
   if (authHeader) {
     // Extract a consistent identifier from auth token
     // For now, use a hash of the token
-    const crypto = require('crypto')
-    const hash = crypto.createHash('sha256').update(authHeader).digest('hex')
+    const { createHash } = await import('crypto')
+    const hash = createHash('sha256').update(authHeader).digest('hex')
     return `auth:${hash.substring(0, 16)}`
   }
 
@@ -53,7 +53,7 @@ export async function checkRateLimit(
   request: NextRequest,
   config: RateLimitConfig
 ): Promise<RateLimitResult> {
-  const identifier = getClientIdentifier(request)
+  const identifier = await getClientIdentifier(request)
   const rateLimitKey = `${config.key}:${identifier}`
 
   try {

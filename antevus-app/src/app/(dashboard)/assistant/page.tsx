@@ -8,7 +8,7 @@ import { useChat } from '@/contexts/chat-context'
 import { sanitizeInput } from '@/lib/security/xss-protection'
 import { SafeMessageContent } from '@/components/chat/safe-message-content'
 import { auditLogger, AuditEventType } from '@/lib/security/audit-logger'
-import { authorizationService, Resource, Action } from '@/lib/security/authorization'
+import { authorizationService, Resource, Action, UserRole } from '@/lib/security/authorization'
 import { useSession } from '@/contexts/session-context'
 import { PermissionDenied } from '@/components/auth/permission-denied'
 import { SensitivityIndicator } from '@/components/chat/sensitivity-indicator'
@@ -438,7 +438,7 @@ How can I assist you with your lab operations today?`
       <PermissionDenied
         resource="Lab Assistant"
         action="use the Lab Assistant"
-        requiredRole={authError?.requiredRole as any}
+        requiredRole={authError?.requiredRole as UserRole | undefined}
         currentRole={user?.roles[0]}
         message={authError?.message}
         onBack={() => router.push('/dashboard')}

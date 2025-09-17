@@ -187,11 +187,16 @@ export function withChatErrorBoundary<P extends object>(
   Component: React.ComponentType<P>,
   onReset?: () => void
 ) {
-  return React.forwardRef<any, P>((props, ref) => (
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const WrappedComponent = (props: any) => (
     <ChatErrorBoundary onReset={onReset}>
-      <Component {...props} ref={ref} />
+      <Component {...props} />
     </ChatErrorBoundary>
-  ))
+  )
+
+  WrappedComponent.displayName = `withChatErrorBoundary(${Component.displayName || Component.name})`
+
+  return WrappedComponent
 }
 
 /**

@@ -157,7 +157,7 @@ export async function POST(request: NextRequest) {
   if (rateLimited) return rateLimited
 
   let userId: string | undefined
-  let threads: any[] = []
+  let threads: unknown[] = []
 
   try {
     // Extract user from auth token
@@ -180,7 +180,7 @@ export async function POST(request: NextRequest) {
     let containsPHI = false
     let containsPII = false
 
-    threads.forEach(thread => {
+    threads.forEach((thread: any) => {
       thread.messages?.forEach((message: any) => {
         const classification = dataClassifier.classifyData(message.content || '')
         if (classification.containsPHI) containsPHI = true

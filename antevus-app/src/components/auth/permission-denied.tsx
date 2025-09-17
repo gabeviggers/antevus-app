@@ -1,6 +1,6 @@
 'use client'
 
-import { ShieldOff, Lock, UserX, AlertTriangle } from 'lucide-react'
+import { ShieldOff, Lock, AlertTriangle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { UserRole } from '@/lib/security/authorization'
@@ -41,7 +41,7 @@ export function PermissionDenied({
             Permission Denied
           </h2>
           <p className="text-sm text-muted-foreground">
-            You don't have permission to {action}
+            You don&apos;t have permission to {action}
           </p>
         </div>
 
