@@ -1,13 +1,15 @@
 # Antevus - Universal Laboratory Instrument API Platform
 
 ## Current Status
-**Phase 0 Complete** - Foundation and infrastructure setup completed (Dec 11, 2024)
+**Phase 1 Complete** - Lab Assistant Feature Shipped! (Dec 17, 2024)
 - Next.js 14 app with TypeScript running at http://localhost:3000
 - All core development tools configured and ready
-- Ready to begin Phase 1: Demo-Ready Frontend MVP
+- Full dashboard with instruments, monitoring, runs, integrations, API playground
+- **NEW**: Lab Assistant with AI-powered conversational interface ✅
+- Production-ready with enterprise security and compliance features
 
 ## Product Vision
-**The Plaid for Labs** - A developer-friendly connectivity layer for laboratory instruments that eliminates integration overhead and enables faster experiments through a unified API.
+**The Plaid for Labs** - A developer-friendly connectivity layer for laboratory instruments that eliminates integration overhead and enables faster experiments through a unified API. Now with natural language control - lab workers can command their instruments through conversational AI, making complex operations as simple as asking a question.
 
 ## Problem We're Solving
 
@@ -62,10 +64,21 @@ Antevus provides a universal connectivity and data normalization layer for labor
 - One-click integrations (ELN/LIMS/Slack)
 - Audit logs with compliance-ready exports (PDF/CSV)
 
+### Natural Language Lab Control (NEW)
+- **Conversational Interface**: Chat-based control of lab instruments with natural language
+- **Smart Queries**: "What's running?", "Show failed runs for Project A", "Summarize today's HPLC results"
+- **Guard-railed Actions**: Start/pause/stop runs with policy-enforced safety checks
+- **Compliance-Ready**: CFR Part 11 e-signatures, audit trails, and change control
+- **Multi-step Orchestration**: Complex workflows executed through simple commands
+- **Real-time Updates**: Live streaming of run status and results in chat
+
 ### Control Layer (Phase 2)
 - Remote start/stop run capabilities
 - Scheduling and queuing for maximized utilization
 - Role-based e-signatures for FDA 21 CFR Part 11 compliance
+- Natural language orchestration with policy enforcement
+- Dry-run previews before execution
+- Automated safety interlocks and dependency checks
 
 ## Technical Architecture
 
@@ -79,15 +92,18 @@ Antevus provides a universal connectivity and data normalization layer for labor
 
 #### Data & Storage
 - **Primary Database**: PostgreSQL with TimescaleDB for time-series telemetry
+- **Vector Database**: pgvector/Weaviate for semantic search over lab data
 - **Message Bus**: Apache Kafka or AWS MSK for durable event streams
 - **Object Storage**: S3 or GCS for raw CSV/FASTQ outputs
 - **Cache Layer**: Redis for session management and real-time data
 
 #### Security & Compliance
 - **Auth & RBAC**: Auth0 or Keycloak for OAuth2, SAML/SSO
+- **Policy Engine**: OPA (Open Policy Agent) for fine-grained ABAC controls
 - **Secrets Management**: HashiCorp Vault or AWS KMS
 - **Compliance Logging**: Immutable WORM storage for 21 CFR Part 11
 - **Zero-Trust Networking**: Mutual TLS between edge agents and API
+- **Intent Validation**: Typed schemas and whitelist for all NL actions
 
 #### Observability
 - **Metrics**: OpenTelemetry + Prometheus + Grafana
@@ -111,7 +127,14 @@ Antevus provides a universal connectivity and data normalization layer for labor
 - **Charts**: Recharts or Apache ECharts for telemetry visualization
 - **State Management**: React Query or Zustand for async API calls
 - **Real-Time**: WebSockets (Socket.IO) or Server-Sent Events
+- **Chat Interface**: Streaming responses with markdown rendering
 - **Build & Deploy**: Vercel or containerized CI/CD pipeline
+
+#### Natural Language Components
+- **LLM Integration**: OpenAI API with function calling for intent parsing
+- **RAG Pipeline**: Retrieval-augmented generation for contextual answers
+- **Tool Registry**: Typed function definitions for available actions
+- **Policy Renderer**: Visual representation of permission checks
 
 #### UX Principles
 - Single pane of glass grid view with color-coded states
@@ -129,6 +152,12 @@ GET  /runs               � List past runs (filterable)
 GET  /runs/{id}/data     � Download normalized result
 POST /webhooks           � Subscribe to run events
 POST /control/start      � (Phase 2) Start run remotely
+
+# Natural Language Endpoints
+WS   /lab-assistant/chat � WebSocket for streaming chat
+POST /lab-assistant/intent � Parse and validate user intent
+POST /lab-assistant/execute � Execute validated action
+GET  /lab-assistant/capabilities � Get available actions per role
 ```
 
 ### Developer Experience
@@ -166,6 +195,14 @@ POST /control/start      � (Phase 2) Start run remotely
 4. Run completes � Slack notification with results link
 5. One-click export to Benchling/ELN
 
+### Natural Language Workflow
+1. Scientist asks: "What's the status of my qPCR runs?"
+2. Assistant queries data and returns formatted table with links
+3. Scientist: "Start ELISA protocol on plate reader PR-07"
+4. Assistant shows dry-run plan with parameters
+5. Scientist confirms with e-signature
+6. Assistant streams execution logs and notifies on completion
+
 ### Developer Integration
 1. Install SDK: `pip install antevus`
 2. Authenticate with API key
@@ -199,6 +236,12 @@ POST /control/start      � (Phase 2) Start run remotely
 - Workflow orchestration engine
 - Scheduling and resource optimization
 - AI-driven experiment suggestions
+
+### Phase 4: Natural Language Control (Months 10-12)
+- Conversational interface for lab operations
+- Policy-enforced action execution
+- Semantic search over historical data
+- Compliance-ready audit trails for NL actions
 
 ## Development Guidelines
 
@@ -237,6 +280,7 @@ npm run dev  # Runs at http://localhost:3000
 ### Documentation
 - **Setup Guide**: See SETUP_GUIDE.md for detailed instructions
 - **Roadmap**: See IMPLEMENTATION_ROADMAP.md for development phases
+- **Natural Language Control**: See NL_LAB_CONTROL.md for technical specification
 - **Project Context**: This file (CLAUDE.md)
 
 ## Contact & Support
