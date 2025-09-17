@@ -3,8 +3,79 @@
 import { createContext, useContext, useState, useEffect, ReactNode, useRef } from 'react'
 import { secureChatStorage } from '@/lib/security/secure-storage'
 import { auditLogger, AuditEventType } from '@/lib/security/audit-logger'
+import { logger } from '@/lib/logger'
 import { dataClassifier, DataSensitivity, DataCategory } from '@/lib/security/data-classification'
 import { authManager } from '@/lib/security/auth-manager'
+
+// Rate limiting configuration with exponential backoff
+const RATE_LIMIT_CONFIG = {
+  maxRetries: 3,
+  baseDelay: 1000, // 1 second
+  maxDelay: 16000, // 16 seconds
+  backoffMultiplier: 2
+}
+
+// Rate limiter with exponential backoff
+class RateLimiter {
+  private retryCount = 0
+  private lastAttempt = 0
+
+  async executeWithBackoff<T>(
+    operation: () => Promise<T>,
+    operationName: string
+  ): Promise<T | null> {
+    const now = Date.now()
+    const timeSinceLastAttempt = now - this.lastAttempt
+
+    // Reset retry count if enough time has passed (1 minute)
+    if (timeSinceLastAttempt > 60000) {
+      this.retryCount = 0
+    }
+
+    try {
+      this.lastAttempt = now
+      const result = await operation()
+      this.retryCount = 0 // Reset on success
+      return result
+    } catch (error: any) {
+      // Check if it's a rate limit error
+      if (error?.status === 429 || error?.message?.includes('rate')) {
+        if (this.retryCount < RATE_LIMIT_CONFIG.maxRetries) {
+          this.retryCount++
+          const delay = Math.min(
+            RATE_LIMIT_CONFIG.baseDelay * Math.pow(RATE_LIMIT_CONFIG.backoffMultiplier, this.retryCount - 1),
+            RATE_LIMIT_CONFIG.maxDelay
+          )
+
+          console.warn(`Rate limited on ${operationName}. Retrying in ${delay}ms (attempt ${this.retryCount}/${RATE_LIMIT_CONFIG.maxRetries})`)
+
+          // Wait with exponential backoff
+          await new Promise(resolve => setTimeout(resolve, delay))
+
+          // Retry the operation
+          return this.executeWithBackoff(operation, operationName)
+        } else {
+          console.error(`Max retries exceeded for ${operationName}. Falling back to local storage.`)
+          // Return null to indicate we should use fallback
+          return null
+        }
+      }
+
+      // For other errors, just log and return null
+      console.error(`Error in ${operationName}:`, error)
+      return null
+    }
+  }
+
+  reset() {
+    this.retryCount = 0
+    this.lastAttempt = 0
+  }
+}
+
+// Create rate limiter instances for different operations
+const saveRateLimiter = new RateLimiter()
+const loadRateLimiter = new RateLimiter()
 
 // Security warning disabled to avoid console spam
 
@@ -192,7 +263,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     // Check for pending thread ID first (from recent user message)
     let threadIdToUse = activeThreadId || pendingThreadIdRef.current
 
-    console.log('addMessage debug:', {
+    logger.debug('Adding message to thread', {
       role: message.role,
       activeThreadId,
       pendingThreadId: pendingThreadIdRef.current,
@@ -467,28 +538,51 @@ export function ChatProvider({ children }: { children: ReactNode }) {
    * - Data is encrypted at rest with AES-256-GCM
    * - User authentication required
    * - Audit logged for SOC 2 compliance
+   * - Implements exponential backoff for rate limiting
    */
   const saveToSecureStorage = async () => {
     try {
-      // TEMPORARY: Skip API call to avoid rate limiting
-      // Just save to session and local storage
-
-      // Store in session for quick access
+      // Always save to secure session storage first (immediate)
       threads.forEach(thread => {
         secureChatStorage.setThread(thread)
       })
 
-      // Also save to localStorage as backup
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('antevus_chat_threads', JSON.stringify(threads))
+      // Try to save to server with rate limiting protection
+      const token = authManager.getToken()
+      if (!token) {
+        console.debug('No auth token, skipping server save')
+        return
       }
 
-      // Skip the API call entirely for now
-      // const token = authManager.getToken()
-      // if (!token) return
-      // const response = await fetch('/api/chat/threads', ...)
+      // Execute with rate limiting and exponential backoff
+      const result = await saveRateLimiter.executeWithBackoff(async () => {
+        const response = await fetch('/api/chat/threads', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ threads })
+        })
+
+        if (!response.ok) {
+          if (response.status === 429) {
+            throw { status: 429, message: 'Rate limited' }
+          }
+          throw new Error(`Failed to save: ${response.statusText}`)
+        }
+
+        return response.json()
+      }, 'saveToSecureStorage')
+
+      if (result) {
+        console.debug('Threads saved to server successfully')
+      } else {
+        console.warn('Server save failed after retries, data preserved in session storage')
+      }
     } catch (error) {
-      console.error('Failed to save threads locally:', error)
+      console.error('Failed to save threads:', error)
+      // Data is still safe in session storage
     }
   }
 
@@ -497,31 +591,11 @@ export function ChatProvider({ children }: { children: ReactNode }) {
    * - Data is decrypted on server side
    * - User authentication required
    * - Persists across page refreshes securely
+   * - Implements exponential backoff for rate limiting
    */
   const loadFromSecureStorage = async () => {
     try {
-      // TEMPORARY: Skip API call to avoid rate limiting
-
-      // First try localStorage
-      if (typeof window !== 'undefined') {
-        const stored = localStorage.getItem('antevus_chat_threads')
-        if (stored) {
-          try {
-            const parsedThreads = JSON.parse(stored)
-            if (Array.isArray(parsedThreads) && parsedThreads.length > 0) {
-              setThreads(parsedThreads)
-              if (!activeThreadId && parsedThreads.length > 0) {
-                setActiveThreadId(parsedThreads[0].id)
-              }
-              return
-            }
-          } catch (e) {
-            console.error('Failed to parse stored threads:', e)
-          }
-        }
-      }
-
-      // Fallback to session storage
+      // First, load from secure session storage (immediate)
       const sessionThreads = secureChatStorage.getAllThreads()
       if (sessionThreads.length > 0) {
         setThreads(sessionThreads)
@@ -530,10 +604,59 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         }
       }
 
-      // Skip the API call entirely
-      return
+      // Try to load from server with rate limiting protection
+      const token = authManager.getToken()
+      if (!token) {
+        console.debug('No auth token, using session storage only')
+        return
+      }
 
-      // DISABLED API CALL:
+      // Execute with rate limiting and exponential backoff
+      const result = await loadRateLimiter.executeWithBackoff(async () => {
+        const response = await fetch('/api/chat/threads', {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        })
+
+        if (!response.ok) {
+          if (response.status === 429) {
+            throw { status: 429, message: 'Rate limited' }
+          }
+          throw new Error(`Failed to load: ${response.statusText}`)
+        }
+
+        return response.json()
+      }, 'loadFromSecureStorage')
+
+      if (result && result.threads && result.threads.length > 0) {
+        // Convert date strings back to Date objects
+        const parsedThreads = result.threads.map((thread: any) => ({
+          ...thread,
+          createdAt: new Date(thread.createdAt),
+          updatedAt: new Date(thread.updatedAt),
+          messages: thread.messages.map((msg: any) => ({
+            ...msg,
+            timestamp: new Date(msg.timestamp)
+          }))
+        }))
+
+        setThreads(parsedThreads)
+
+        // Set the first thread as active if there's no active thread
+        if (!activeThreadId && parsedThreads.length > 0) {
+          setActiveThreadId(parsedThreads[0].id)
+        }
+
+        // Update session storage with server data
+        parsedThreads.forEach((thread: ChatThread) => {
+          secureChatStorage.setThread(thread)
+        })
+
+        console.debug('Threads loaded from server successfully')
+      } else if (!result) {
+        console.warn('Server load failed after retries, using session storage')
+      }
       // const response = await fetch('/api/chat/threads', {
       //   headers: {
       //     'Authorization': `Bearer ${token}`
@@ -576,14 +699,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       //   }
       // }
     } catch (error) {
-      // Failed to load - try session storage
-      const sessionThreads = secureChatStorage.getAllThreads()
-      if (sessionThreads.length > 0) {
-        setThreads(sessionThreads)
-        if (!activeThreadId && sessionThreads.length > 0) {
-          setActiveThreadId(sessionThreads[0].id)
-        }
-      }
+      console.error('Failed to load threads:', error)
+      // Session storage fallback is already handled above
     }
   }
 

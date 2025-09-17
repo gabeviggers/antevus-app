@@ -207,10 +207,10 @@ export function Sidebar({ sidebarOpen, setSidebarOpen, collapsed, setCollapsed }
                       <button
                         onClick={() => {
                           if (confirm('Are you sure you want to delete all chat history? This cannot be undone.')) {
-                            // Clear all threads from localStorage
-                            localStorage.removeItem('antevus-chat-threads')
-                            // Reload to reset the context
-                            window.location.reload()
+                            // Delete all threads one by one using secure method
+                            threads.forEach(thread => deleteThread(thread.id))
+                            // Navigate to assistant page to show fresh interface
+                            router.push('/assistant')
                           }
                         }}
                         className="p-1 rounded hover:bg-destructive/20 text-destructive/70 hover:text-destructive transition-colors"
