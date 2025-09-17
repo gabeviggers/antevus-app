@@ -105,18 +105,21 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const checkSession = async () => {
     setIsLoading(true)
     try {
-      // For demo, we'll restore session from mock storage
-      const mockSession = sessionStorage.getItem('mock_session')
-      if (mockSession) {
-        const userData = JSON.parse(mockSession)
-        setUser(userData)
-        auditLogger.setUserId(userData.id)
+      // SECURITY: Sessions are memory-only for HIPAA compliance
+      // Never store session data in browser storage (localStorage/sessionStorage)
+      // For production, use httpOnly secure cookies
 
-        // Restore token for the session
-        authManager.setToken(`demo_token_${Date.now()}`, 30 * 60 * 1000)
-      }
+      // Note: Demo sessions do not persist across page refreshes
+      // This is intentional for security - requires re-authentication
     } catch (error) {
-      console.error('Session check failed:', error)
+      // Log error securely without exposing details
+      auditLogger.log({
+        eventType: AuditEventType.SYSTEM_ERROR,
+        action: 'Session check failed',
+        metadata: {
+          error: error instanceof Error ? error.message : 'Unknown error'
+        }
+      })
     } finally {
       setIsLoading(false)
     }
@@ -152,8 +155,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       }
       setUser(userContext)
 
-      // Store mock session (for demo only)
-      sessionStorage.setItem('mock_session', JSON.stringify(userContext))
+      // SECURITY: Session stored in memory only - never in browser storage
+      // This is required for HIPAA compliance
 
       // Set user ID for audit logging
       auditLogger.setUserId(userContext.id)
@@ -181,11 +184,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     // Clear auth token
     authManager.clearAuth()
 
-    // Clear user context
+    // Clear user context from memory only
     setUser(null)
 
-    // Clear mock session
-    sessionStorage.removeItem('mock_session')
+    // Session cleared from memory - no browser storage to clear
 
     // Log logout
     if (userId) {
