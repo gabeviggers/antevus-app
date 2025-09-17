@@ -50,7 +50,7 @@ export class ChatErrorBoundary extends React.Component<
 
     // Audit log for compliance
     auditLogger.log({
-      eventType: AuditEventType.CHAT_ERROR,
+      eventType: AuditEventType.SYSTEM_ERROR,
       action: 'Chat component error occurred',
       metadata: {
         errorMessage: error.message,
@@ -90,10 +90,11 @@ export class ChatErrorBoundary extends React.Component<
 
     // Audit log the recovery attempt
     auditLogger.log({
-      eventType: AuditEventType.CHAT_ERROR_RECOVERY,
+      eventType: AuditEventType.SYSTEM_ERROR,
       action: 'User attempted to recover from chat error',
       metadata: {
-        previousError: this.state.error?.message
+        previousError: this.state.error?.message,
+        recovery: true
       }
     })
   }
