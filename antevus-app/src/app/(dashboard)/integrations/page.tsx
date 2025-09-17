@@ -38,6 +38,18 @@ export default function IntegrationsPage() {
   const [isSyncing, setIsSyncing] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
 
+  // Helper to convert UserContext to User format for audit logging
+  const getAuditUser = () => {
+    return user ? {
+      id: user.id,
+      email: user.email,
+      name: user.email, // Use email as name if not available
+      role: user.roles[0] as any, // Use first role
+      organization: 'Antevus Labs', // Default organization
+      createdAt: new Date().toISOString()
+    } : null
+  }
+
   // Filter integrations based on search and category
   const filteredIntegrations = useMemo(() => {
     let filtered = [...integrations]
@@ -99,7 +111,7 @@ export default function IntegrationsPage() {
 
   const handleDisconnect = async (integration: Integration) => {
     // Log audit event
-    auditLogger.logEvent(user, 'integration.disconnect', {
+    auditLogger.logEvent(getAuditUser(), 'integration.disconnect', {
       resourceType: 'integration',
       resourceId: integration.id,
       success: true,
@@ -126,7 +138,7 @@ export default function IntegrationsPage() {
 
     try {
       // Log audit event
-      auditLogger.logEvent(user, 'integration.configure', {
+      auditLogger.logEvent(getAuditUser(), 'integration.configure', {
         resourceType: 'integration',
         resourceId: integration.id,
         success: true,
@@ -147,7 +159,7 @@ export default function IntegrationsPage() {
     } catch (error) {
       console.error('Error saving config:', error)
       // Log failure event
-      auditLogger.logEvent(user, 'integration.error', {
+      auditLogger.logEvent(getAuditUser(), 'integration.error', {
         resourceType: 'integration',
         resourceId: integration.id,
         success: false,
@@ -180,7 +192,7 @@ export default function IntegrationsPage() {
             await new Promise(resolve => setTimeout(resolve, Math.random() * 2000 + 1000))
 
             // Log successful sync
-            auditLogger.logEvent(user, 'integration.sync', {
+            auditLogger.logEvent(getAuditUser(), 'integration.sync', {
               resourceType: 'integration',
               resourceId: integration.id,
               success: true,
@@ -198,7 +210,7 @@ export default function IntegrationsPage() {
             }
           } catch (error) {
             // Handle individual sync errors
-            auditLogger.logEvent(user, 'integration.error', {
+            auditLogger.logEvent(getAuditUser(), 'integration.error', {
               resourceType: 'integration',
               resourceId: integration.id,
               success: false,
