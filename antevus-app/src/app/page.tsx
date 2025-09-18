@@ -223,8 +223,8 @@ export default function LoginPage() {
       </div>
 
       {/* Footer */}
-      <footer className="py-6 text-center text-xs text-muted-foreground">
-        <p>&copy; 2024 Antevus. All rights reserved.</p>
+      <footer className="absolute bottom-0 left-0 p-6 text-xs text-muted-foreground">
+        <p>&copy; 2025 Antevus. All rights reserved.</p>
       </footer>
     </div>
   )
