@@ -206,26 +206,41 @@ export default function LoginPage() {
                 GitHub
               </Button>
             </div>
+
+            {/* Mobile only: Sign Up Link and Copyright right below OAuth buttons */}
+            <div className="sm:hidden space-y-3 text-center">
+              <p className="text-sm text-muted-foreground">
+                Don&apos;t have an account?{' '}
+                <Link
+                  href="/signup"
+                  className="font-medium text-foreground hover:text-muted-foreground transition-colors"
+                >
+                  Request a demo
+                </Link>
+              </p>
+              <p className="text-xs text-muted-foreground">
+                &copy; 2025 Antevus. All rights reserved.
+              </p>
+            </div>
           </form>
 
-          {/* Sign Up Link - moved outside form for better spacing */}
+          {/* Desktop only: Sign Up Link outside form */}
+          <div className="hidden sm:block text-center">
+            <p className="text-sm text-muted-foreground">
+              Don&apos;t have an account?{' '}
+              <Link
+                href="/signup"
+                className="font-medium text-foreground hover:text-muted-foreground transition-colors"
+              >
+                Request a demo
+              </Link>
+            </p>
+          </div>
         </div>
       </div>
 
-      {/* Footer Section - Contains both signup link and copyright */}
-      <div className="w-full px-4 pb-8 pt-4 text-center space-y-4">
-        {/* Sign Up Link */}
-        <p className="text-sm text-muted-foreground">
-          Don&apos;t have an account?{' '}
-          <Link
-            href="/signup"
-            className="font-medium text-foreground hover:text-muted-foreground transition-colors"
-          >
-            Request a demo
-          </Link>
-        </p>
-
-        {/* Copyright */}
+      {/* Desktop only: Footer Section */}
+      <div className="hidden sm:block w-full px-4 pb-8 pt-4 text-center">
         <p className="text-xs text-muted-foreground">
           &copy; 2025 Antevus. All rights reserved.
         </p>
