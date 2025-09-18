@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { authManager } from '@/lib/security/auth-manager'
-import { authorizationService } from '@/lib/security/authorization'
+import { authorizationService, Resource, Action, UserRole } from '@/lib/security/authorization'
 import { encryptionService } from '@/lib/security/encryption'
 import { auditLogger, AuditEventType, AuditSeverity } from '@/lib/security/audit-logger'
 import { withRateLimit, checkRateLimit, addRateLimitHeaders } from '@/lib/api/rate-limit-helper'
@@ -125,16 +125,21 @@ export async function POST(request: NextRequest) {
     const userContext = {
       id: claims.sub,
       email: claims.email || '',
-      roles: claims.roles || []
+      roles: (claims.roles || []) as UserRole[]
     }
 
-    // Check if user has permission to archive threads
-    const hasPermission = await authorizationService.requirePermission(
-      userContext,
-      'chat:archive'
-    )
+    // Check if user has permission to archive threads (using DELETE action on CHAT_HISTORY)
+    const authResult = await authorizationService.can({
+      user: userContext,
+      resource: Resource.CHAT_HISTORY,
+      action: Action.DELETE,
+      context: {
+        userId: claims.sub,
+        operation: 'archive'
+      }
+    })
 
-    if (!hasPermission) {
+    if (!authResult.allowed) {
       auditLogger.log({
         eventType: AuditEventType.DATA_ACCESS_DENIED,
         action: 'Insufficient permissions for archive',
@@ -142,8 +147,9 @@ export async function POST(request: NextRequest) {
         severity: AuditSeverity.WARNING,
         outcome: 'FAILURE',
         metadata: {
-          requiredPermission: 'chat:archive',
-          userRoles: userContext.roles
+          requiredPermission: `${Resource.CHAT_HISTORY}:${Action.DELETE}`,
+          userRoles: userContext.roles,
+          reason: authResult.reason
         }
       })
       return createErrorResponse('Insufficient permissions to archive threads', 403)
@@ -161,7 +167,7 @@ export async function POST(request: NextRequest) {
         severity: AuditSeverity.WARNING,
         outcome: 'FAILURE',
         metadata: {
-          errors: validation.error.errors
+          errors: validation.error.issues
         }
       })
       return createErrorResponse('Invalid archive request format', 400)
@@ -181,9 +187,9 @@ export async function POST(request: NextRequest) {
         return {
           id: thread.id,
           userId: userContext.id,
-          encryptedData: encrypted.ciphertext,
+          encryptedData: encrypted.encrypted,
           iv: encrypted.iv,
-          authTag: encrypted.authTag,
+          authTag: encrypted.tag,
           archivedAt: timestamp,
           reason: archiveReason || 'scheduled'
         }
@@ -293,21 +299,26 @@ export async function GET(request: NextRequest) {
     const userContext = {
       id: claims.sub,
       email: claims.email || '',
-      roles: claims.roles || []
+      roles: (claims.roles || []) as UserRole[]
     }
 
-    const hasPermission = await authorizationService.requirePermission(
-      userContext,
-      'chat:read'
-    )
+    const authResult = await authorizationService.can({
+      user: userContext,
+      resource: Resource.CHAT_HISTORY,
+      action: Action.VIEW,
+      context: {
+        userId: claims.sub,
+        operation: 'read_archive'
+      }
+    })
 
-    if (!hasPermission) {
+    if (!authResult.allowed) {
       return createErrorResponse('Insufficient permissions', 403)
     }
 
     // In production, fetch encrypted archives from database
     // For demo, return empty array
-    const archives = []
+    const archives: Array<{ id: string; timestamp: string }> = []
 
     // Log access
     auditLogger.log({
