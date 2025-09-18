@@ -32,7 +32,7 @@ interface VerifiedClaims {
   iat?: number
   iss?: string
   aud?: string | string[]
-  [key: string]: any
+  [key: string]: unknown
 }
 
 // Configuration from environment variables

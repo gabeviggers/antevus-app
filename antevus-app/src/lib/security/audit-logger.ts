@@ -281,7 +281,7 @@ class AuditLogger {
    * Canonicalize JSON object for stable HMAC computation
    * Ensures consistent key ordering for deterministic output
    */
-  private canonicalizeJSON(obj: any): string {
+  private canonicalizeJSON(obj: unknown): string {
     if (obj === null) return 'null'
     if (typeof obj !== 'object') return JSON.stringify(obj)
     if (Array.isArray(obj)) {
@@ -289,9 +289,9 @@ class AuditLogger {
     }
 
     // Sort object keys for stable serialization
-    const sortedKeys = Object.keys(obj).sort()
+    const sortedKeys = Object.keys(obj as Record<string, unknown>).sort()
     const pairs = sortedKeys.map(key => {
-      return `"${key}":${this.canonicalizeJSON(obj[key])}`
+      return `"${key}":${this.canonicalizeJSON((obj as Record<string, unknown>)[key])}`
     })
     return '{' + pairs.join(',') + '}'
   }
