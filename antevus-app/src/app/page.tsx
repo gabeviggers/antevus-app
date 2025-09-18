@@ -208,25 +208,28 @@ export default function LoginPage() {
             </div>
           </form>
 
-          {/* Sign Up Link */}
-          <div className="text-center">
-            <p className="text-sm text-muted-foreground">
-              Don&apos;t have an account?{' '}
-              <Link
-                href="/signup"
-                className="font-medium text-foreground hover:text-muted-foreground transition-colors"
-              >
-                Request a demo
-              </Link>
-            </p>
-          </div>
+          {/* Sign Up Link - moved outside form for better spacing */}
         </div>
       </div>
 
-      {/* Footer - Centered on mobile, left-aligned on desktop */}
-      <footer className="absolute bottom-0 left-0 right-0 p-6 text-xs text-muted-foreground sm:left-0 sm:right-auto">
-        <p className="text-center sm:text-left">&copy; 2025 Antevus. All rights reserved.</p>
-      </footer>
+      {/* Footer Section - Contains both signup link and copyright */}
+      <div className="w-full px-4 pb-8 pt-4 text-center space-y-4">
+        {/* Sign Up Link */}
+        <p className="text-sm text-muted-foreground">
+          Don&apos;t have an account?{' '}
+          <Link
+            href="/signup"
+            className="font-medium text-foreground hover:text-muted-foreground transition-colors"
+          >
+            Request a demo
+          </Link>
+        </p>
+
+        {/* Copyright */}
+        <p className="text-xs text-muted-foreground">
+          &copy; 2025 Antevus. All rights reserved.
+        </p>
+      </div>
     </div>
   )
 }
