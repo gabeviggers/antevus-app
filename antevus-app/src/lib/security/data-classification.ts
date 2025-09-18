@@ -263,9 +263,19 @@ export class DataClassificationService {
   private redactContent(content: string, patterns: string[]): string {
     let redacted = content
 
+    // Redact research data patterns
+    if (patterns.some(p => p.startsWith('RESEARCH:'))) {
+      redacted = redacted.replace(SENSITIVE_PATTERNS.RESEARCH.studyId, '[STUDY_ID_REDACTED]')
+      redacted = redacted.replace(SENSITIVE_PATTERNS.RESEARCH.subjectId, '[SUBJECT_ID_REDACTED]')
+      redacted = redacted.replace(SENSITIVE_PATTERNS.RESEARCH.sampleId, '[SAMPLE_ID_REDACTED]')
+      redacted = redacted.replace(SENSITIVE_PATTERNS.RESEARCH.batchNumber, '[BATCH_REDACTED]')
+    }
+
     // Redact based on detected patterns
     if (patterns.some(p => p.startsWith('CREDENTIAL:'))) {
       // Redact all credentials
+      redacted = redacted.replace(SENSITIVE_PATTERNS.CREDENTIALS.awsKey, '[AWS_KEY_REDACTED]')
+      redacted = redacted.replace(SENSITIVE_PATTERNS.CREDENTIALS.connectionString, '[CONNECTION_STRING_REDACTED]')
       redacted = redacted.replace(SENSITIVE_PATTERNS.CREDENTIALS.apiKey, '[API_KEY_REDACTED]')
       redacted = redacted.replace(SENSITIVE_PATTERNS.CREDENTIALS.password, '[PASSWORD_REDACTED]')
       redacted = redacted.replace(SENSITIVE_PATTERNS.CREDENTIALS.token, '[TOKEN_REDACTED]')
@@ -274,6 +284,11 @@ export class DataClassificationService {
 
     if (patterns.some(p => p.startsWith('PHI:'))) {
       // Redact PHI
+      redacted = redacted.replace(SENSITIVE_PATTERNS.PHI.diagnosis, '[DIAGNOSIS_REDACTED]')
+      redacted = redacted.replace(SENSITIVE_PATTERNS.PHI.medication, '[MEDICATION_REDACTED]')
+      redacted = redacted.replace(SENSITIVE_PATTERNS.PHI.healthCondition, '[CONDITION_REDACTED]')
+      redacted = redacted.replace(SENSITIVE_PATTERNS.PHI.icd10, '[ICD10_REDACTED]')
+      redacted = redacted.replace(SENSITIVE_PATTERNS.PHI.cpt, '[CPT_REDACTED]')
       redacted = redacted.replace(SENSITIVE_PATTERNS.PHI.medicalRecordNumber, '[MRN_REDACTED]')
       redacted = redacted.replace(SENSITIVE_PATTERNS.PHI.patientId, '[PATIENT_ID_REDACTED]')
       redacted = redacted.replace(SENSITIVE_PATTERNS.PHI.labResults, '[LAB_RESULT_REDACTED]')
@@ -281,6 +296,9 @@ export class DataClassificationService {
 
     if (patterns.some(p => p.startsWith('PII:'))) {
       // Redact PII
+      redacted = redacted.replace(SENSITIVE_PATTERNS.PII.dateOfBirth, '[DOB_REDACTED]')
+      redacted = redacted.replace(SENSITIVE_PATTERNS.PII.driverLicense, '[DL_REDACTED]')
+      redacted = redacted.replace(SENSITIVE_PATTERNS.PII.passport, '[PASSPORT_REDACTED]')
       redacted = redacted.replace(SENSITIVE_PATTERNS.PII.ssn, '[SSN_REDACTED]')
       redacted = redacted.replace(SENSITIVE_PATTERNS.PII.email, '[EMAIL_REDACTED]')
       redacted = redacted.replace(SENSITIVE_PATTERNS.PII.phone, '[PHONE_REDACTED]')
