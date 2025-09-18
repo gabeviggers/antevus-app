@@ -9,7 +9,7 @@ describe('Desktop Notifications', () => {
   // Mock Notification API
   const mockNotification = {
     close: jest.fn(),
-    onclick: null as any
+    onclick: null as ((this: Notification, ev: Event) => void) | null
   }
 
   beforeEach(() => {
@@ -17,7 +17,7 @@ describe('Desktop Notifications', () => {
     jest.clearAllMocks()
 
     // Mock Notification constructor
-    global.Notification = jest.fn(() => mockNotification) as any
+    global.Notification = jest.fn(() => mockNotification) as unknown as typeof Notification
     global.Notification.permission = 'default'
     global.Notification.requestPermission = jest.fn()
   })
@@ -34,7 +34,7 @@ describe('Desktop Notifications', () => {
 
     it('returns false when Notification API is not available', () => {
       const originalNotification = global.Notification
-      delete (global as any).Notification
+      delete (global as unknown as Record<string, unknown>).Notification
       expect(isDesktopSupported()).toBe(false)
       global.Notification = originalNotification
     })

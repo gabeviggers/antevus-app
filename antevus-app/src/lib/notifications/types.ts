@@ -21,7 +21,7 @@ export interface NotificationOptions {
   correlationId?: string
   coalesce?: boolean
   desktopEnabled?: boolean
-  metadata?: Record<string, any>
+  metadata?: Record<string, unknown>
 }
 
 export interface Notification extends NotificationOptions {
