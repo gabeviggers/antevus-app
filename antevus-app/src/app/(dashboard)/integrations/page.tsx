@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useMemo, useEffect } from 'react'
-import { useAuth } from '@/contexts/auth-context'
+import { useSession } from '@/contexts/session-context'
 import { auditLogger } from '@/lib/audit/logger'
 import { IntegrationErrorBoundary } from '@/components/error-boundary'
 import {
@@ -25,11 +25,12 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ThemeToggle } from '@/components/theme-toggle'
+import { logger } from '@/lib/logger'
 
 const ITEMS_PER_PAGE = 9 // 3x3 grid
 
 export default function IntegrationsPage() {
-  const { user } = useAuth()
+  const { user } = useSession()
   const [integrations, setIntegrations] = useState<Integration[]>(mockIntegrations)
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedCategory, setSelectedCategory] = useState<IntegrationCategory | 'all'>('all')
@@ -37,6 +38,19 @@ export default function IntegrationsPage() {
   const [isConfigModalOpen, setIsConfigModalOpen] = useState(false)
   const [isSyncing, setIsSyncing] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
+
+  // Helper to convert UserContext to User format for audit logging
+  const getAuditUser = () => {
+    return user ? {
+      id: user.id,
+      email: user.email,
+      name: user.email, // Use email as name if not available
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      role: user.roles[0] as any, // Use first role
+      organization: 'Antevus Labs', // Default organization
+      createdAt: new Date().toISOString()
+    } : null
+  }
 
   // Filter integrations based on search and category
   const filteredIntegrations = useMemo(() => {
@@ -99,7 +113,7 @@ export default function IntegrationsPage() {
 
   const handleDisconnect = async (integration: Integration) => {
     // Log audit event
-    auditLogger.logEvent(user, 'integration.disconnect', {
+    auditLogger.logEvent(getAuditUser(), 'integration.disconnect', {
       resourceType: 'integration',
       resourceId: integration.id,
       success: true,
@@ -126,7 +140,7 @@ export default function IntegrationsPage() {
 
     try {
       // Log audit event
-      auditLogger.logEvent(user, 'integration.configure', {
+      auditLogger.logEvent(getAuditUser(), 'integration.configure', {
         resourceType: 'integration',
         resourceId: integration.id,
         success: true,
@@ -145,9 +159,9 @@ export default function IntegrationsPage() {
         setIntegrations(prev => prev.map(i => i.id === integration.id ? updated : i))
       }
     } catch (error) {
-      console.error('Error saving config:', error)
+      logger.error('Error saving config', error)
       // Log failure event
-      auditLogger.logEvent(user, 'integration.error', {
+      auditLogger.logEvent(getAuditUser(), 'integration.error', {
         resourceType: 'integration',
         resourceId: integration.id,
         success: false,
@@ -180,7 +194,7 @@ export default function IntegrationsPage() {
             await new Promise(resolve => setTimeout(resolve, Math.random() * 2000 + 1000))
 
             // Log successful sync
-            auditLogger.logEvent(user, 'integration.sync', {
+            auditLogger.logEvent(getAuditUser(), 'integration.sync', {
               resourceType: 'integration',
               resourceId: integration.id,
               success: true,
@@ -198,7 +212,7 @@ export default function IntegrationsPage() {
             }
           } catch (error) {
             // Handle individual sync errors
-            auditLogger.logEvent(user, 'integration.error', {
+            auditLogger.logEvent(getAuditUser(), 'integration.error', {
               resourceType: 'integration',
               resourceId: integration.id,
               success: false,
@@ -223,7 +237,7 @@ export default function IntegrationsPage() {
         return syncResult || integration
       }))
     } catch (error) {
-      console.error('Sync all failed:', error)
+      logger.error('Sync all failed', error)
 
       // Revert all to connected status on catastrophic failure
       setIntegrations(prev => prev.map(i =>

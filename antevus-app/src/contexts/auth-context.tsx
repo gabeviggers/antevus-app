@@ -18,35 +18,19 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<AuthSession | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
+  const [isLoading, setIsLoading] = useState(false) // Changed to false - no loading from storage
   const router = useRouter()
 
-  // Load session from localStorage on mount
-  useEffect(() => {
-    const storedSession = localStorage.getItem('antevus_session')
-    if (storedSession) {
-      try {
-        const parsed = JSON.parse(storedSession)
-        const isValidShape =
-          parsed &&
-          typeof parsed.expiresAt === 'string' &&
-          parsed.user &&
-          typeof parsed.user.id === 'string' &&
-          typeof parsed.user.email === 'string' &&
-          typeof parsed.user.role === 'string'
-        // Only accept well-formed, unexpired sessions
-        if (isValidShape && new Date(parsed.expiresAt) > new Date()) {
-          setSession(parsed)
-        } else {
-          localStorage.removeItem('antevus_session')
-        }
-      } catch (error) {
-        console.error('Failed to parse session:', error)
-        localStorage.removeItem('antevus_session')
-      }
-    }
-    setIsLoading(false)
-  }, [])
+  // SECURITY: Session stored in memory only - never in localStorage
+  // For production, use httpOnly cookies with secure flag
+  // localStorage is NOT HIPAA compliant for session data
+
+  // Note: Sessions do NOT persist across page refreshes by design
+  // This is more secure but requires re-authentication
+  // For better UX in production, implement:
+  // 1. httpOnly secure cookies for session token
+  // 2. Refresh token rotation
+  // 3. Silent token refresh before expiry
 
   const login = async (credentials: LoginCredentials) => {
     try {
@@ -71,9 +55,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { success: false, error: data.error }
       }
 
-      // Store session
+      // Store session in memory only (HIPAA compliant)
       setSession(data.session)
-      localStorage.setItem('antevus_session', JSON.stringify(data.session))
+      // NEVER store session in localStorage - security violation
 
       // Log successful login
       auditLogger.logEvent(data.session.user, 'user.login', {
@@ -83,7 +67,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       return { success: true }
     } catch (error) {
-      console.error('Login error:', error)
+      // Log error securely without exposing details
+      auditLogger.logEvent(null, 'user.failed_login', {
+        success: false,
+        errorMessage: 'Login exception',
+        metadata: { error: error instanceof Error ? error.message : 'Unknown error' }
+      })
       return { success: false, error: 'An error occurred during login' }
     }
   }
@@ -97,7 +86,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     setSession(null)
-    localStorage.removeItem('antevus_session')
+    // Session cleared from memory only
     router.push('/')
   }, [session?.user, router])
 

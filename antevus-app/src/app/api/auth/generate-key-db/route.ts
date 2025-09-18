@@ -5,6 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
+import { UserRole } from '@/lib/security/authorization'
 import { getServerSession } from '@/lib/auth/session'
 import { auditLogger } from '@/lib/audit/logger'
 import { validateCSRFToken } from '@/lib/security/csrf'
@@ -74,7 +75,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check user permissions (must be Admin or Scientist)
-    if (session.user.role !== 'admin' && session.user.role !== 'scientist') {
+    if (session.user.role !== UserRole.ADMIN && session.user.role !== UserRole.SCIENTIST) {
       await auditLogger.logEvent(
         session.user,
         'api.key.generate.failed',

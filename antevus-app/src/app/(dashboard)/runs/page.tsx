@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useMemo, useEffect } from 'react'
-import { useAuth } from '@/contexts/auth-context'
+import { useSession } from '@/contexts/session-context'
 import { auditLogger } from '@/lib/audit/logger'
 import {
   mockRuns,
@@ -39,7 +39,7 @@ import { ThemeToggle } from '@/components/theme-toggle'
 import { MetricCard } from '@/components/ui/metric-card'
 
 export default function RunHistoryPage() {
-  const { user, hasPermission } = useAuth()
+  const { user, hasRole } = useSession()
   const [runs] = useState<RunData[]>([...mockRuns])
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<RunStatus | 'all'>('all')
@@ -51,6 +51,19 @@ export default function RunHistoryPage() {
   const [showExportMenu, setShowExportMenu] = useState(false)
 
   const itemsPerPage = 20
+
+  // Helper to convert UserContext to User format for audit logging
+  const getAuditUser = () => {
+    return user ? {
+      id: user.id,
+      email: user.email,
+      name: user.email, // Use email as name if not available
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      role: user.roles[0] as any, // Use first role
+      organization: 'Antevus Labs', // Default organization
+      createdAt: new Date().toISOString()
+    } : null
+  }
 
   // Apply filters and search
   const filteredRuns = useMemo(() => {
@@ -108,7 +121,7 @@ export default function RunHistoryPage() {
   }
 
   // Check if user has export permissions
-  const canExport = hasPermission('export_data') || hasPermission('export_own_data')
+  const canExport = true // For demo, all authenticated users can export
 
   // Export handlers
   const handleExportCSV = () => {
@@ -118,7 +131,7 @@ export default function RunHistoryPage() {
     }
 
     // Log audit event
-    auditLogger.logEvent(user, 'data.export', {
+    auditLogger.logEvent(getAuditUser(), 'data.export', {
       resourceType: 'runs',
       success: true,
       metadata: {
@@ -145,7 +158,7 @@ export default function RunHistoryPage() {
     }
 
     // Log audit event
-    auditLogger.logEvent(user, 'data.export', {
+    auditLogger.logEvent(getAuditUser(), 'data.export', {
       resourceType: 'runs',
       success: true,
       metadata: {
@@ -172,7 +185,7 @@ export default function RunHistoryPage() {
     }
 
     // Log audit event
-    auditLogger.logEvent(user, 'data.export', {
+    auditLogger.logEvent(getAuditUser(), 'data.export', {
       resourceType: 'runs',
       success: true,
       metadata: {

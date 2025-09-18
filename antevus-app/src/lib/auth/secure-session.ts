@@ -7,6 +7,7 @@ import { SignJWT, jwtVerify } from 'jose'
 import { cookies } from 'next/headers'
 import { NextRequest, NextResponse } from 'next/server'
 import { User } from '@/lib/auth/types'
+import { UserRole } from '@/lib/security/authorization'
 import { logger } from '@/lib/logger'
 import { auditLogger } from '@/lib/audit/logger'
 import { prisma } from '@/lib/db/prisma'
@@ -170,7 +171,7 @@ export async function refreshSessionIfNeeded(
       id: session.userId,
       email: session.email,
       name: session.name,
-      role: session.role as 'admin' | 'scientist' | 'lab_manager' | 'viewer',
+      role: session.role as UserRole,
       organization: session.organization || 'Unknown',
       createdAt: new Date(session.createdAt).toISOString()
     }
@@ -288,7 +289,7 @@ export async function authenticateUser(
       id: dbUser.id,
       email: dbUser.email,
       name: dbUser.name,
-      role: dbUser.role as 'admin' | 'scientist' | 'lab_manager' | 'viewer',
+      role: dbUser.role as UserRole,
       organization: 'Unknown', // Add organization to database schema if needed
       createdAt: dbUser.createdAt.toISOString()
     }

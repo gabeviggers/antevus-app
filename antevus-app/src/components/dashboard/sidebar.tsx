@@ -1,8 +1,11 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
-import { useAuth } from '@/contexts/auth-context'
+import { usePathname, useRouter } from 'next/navigation'
+import { useSession } from '@/contexts/session-context'
+import { useChat } from '@/contexts/chat-context'
+import { useState } from 'react'
+import { cn } from '@/lib/utils'
 import {
   LayoutDashboard,
   Activity,
@@ -13,7 +16,15 @@ import {
   LogOut,
   ChevronLeft,
   X,
-  Menu
+  Menu,
+  Sparkles,
+  Search,
+  Plus,
+  MessageSquare,
+  MoreHorizontal,
+  Pencil,
+  Trash2,
+  Trash
 } from 'lucide-react'
 
 const navigation = [
@@ -22,6 +33,7 @@ const navigation = [
   { name: 'Run History', href: '/runs', icon: History },
   { name: 'Integrations', href: '/integrations', icon: Plug },
   { name: 'API Playground', href: '/api-playground', icon: Code2 },
+  { name: 'Lab Assistant', href: '/assistant', icon: Sparkles },
 ]
 
 interface SidebarProps {
@@ -33,14 +45,16 @@ interface SidebarProps {
 
 export function Sidebar({ sidebarOpen, setSidebarOpen, collapsed, setCollapsed }: SidebarProps) {
   const pathname = usePathname()
-  const { user, logout } = useAuth()
+  const router = useRouter()
+  const { logout } = useSession()
+  const { threads, activeThreadId, switchThread, deleteThread, renameThread, searchThreads, saveToLocalStorage } = useChat()
+  const [searchQuery, setSearchQuery] = useState('')
+  const [editingThreadId, setEditingThreadId] = useState<string | null>(null)
+  const [editingTitle, setEditingTitle] = useState('')
+  const [menuOpenThreadId, setMenuOpenThreadId] = useState<string | null>(null)
 
-  // Get user initials for avatar
-  const userInitials = user?.name
-    ?.split(' ')
-    .map(n => n[0])
-    .join('')
-    .toUpperCase() || 'U'
+  // Check if we're on the assistant page
+  const isAssistantPage = pathname === '/assistant'
 
   // Find the most specific active route
   // This prevents parent routes from being active when on child routes
@@ -142,6 +156,12 @@ export function Sidebar({ sidebarOpen, setSidebarOpen, collapsed, setCollapsed }
                 <li key={item.name}>
                   <Link
                     href={item.href}
+                    onClick={() => {
+                      // When clicking Lab Assistant, clear active thread for fresh chat
+                      if (item.href === '/assistant') {
+                        switchThread('')
+                      }
+                    }}
                     className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors group relative ${
                       isActive
                         ? 'bg-primary text-primary-foreground'
@@ -164,69 +184,198 @@ export function Sidebar({ sidebarOpen, setSidebarOpen, collapsed, setCollapsed }
               )
             })}
             </ul>
+
+            {/* Chat History Section - Always show when not collapsed */}
+            {!collapsed && (
+              <div className="mt-6 px-2">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Chat History</span>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => {
+                        // Clear active thread to show fresh chat interface
+                        // Thread will be created when user sends first message
+                        switchThread('')  // Clear active thread
+                        router.push('/assistant')
+                      }}
+                      className="p-1 rounded hover:bg-accent transition-colors"
+                      title="New chat"
+                    >
+                      <Plus className="h-4 w-4" />
+                    </button>
+                    {threads.length > 0 && (
+                      <button
+                        onClick={() => {
+                          if (confirm('Are you sure you want to delete all chat history? This cannot be undone.')) {
+                            // Delete all threads one by one using secure method
+                            threads.forEach(thread => deleteThread(thread.id))
+                            // Navigate to assistant page to show fresh interface
+                            router.push('/assistant')
+                          }
+                        }}
+                        className="p-1 rounded hover:bg-destructive/20 text-destructive/70 hover:text-destructive transition-colors"
+                        title="Clear all chats"
+                      >
+                        <Trash className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Search Bar */}
+                <div className="relative mb-3">
+                  <Search className="absolute left-2.5 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                  <input
+                    type="text"
+                    placeholder="Search chats..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full pl-8 pr-3 py-1.5 text-xs bg-muted/50 border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary/50 focus:border-primary transition-colors"
+                  />
+                </div>
+
+                {/* Chat Threads List */}
+                <div className="space-y-1 max-h-[calc(100vh-28rem)] overflow-y-auto">
+                  {(searchQuery ? searchThreads(searchQuery) : threads).map((thread) => (
+                    <div
+                      key={thread.id}
+                      className={`group relative flex items-center gap-2 px-2.5 py-2 rounded-lg transition-all cursor-pointer ${
+                        thread.id === activeThreadId
+                          ? 'bg-accent text-accent-foreground'
+                          : 'hover:bg-accent/50'
+                      }`}
+                    >
+                      <MessageSquare className={cn(
+                        "h-3.5 w-3.5 flex-shrink-0",
+                        thread.id === activeThreadId && isAssistantPage
+                          ? "text-foreground"
+                          : "text-muted-foreground"
+                      )} />
+
+                      {editingThreadId === thread.id ? (
+                        <input
+                          type="text"
+                          value={editingTitle}
+                          onChange={(e) => setEditingTitle(e.target.value)}
+                          onBlur={() => {
+                            renameThread(thread.id, editingTitle)
+                            setEditingThreadId(null)
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              renameThread(thread.id, editingTitle)
+                              setEditingThreadId(null)
+                            } else if (e.key === 'Escape') {
+                              setEditingThreadId(null)
+                            }
+                          }}
+                          className="flex-1 bg-transparent border-b border-primary text-xs focus:outline-none"
+                          autoFocus
+                        />
+                      ) : (
+                        <div
+                          onClick={() => {
+                            switchThread(thread.id)
+                            router.push('/assistant')
+                          }}
+                          className="flex-1 min-w-0"
+                        >
+                          <p className="text-xs truncate">{thread.title}</p>
+                          <p className="text-[10px] text-muted-foreground">
+                            {new Date(thread.updatedAt).toLocaleDateString()}
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Thread Actions Menu */}
+                      <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setMenuOpenThreadId(menuOpenThreadId === thread.id ? null : thread.id)
+                          }}
+                          className="p-1 rounded hover:bg-accent"
+                        >
+                          <MoreHorizontal className="h-3.5 w-3.5" />
+                        </button>
+
+                        {menuOpenThreadId === thread.id && (
+                          <div className="absolute right-0 top-8 bg-popover border border-border rounded-md shadow-lg z-50">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setEditingThreadId(thread.id)
+                                setEditingTitle(thread.title)
+                                setMenuOpenThreadId(null)
+                              }}
+                              className="flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-accent w-full text-left"
+                            >
+                              <Pencil className="h-3 w-3" />
+                              Rename
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                deleteThread(thread.id)
+                                setMenuOpenThreadId(null)
+                              }}
+                              className="flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-accent w-full text-left text-destructive"
+                            >
+                              <Trash2 className="h-3 w-3" />
+                              Delete
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+
+                  {threads.length === 0 && (
+                    <p className="text-xs text-muted-foreground text-center py-4">
+                      No chats yet. Start a new conversation!
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         </nav>
 
         {/* Bottom Section - Always visible */}
         <div className="mt-auto border-t border-border bg-card">
-          {/* Settings */}
-          <Link
-            href="/dashboard/settings"
-            className={`flex items-center gap-3 px-4 py-2.5 hover:bg-accent hover:text-accent-foreground transition-colors group relative ${
-              collapsed ? 'justify-center' : ''
-            }`}
-            title={collapsed ? 'Settings' : undefined}
-          >
-            <Settings className="h-4 w-4 flex-shrink-0" />
-            {!collapsed && <span className="text-sm font-medium">Settings</span>}
-            {collapsed && (
-              <div className="absolute left-full ml-2 px-2 py-1 bg-popover text-popover-foreground text-xs rounded-md opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all whitespace-nowrap z-50 shadow-lg">
-                Settings
-              </div>
-            )}
-          </Link>
-
-          {/* User Section */}
-          <div className={`px-3 py-2.5 border-t border-border ${collapsed ? 'flex flex-col items-center gap-2' : ''}`}>
-            {!collapsed ? (
-              <>
-                <div className="flex items-center gap-2 mb-2">
-                  <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                    <span className="text-xs font-medium">{userInitials}</span>
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium truncate">{user?.name || 'User'}</p>
-                    <p className="text-xs text-muted-foreground truncate">{user?.email || 'email@example.com'}</p>
-                    <p className="text-xs text-muted-foreground capitalize">{user?.role?.replace('_', ' ') || 'role'}</p>
-                  </div>
+            {/* Settings */}
+            <Link
+              href="/dashboard/settings"
+              className={`flex items-center gap-3 px-4 py-2 hover:bg-accent hover:text-accent-foreground transition-colors group relative block ${
+                collapsed ? 'justify-center' : ''
+              }`}
+              title={collapsed ? 'Settings' : undefined}
+            >
+              <Settings className="h-4 w-4 flex-shrink-0" />
+              {!collapsed && <span className="text-sm font-medium">Settings</span>}
+              {collapsed && (
+                <div className="absolute left-full ml-2 px-2 py-1 bg-popover text-popover-foreground text-xs rounded-md opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all whitespace-nowrap z-50 shadow-lg">
+                  Settings
                 </div>
-                <button
-                  onClick={logout}
-                  className="flex items-center gap-2 w-full px-2 py-1.5 rounded-md hover:bg-accent hover:text-accent-foreground transition-colors"
-                >
-                  <LogOut className="h-4 w-4 flex-shrink-0" />
-                  <span className="text-sm">Sign out</span>
-                </button>
-              </>
-            ) : (
-              <>
-                <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
-                  <span className="text-xs font-medium">{userInitials}</span>
-                </div>
-                <button
-                  onClick={logout}
-                  className="p-2 rounded-md hover:bg-accent hover:text-accent-foreground transition-colors group relative"
-                  title="Sign out"
-                >
-                  <LogOut className="h-4 w-4" />
-                  <div className="absolute left-full ml-2 px-2 py-1 bg-popover text-popover-foreground text-xs rounded-md opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all whitespace-nowrap z-50 shadow-lg">
-                    Sign out
-                  </div>
-                </button>
-              </>
-            )}
-          </div>
+              )}
+            </Link>
 
+            {/* Sign Out Button */}
+            <button
+              onClick={logout}
+              className={`flex items-center gap-3 px-4 py-2 hover:bg-accent hover:text-accent-foreground transition-colors group relative w-full ${
+                collapsed ? 'justify-center' : ''
+              }`}
+              title={collapsed ? 'Sign out' : undefined}
+            >
+              <LogOut className="h-4 w-4 flex-shrink-0" />
+              {!collapsed && <span className="text-sm font-medium">Sign out</span>}
+              {collapsed && (
+                <div className="absolute left-full ml-2 px-2 py-1 bg-popover text-popover-foreground text-xs rounded-md opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all whitespace-nowrap z-50 shadow-lg">
+                  Sign out
+                </div>
+              )}
+            </button>
         </div>
       </aside>
     </>

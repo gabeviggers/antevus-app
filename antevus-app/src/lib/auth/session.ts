@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server'
 import { SignJWT, jwtVerify } from 'jose'
 import { randomBytes } from 'crypto'
 import { User } from './types'
+import { logger } from '@/lib/logger'
 
 // Cache for JWT secret to avoid regenerating in development
 let cachedSecret: string | null = null
@@ -13,7 +14,7 @@ function getSecretKey(): Uint8Array {
       cachedSecret = process.env.JWT_SECRET
     } else if (process.env.NODE_ENV !== 'production') {
       // Only use random secret in development
-      console.warn('[Auth] Using random JWT secret for development. Set JWT_SECRET env var for production.')
+      logger.warn('[Auth] Using random JWT secret for development. Set JWT_SECRET env var for production.')
       cachedSecret = randomBytes(32).toString('hex')
     } else {
       // In production, require explicit secret
@@ -72,7 +73,7 @@ export async function getServerSession(request: NextRequest): Promise<SessionDat
 
     return session
   } catch (error) {
-    console.error('Session verification error:', error)
+    logger.error('Session verification error', error)
     return null
   }
 }

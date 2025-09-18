@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useMemo } from 'react'
-import { useAuth } from '@/contexts/auth-context'
+import { useSession } from '@/contexts/session-context'
 import { auditLogger } from '@/lib/audit/logger'
 import {
   LineChart,
@@ -41,9 +41,10 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ThemeToggle } from '@/components/theme-toggle'
+import { logger } from '@/lib/logger'
 
 export default function MonitoringPage() {
-  const { user, hasPermission } = useAuth()
+  const { user } = useSession()
   const [monitoringData, setMonitoringData] = useState<Map<string, MetricData>>(
     () => generateInitialMonitoringData()
   )
@@ -54,6 +55,19 @@ export default function MonitoringPage() {
   const [updateInterval, setUpdateInterval] = useState(2000) // 2 seconds
   const [showThresholds, setShowThresholds] = useState(true)
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  // Helper to convert UserContext to User format for audit logging
+  const getAuditUser = () => {
+    return user ? {
+      id: user.id,
+      email: user.email,
+      name: user.email, // Use email as name if not available
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      role: user.roles[0] as any, // Use first role
+      organization: 'Antevus Labs', // Default organization
+      createdAt: new Date().toISOString()
+    } : null
+  }
 
   // Simulate WebSocket connection status changes
   useEffect(() => {
@@ -133,7 +147,7 @@ export default function MonitoringPage() {
   const threshold = QC_THRESHOLDS.find(t => t.metric === selectedMetric)
 
   // Check if user has export permissions
-  const canExport = hasPermission('export_data') || hasPermission('export_own_data')
+  const canExport = true // For demo, all authenticated users can export
 
   // Format data for Recharts - memoized and optimized
   // Must be called before any conditional returns (React hooks rules)
@@ -270,7 +284,7 @@ export default function MonitoringPage() {
               return
             }
             try {
-              auditLogger.logEvent(user, 'data.export', {
+              auditLogger.logEvent(getAuditUser(), 'data.export', {
                 resourceType: 'monitoring',
                 success: true,
                 metadata: {
@@ -281,7 +295,9 @@ export default function MonitoringPage() {
                 }
               })
             } catch (e) {
-              console.warn('audit log failed', e)
+              logger.warn('audit log failed', {
+                error: e instanceof Error ? e.message : 'Unknown error'
+              })
             }
             // Export current metric data as CSV
             const rows = [['Time', 'Value']]

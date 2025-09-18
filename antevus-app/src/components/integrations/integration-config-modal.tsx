@@ -5,6 +5,8 @@ import { z } from 'zod'
 import { type Integration, type IntegrationConfig } from '@/lib/mock-data/integrations'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
+import { secureApiCall } from '@/lib/security/auth-manager'
+import { logger } from '@/lib/logger'
 import {
   X,
   Save,
@@ -108,18 +110,18 @@ export function IntegrationConfigModal({
       const hasCredentials = !!(fullConfig.apiKey || fullConfig.webhookUrl || fullConfig.secretKey)
 
       if (hasCredentials) {
-        const response = await fetch(`/api/integrations/${integration.id}/credentials`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${sessionStorage.getItem('token') || ''}`
-          },
-          body: JSON.stringify({
-            apiKey: fullConfig.apiKey,
-            webhookUrl: fullConfig.webhookUrl,
-            secretKey: fullConfig.secretKey
-          })
-        })
+        // Use secure API call that handles auth tokens in memory
+        const response = await secureApiCall(
+          `/api/integrations/${integration.id}/credentials`,
+          {
+            method: 'POST',
+            body: JSON.stringify({
+              apiKey: fullConfig.apiKey,
+              webhookUrl: fullConfig.webhookUrl,
+              secretKey: fullConfig.secretKey
+            })
+          }
+        )
 
         if (!response.ok) {
           throw new Error('Failed to store credentials securely')
@@ -148,7 +150,7 @@ export function IntegrationConfigModal({
 
       onClose()
     } catch (error) {
-      console.error('Error saving integration:', error)
+      logger.error('Error saving integration', error)
       setValidationErrors([{
         code: 'custom',
         message: 'Failed to save credentials securely. Please try again.',

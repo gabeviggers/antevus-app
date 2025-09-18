@@ -5,6 +5,7 @@
 
 import bcrypt from 'bcryptjs'
 import { User } from './types'
+import { UserRole } from '@/lib/security/authorization'
 import { logger } from '@/lib/logger'
 
 // Extended user type for storage
@@ -32,7 +33,7 @@ const mockUsersWithHashes: StoredUser[] = [
     // Hash of 'admin123' - generated with bcrypt.hashSync('admin123', 12)
     passwordHash: '$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewY5OGgflUPJFgyq',
     name: 'Admin User',
-    role: 'admin',
+    role: UserRole.ADMIN,
     organization: 'Antevus Labs',
     department: 'System Administration',
     createdAt: '2024-01-01T00:00:00Z',
@@ -45,7 +46,7 @@ const mockUsersWithHashes: StoredUser[] = [
     // Hash of 'scientist123'
     passwordHash: '$2a$12$hRxGwelVUrL7JqHTPMeKLOYz6TtxMQJqhN8/LPNsubr40RBVuBPJe',
     name: 'John Doe',
-    role: 'scientist',
+    role: UserRole.SCIENTIST,
     organization: 'Research Lab Inc',
     department: 'Genomics',
     createdAt: '2024-01-15T00:00:00Z',
@@ -58,7 +59,7 @@ const mockUsersWithHashes: StoredUser[] = [
     // Hash of 'manager123'
     passwordHash: '$2a$12$QKUDqmOWNbO8NPUyXpHoLOYz6TtxMQJqhN8/LC3mnHULUw9viJXke',
     name: 'Sarah Johnson',
-    role: 'lab_manager',
+    role: UserRole.LAB_MANAGER,
     organization: 'Research Lab Inc',
     department: 'Operations',
     createdAt: '2024-01-10T00:00:00Z',
@@ -71,7 +72,7 @@ const mockUsersWithHashes: StoredUser[] = [
     // Hash of 'viewer123'
     passwordHash: '$2a$12$Iw2d5sLLkkp7rRm0aHGxFOYz6TtxMQJqhN8/Lyx7E2KrQMWqhx.I6',
     name: 'Viewer Account',
-    role: 'viewer',
+    role: UserRole.VIEWER,
     organization: 'Research Lab Inc',
     department: 'Quality Assurance',
     createdAt: '2024-02-01T00:00:00Z',

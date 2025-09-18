@@ -1,4 +1,5 @@
 import { User } from '@/lib/auth/types'
+import { logger } from '@/lib/logger'
 
 export type AuditEventType =
   | 'user.login'
@@ -97,7 +98,7 @@ class AuditLogger {
     // In development only, log sanitized audit events
     if (process.env.NODE_ENV === 'development') {
       // Use structured logging without exposing sensitive data
-      console.log('[AUDIT]', {
+      logger.info('[AUDIT]', {
         type: eventType,
         userId: user?.id || 'anonymous',
         success: event.success,

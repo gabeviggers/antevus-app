@@ -2,6 +2,7 @@
  * Simple in-memory cache for API responses
  * In production, consider Redis or other distributed cache
  */
+import { logger } from '@/lib/logger'
 
 interface CacheEntry<T> {
   data: T
@@ -122,12 +123,12 @@ export async function cachedFetch<T>(
   if (!forceRefresh) {
     const cached = apiCache.get<T>(key)
     if (cached !== null) {
-      console.log(`[Cache Hit] ${key}`)
+      logger.debug(`[Cache Hit] ${key}`)
       return cached
     }
   }
 
-  console.log(`[Cache Miss] ${key}`)
+  logger.debug(`[Cache Miss] ${key}`)
 
   try {
     // Fetch fresh data
@@ -141,7 +142,7 @@ export async function cachedFetch<T>(
     // On error, return stale cache if available
     const staleData = apiCache.get<T>(key)
     if (staleData !== null) {
-      console.log(`[Cache Stale] Returning stale data for ${key} due to error`)
+      logger.warn(`[Cache Stale] Returning stale data for ${key} due to error`)
       return staleData
     }
 

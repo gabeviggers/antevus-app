@@ -92,6 +92,30 @@ const routeRateLimits: Map<string, RouteRateLimit> = new Map([
     blockDuration: 30 * 60 * 1000
   }],
 
+  // Chat routes - moderate limits for conversation storage
+  ['/api/chat/threads', {
+    key: 'route:/api/chat/threads',
+    limit: 60, // 60 requests per minute for thread operations
+    window: config.windows.rateLimit,
+    blockDuration: 5 * 60 * 1000 // 5 minutes
+  }],
+
+  // Future chat completion endpoint - stricter limits due to LLM costs
+  ['/api/chat/completion', {
+    key: 'route:/api/chat/completion',
+    limit: 30, // 30 requests per minute for LLM calls
+    window: config.windows.rateLimit,
+    blockDuration: 10 * 60 * 1000 // 10 minutes
+  }],
+
+  // Future streaming endpoint - very strict limits
+  ['/api/chat/stream', {
+    key: 'route:/api/chat/stream',
+    limit: 20, // 20 streaming sessions per minute
+    window: config.windows.rateLimit,
+    blockDuration: 15 * 60 * 1000 // 15 minutes
+  }],
+
   // API v1 routes - moderate limits
   ['/api/v1/instruments', {
     key: 'route:/api/v1/instruments',

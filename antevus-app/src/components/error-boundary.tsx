@@ -3,6 +3,7 @@
 import React, { Component, ReactNode } from 'react'
 import { AlertTriangle, RefreshCw, Home } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { logger } from '@/lib/logger'
 // import { auditLogger } from '@/lib/audit/logger' // Currently unused
 
 interface Props {
@@ -65,7 +66,7 @@ export class ErrorBoundary extends Component<Props, State> {
         })
       }).catch(() => {})
     } catch (loggingError) {
-      console.error('Failed to log error:', loggingError)
+      logger.error('Failed to log error', loggingError)
     }
     // Call custom error handler if provided
     if (this.props.onError) {
@@ -235,7 +236,7 @@ export function IntegrationErrorBoundary({ children }: { children: ReactNode }) 
     <ErrorBoundary
       level="section"
       onError={(error, errorInfo) => {
-        console.error('Integration error:', error, errorInfo)
+        logger.error('Integration error', error, { errorInfo })
       }}
       fallback={
         <div className="p-6 bg-card border border-border rounded-lg">
@@ -270,7 +271,7 @@ export function DashboardErrorBoundary({ children }: { children: ReactNode }) {
         // Send critical errors to monitoring service
         if (process.env.NODE_ENV === 'production') {
           // In production, send to Sentry or similar
-          console.error('Dashboard critical error:', error)
+          logger.error('Dashboard critical error', error)
         }
       }}
     >
