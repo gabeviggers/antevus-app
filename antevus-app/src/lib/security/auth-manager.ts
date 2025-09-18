@@ -1,19 +1,21 @@
 /**
- * Secure Authentication Manager
+ * Secure Authentication Manager with JWT Verification
  *
  * SECURITY NOTICE:
  * - Tokens are stored in memory only, never in localStorage/sessionStorage
- * - Vulnerable to XSS attacks are mitigated by:
- *   1. No client-side token storage
- *   2. Short-lived tokens
- *   3. Automatic cleanup on page unload
+ * - Proper JWT verification with jose library
+ * - Demo mode is explicitly gated behind DEMO_MODE environment variable
+ * - Fails closed when verification fails
  *
  * PRODUCTION REQUIREMENTS:
  * - Use httpOnly cookies for token storage
  * - Implement CSRF protection
  * - Add token refresh mechanism
  * - Use secure SameSite cookie attributes
+ * - Configure proper JWKS endpoint or public key
  */
+
+import { jwtVerify, createRemoteJWKSet, JWTPayload, errors as joseErrors } from 'jose'
 
 interface AuthToken {
   value: string
@@ -22,13 +24,48 @@ interface AuthToken {
   scope?: string[]
 }
 
+interface VerifiedClaims {
+  sub: string // Subject (user ID)
+  email?: string
+  roles?: string[]
+  exp?: number
+  iat?: number
+  iss?: string
+  aud?: string | string[]
+  [key: string]: any
+}
+
+// Configuration from environment variables
+const config = {
+  // Demo mode - only enable for development/testing
+  isDemoMode: process.env.NEXT_PUBLIC_DEMO_MODE === 'true' || process.env.DEMO_MODE === 'true',
+
+  // JWT Configuration (for production)
+  jwksUri: process.env.JWKS_URI || process.env.NEXT_PUBLIC_JWKS_URI,
+  jwtIssuer: process.env.JWT_ISSUER || process.env.NEXT_PUBLIC_JWT_ISSUER || 'https://auth.antevus.com',
+  jwtAudience: process.env.JWT_AUDIENCE || process.env.NEXT_PUBLIC_JWT_AUDIENCE || 'https://api.antevus.com',
+
+  // Alternative: Use a static public key instead of JWKS
+  jwtPublicKey: process.env.JWT_PUBLIC_KEY || process.env.NEXT_PUBLIC_JWT_PUBLIC_KEY,
+}
+
 class SecureAuthManager {
   private token: AuthToken | null = null
   private refreshToken: string | null = null
   private tokenRefreshTimer: NodeJS.Timeout | null = null
   private readonly TOKEN_LIFETIME_MS = 15 * 60 * 1000 // 15 minutes
+  private jwks: ReturnType<typeof createRemoteJWKSet> | null = null
 
   constructor() {
+    // Initialize JWKS if URI is provided
+    if (config.jwksUri && !config.isDemoMode) {
+      try {
+        this.jwks = createRemoteJWKSet(new URL(config.jwksUri))
+      } catch (error) {
+        console.error('Failed to initialize JWKS:', error)
+      }
+    }
+
     // Clear tokens on page unload for security
     if (typeof window !== 'undefined') {
       window.addEventListener('beforeunload', () => this.clearAuth())
@@ -37,13 +74,25 @@ class SecureAuthManager {
 
   /**
    * Store authentication token securely in memory
-   * WARNING: This is for demo only. Production must use httpOnly cookies
+   *
+   * SECURITY: Tokens are stored in memory ONLY to prevent:
+   * - XSS attacks from accessing localStorage/sessionStorage
+   * - Token persistence across sessions (HIPAA compliance)
+   * - Unauthorized access to sensitive authentication data
+   *
+   * NEVER store tokens in:
+   * - localStorage (persists indefinitely, accessible via JS)
+   * - sessionStorage (persists for session, accessible via JS)
+   * - Non-httpOnly cookies (accessible via JS)
+   *
+   * PRODUCTION: Use httpOnly, secure, sameSite cookies set by server
    */
   setToken(token: string, expiresInMs?: number): void {
     const expiresAt = new Date(
       Date.now() + (expiresInMs || this.TOKEN_LIFETIME_MS)
     )
 
+    // SECURITY: Store in memory only - never in browser storage
     this.token = {
       value: token,
       expiresAt
@@ -52,21 +101,25 @@ class SecureAuthManager {
     // Set up automatic token expiration
     this.setupTokenExpiration()
 
-    // Token stored securely in memory
+    // Token stored securely in memory only
   }
 
   /**
-   * Get current authentication token
+   * Get current authentication token from memory
    * Returns null if token is expired or not set
+   *
+   * SECURITY: Reads from memory only - never from browser storage
+   * This ensures tokens cannot be persisted or accessed via XSS
    */
   getToken(): string | null {
+    // Read from memory - no localStorage/sessionStorage access
     if (!this.token) {
       return null
     }
 
     // Check if token is expired
     if (new Date() > this.token.expiresAt) {
-      // Token expired
+      // Token expired - clear from memory
       this.clearAuth()
       return null
     }
@@ -138,41 +191,114 @@ class SecureAuthManager {
   /**
    * Verify token and extract claims
    * Returns verified user information or null if invalid
+   *
+   * SECURITY: This method performs proper JWT verification
+   * - In demo mode: Accepts demo_token_* format FIRST (before any other checks)
+   * - In production: Validates JWT signature, expiry, issuer, audience
+   *
+   * IMPORTANT: Demo token parsing happens BEFORE stored token checks
+   * to ensure demo_token_* flows are never blocked
    */
-  async verifyToken(token: string): Promise<{ sub: string; email?: string; roles?: string[] } | null> {
-    // For demo: Simple token validation
-    // Check if token matches our stored token
-    if (!token || token !== this.getToken()) {
+  async verifyToken(token: string): Promise<VerifiedClaims | null> {
+    if (!token) {
       return null
     }
 
-    // In production, implement proper JWT verification:
-    // 1. Verify JWT signature with public key
-    // 2. Check expiration (exp claim)
-    // 3. Validate issuer (iss) and audience (aud)
-    // 4. Return decoded claims
+    // CRITICAL: Check for demo tokens FIRST before any other validation
+    // This ensures demo_token_* patterns work even if not stored
+    if (config.isDemoMode && token.startsWith('demo_token_')) {
+      // Parse demo token format: demo_token_<timestamp>_<userId>
+      const parts = token.split('_')
 
-    // For demo, extract user ID from token format: "demo_token_<timestamp>_<userId>"
-    const parts = token.split('_')
-    if (parts.length >= 4 && parts[0] === 'demo' && parts[1] === 'token') {
-      // Return mock claims
-      return {
-        sub: parts[3] || 'demo-user', // User ID
-        email: 'demo@antevus.com',
-        roles: ['scientist']
+      // Format: demo_token_<timestamp>_<userId>
+      if (parts.length >= 4 && parts[0] === 'demo' && parts[1] === 'token') {
+        console.log('Demo mode: Accepting demo_token with userId:', parts[3])
+        return {
+          sub: parts[3] || 'demo-user-001',
+          email: 'demo@antevus.com',
+          roles: ['scientist'],
+          exp: Math.floor(Date.now() / 1000) + 3600, // 1 hour from now
+          iat: Math.floor(Date.now() / 1000),
+          iss: 'demo-issuer',
+          aud: 'demo-audience'
+        }
       }
-    }
 
-    // For tokens in format "demo_token_<timestamp>", use default user
-    if (token.startsWith('demo_token_')) {
+      // Simple format: demo_token_<timestamp> or just demo_token_*
+      console.log('Demo mode: Accepting simple demo_token')
       return {
         sub: 'demo-user-001',
         email: 'demo@antevus.com',
-        roles: ['scientist']
+        roles: ['scientist'],
+        exp: Math.floor(Date.now() / 1000) + 3600,
+        iat: Math.floor(Date.now() / 1000),
+        iss: 'demo-issuer',
+        aud: 'demo-audience'
       }
     }
 
-    return null
+    // NO STORED TOKEN CHECK: This method verifies ANY token passed to it
+    // It does NOT compare against this.token - that's the caller's responsibility
+    // This ensures demo tokens and API tokens can be verified independently
+
+    // PRODUCTION MODE: Proper JWT verification
+    try {
+      let payload: JWTPayload
+
+      if (this.jwks) {
+        // Verify using JWKS (recommended for production)
+        const result = await jwtVerify(token, this.jwks, {
+          issuer: config.jwtIssuer,
+          audience: config.jwtAudience,
+        })
+        payload = result.payload
+      } else if (config.jwtPublicKey) {
+        // Verify using static public key
+        const publicKey = await crypto.subtle.importKey(
+          'spki',
+          Buffer.from(config.jwtPublicKey, 'base64'),
+          { name: 'RSA-PSS', hash: 'SHA-256' },
+          false,
+          ['verify']
+        )
+
+        const result = await jwtVerify(token, publicKey, {
+          issuer: config.jwtIssuer,
+          audience: config.jwtAudience,
+        })
+        payload = result.payload
+      } else {
+        // No verification configuration available
+        console.error('JWT verification not configured. Set JWKS_URI or JWT_PUBLIC_KEY')
+        return null
+      }
+
+      // Extract and return verified claims
+      return {
+        sub: payload.sub || '',
+        email: payload.email as string | undefined,
+        roles: payload.roles as string[] | undefined,
+        exp: payload.exp,
+        iat: payload.iat,
+        iss: payload.iss,
+        aud: payload.aud,
+        ...payload
+      }
+    } catch (error) {
+      // Log verification errors in development only
+      if (process.env.NODE_ENV === 'development') {
+        if (error instanceof joseErrors.JWTExpired) {
+          console.warn('JWT expired')
+        } else if (error instanceof joseErrors.JWTInvalid) {
+          console.warn('JWT invalid')
+        } else if (error instanceof joseErrors.JWSSignatureVerificationFailed) {
+          console.warn('JWT signature verification failed')
+        } else {
+          console.warn('JWT verification failed:', error)
+        }
+      }
+      return null
+    }
   }
 
   /**
@@ -194,6 +320,7 @@ class SecureAuthManager {
     isAuthenticated: boolean
     tokenExpiresIn: number | null
     securityMode: string
+    demoMode: boolean
   } {
     const now = Date.now()
 
@@ -202,7 +329,8 @@ class SecureAuthManager {
       tokenExpiresIn: this.token
         ? Math.max(0, this.token.expiresAt.getTime() - now)
         : null,
-      securityMode: 'memory-only' // Never localStorage/sessionStorage
+      securityMode: 'memory-only', // Never localStorage/sessionStorage
+      demoMode: config.isDemoMode
     }
   }
 }

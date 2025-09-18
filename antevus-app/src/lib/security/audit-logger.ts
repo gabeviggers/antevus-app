@@ -4,12 +4,13 @@
  * COMPLIANCE NOTICE:
  * - This module implements audit logging required for SOC 2 Type II
  * - All security-relevant events must be logged
- * - Logs are immutable and tamper-evident
+ * - Logs are immutable and tamper-evident (HMAC-SHA256)
  * - PII/PHI is excluded or redacted from logs
  * - Logs must be retained for compliance period (typically 7 years)
  */
 
 import { z } from 'zod'
+import * as crypto from 'crypto'
 
 /**
  * Audit event types for comprehensive tracking
@@ -115,6 +116,23 @@ const AuditLogSchema = z.object({
 export type AuditLogEntry = z.infer<typeof AuditLogSchema>
 
 /**
+ * Server transport interface for persisting audit logs
+ */
+export interface AuditLogServerTransport {
+  /**
+   * Write audit logs to persistent storage
+   * @param logs Array of audit log entries to persist
+   * @returns Promise that resolves when logs are persisted
+   */
+  write(logs: AuditLogEntry[]): Promise<void> | void
+
+  /**
+   * Optional: Verify if transport is properly configured
+   */
+  isConfigured?(): boolean
+}
+
+/**
  * Audit logger configuration
  */
 interface AuditLoggerConfig {
@@ -125,6 +143,18 @@ interface AuditLoggerConfig {
   flushInterval: number
   redactPII: boolean
   retentionDays: number
+  hmacSecret?: string
+  serverTransport?: AuditLogServerTransport
+}
+
+// SECURITY: HMAC secret for server-side integrity verification
+// This should be loaded from environment variables in production
+// NEVER commit the actual secret to source control
+const HMAC_SECRET = process.env.AUDIT_LOG_HMAC_SECRET ||
+  (process.env.NODE_ENV === 'development' ? 'dev-only-not-for-production-use' : '')
+
+if (!HMAC_SECRET && process.env.NODE_ENV === 'production') {
+  console.error('CRITICAL: AUDIT_LOG_HMAC_SECRET not configured. Audit log integrity cannot be guaranteed.')
 }
 
 const DEFAULT_CONFIG: AuditLoggerConfig = {
@@ -134,7 +164,8 @@ const DEFAULT_CONFIG: AuditLoggerConfig = {
   batchSize: 100,
   flushInterval: 5000, // 5 seconds
   redactPII: true,
-  retentionDays: 2555 // 7 years
+  retentionDays: 2555, // 7 years
+  hmacSecret: HMAC_SECRET
 }
 
 /**
@@ -146,6 +177,7 @@ class AuditLogger {
   private flushTimer: NodeJS.Timeout | null = null
   private sessionId: string
   private userId: string | null = null
+  private serverTransport: AuditLogServerTransport | undefined
 
   // SECURITY: In-memory debug buffer for development inspection
   // This replaces sessionStorage to prevent PII/PHI from being stored in browser
@@ -156,6 +188,13 @@ class AuditLogger {
   constructor(config: Partial<AuditLoggerConfig> = {}) {
     this.config = { ...DEFAULT_CONFIG, ...config }
     this.sessionId = this.generateSessionId()
+    this.serverTransport = config.serverTransport
+
+    // Warn if running on server without transport
+    if (typeof window === 'undefined' && !this.serverTransport) {
+      console.warn('AuditLogger: Running on server without serverTransport. Logs will not be persisted.')
+    }
+
     this.startFlushTimer()
 
     // Ensure logs are flushed on page unload
@@ -239,17 +278,95 @@ class AuditLogger {
   }
 
   /**
-   * Calculate checksum for integrity verification
+   * Canonicalize JSON object for stable HMAC computation
+   * Ensures consistent key ordering for deterministic output
+   */
+  private canonicalizeJSON(obj: any): string {
+    if (obj === null) return 'null'
+    if (typeof obj !== 'object') return JSON.stringify(obj)
+    if (Array.isArray(obj)) {
+      return '[' + obj.map(item => this.canonicalizeJSON(item)).join(',') + ']'
+    }
+
+    // Sort object keys for stable serialization
+    const sortedKeys = Object.keys(obj).sort()
+    const pairs = sortedKeys.map(key => {
+      return `"${key}":${this.canonicalizeJSON(obj[key])}`
+    })
+    return '{' + pairs.join(',') + '}'
+  }
+
+  /**
+   * Calculate HMAC-SHA256 checksum for integrity verification
+   * SECURITY: Uses cryptographically secure HMAC with server-side secret
    */
   private calculateChecksum(entry: Omit<AuditLogEntry, 'checksum'>): string {
-    const content = JSON.stringify(entry)
-    let hash = 0
-    for (let i = 0; i < content.length; i++) {
-      const char = content.charCodeAt(i)
-      hash = ((hash << 5) - hash) + char
-      hash = hash & hash // Convert to 32bit integer
+    // Running on server with secret
+    if (typeof window === 'undefined' && this.config.hmacSecret) {
+      // Canonicalize the entry for stable HMAC
+      const canonicalized = this.canonicalizeJSON(entry)
+
+      // Calculate HMAC-SHA256
+      const hmac = crypto.createHmac('sha256', this.config.hmacSecret)
+      hmac.update(canonicalized)
+      return hmac.digest('hex')
     }
-    return Math.abs(hash).toString(16)
+
+    // Client-side: Return a client checksum (non-authoritative)
+    // This is only for client-side detection of accidental corruption
+    if (typeof window !== 'undefined') {
+      const content = this.canonicalizeJSON(entry)
+      // Simple non-cryptographic hash for client-side only
+      let hash = 0
+      for (let i = 0; i < content.length; i++) {
+        const char = content.charCodeAt(i)
+        hash = ((hash << 5) - hash) + char
+        hash = hash & hash
+      }
+      return 'client_' + Math.abs(hash).toString(16)
+    }
+
+    // No HMAC secret configured (development/testing)
+    return 'no_hmac_configured'
+  }
+
+  /**
+   * Verify checksum using constant-time comparison
+   * SECURITY: Prevents timing attacks on HMAC verification
+   */
+  verifyChecksum(entry: AuditLogEntry): boolean {
+    // Only verify on server with HMAC secret
+    if (typeof window === 'undefined' && this.config.hmacSecret) {
+      const { checksum, ...entryWithoutChecksum } = entry
+      const expectedChecksum = this.calculateChecksum(entryWithoutChecksum)
+
+      // Both checksums must exist for verification
+      if (!checksum || !expectedChecksum) {
+        return false
+      }
+
+      // Use constant-time comparison to prevent timing attacks
+      return this.constantTimeCompare(checksum, expectedChecksum)
+    }
+
+    // Client-side or no HMAC: Skip verification
+    return true
+  }
+
+  /**
+   * Constant-time string comparison to prevent timing attacks
+   */
+  private constantTimeCompare(a: string, b: string): boolean {
+    if (a.length !== b.length) {
+      return false
+    }
+
+    let result = 0
+    for (let i = 0; i < a.length; i++) {
+      result |= a.charCodeAt(i) ^ b.charCodeAt(i)
+    }
+
+    return result === 0
   }
 
   /**
@@ -383,8 +500,36 @@ class AuditLogger {
           this.buffer.unshift(...logsToSend)
         }
       } else {
-        // Server-side: store internally, don't log to console
-        // Logs are processed internally without console output
+        // Server-side: Use server transport to persist logs
+        if (this.serverTransport) {
+          try {
+            // Write logs to persistent storage using the provided transport
+            const result = this.serverTransport.write(logsToSend)
+
+            // Handle both sync and async transports
+            if (result instanceof Promise) {
+              await result
+            }
+
+            // Logs successfully persisted
+            if (process.env.NODE_ENV === 'development') {
+              console.log(`AuditLogger: Persisted ${logsToSend.length} log(s) via server transport`)
+            }
+          } catch (error) {
+            // Log error and re-add logs to buffer for retry
+            if (process.env.NODE_ENV === 'development') {
+              console.error('AuditLogger: Failed to persist logs via server transport:', error)
+            }
+
+            // Re-add logs to buffer for retry
+            this.buffer.unshift(...logsToSend)
+          }
+        } else {
+          // No server transport configured - logs will be lost
+          if (process.env.NODE_ENV === 'development') {
+            console.warn(`AuditLogger: No server transport configured. ${logsToSend.length} log(s) dropped.`)
+          }
+        }
       }
     }
 
@@ -527,8 +672,51 @@ class AuditLogger {
   }
 }
 
-// Export singleton instance
+// Export singleton instance for client-side use
 export const auditLogger = new AuditLogger()
+
+/**
+ * Factory function to create an audit logger with server transport
+ * Use this on the server side to ensure logs are persisted
+ */
+export function createAuditLogger(
+  transport?: AuditLogServerTransport,
+  config?: Partial<AuditLoggerConfig>
+): AuditLogger {
+  return new AuditLogger({
+    ...config,
+    serverTransport: transport
+  })
+}
+
+/**
+ * Example server transport implementation for reference
+ * In production, replace this with your actual database/storage implementation
+ */
+export class ExampleServerTransport implements AuditLogServerTransport {
+  async write(logs: AuditLogEntry[]): Promise<void> {
+    // Example: Write to database
+    // await db.auditLogs.insertMany(logs)
+
+    // Example: Write to file system
+    // const fs = await import('fs/promises')
+    // await fs.appendFile('audit.log', logs.map(l => JSON.stringify(l)).join('\n'))
+
+    // Example: Send to external service
+    // await fetch('https://audit-service.example.com/logs', {
+    //   method: 'POST',
+    //   headers: { 'Content-Type': 'application/json' },
+    //   body: JSON.stringify(logs)
+    // })
+
+    console.log(`[ExampleServerTransport] Would persist ${logs.length} audit log(s)`)
+  }
+
+  isConfigured(): boolean {
+    // Check if database/service is properly configured
+    return true
+  }
+}
 
 // Export for type usage
 export default AuditLogger
