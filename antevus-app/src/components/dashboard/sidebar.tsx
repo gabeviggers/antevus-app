@@ -4,8 +4,9 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useSession } from '@/contexts/session-context'
 import { useChat } from '@/contexts/chat-context'
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { cn } from '@/lib/utils'
+import { UserRole } from '@/lib/security/authorization'
 import {
   LayoutDashboard,
   Activity,
@@ -27,14 +28,17 @@ import {
   Trash
 } from 'lucide-react'
 
-const navigation = [
-  { name: 'Lab Assistant', href: '/assistant', icon: Sparkles },
+// Base navigation items available to all users
+const baseNavigation = [
   { name: 'Instruments', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Run History', href: '/runs', icon: History },
   { name: 'Monitoring', href: '/monitoring', icon: Activity },
   { name: 'Integrations', href: '/integrations', icon: Plug },
   { name: 'API Playground', href: '/api-playground', icon: Code2 },
 ]
+
+// Assistant navigation item - only for users with permission
+const assistantNavItem = { name: 'Ask Antevus', href: '/assistant', icon: Sparkles }
 
 interface SidebarProps {
   sidebarOpen: boolean
@@ -46,12 +50,29 @@ interface SidebarProps {
 export function Sidebar({ sidebarOpen, setSidebarOpen, collapsed, setCollapsed }: SidebarProps) {
   const pathname = usePathname()
   const router = useRouter()
-  const { logout } = useSession()
+  const { logout, user } = useSession()
   const { threads, activeThreadId, switchThread, deleteThread, renameThread, searchThreads } = useChat()
   const [searchQuery, setSearchQuery] = useState('')
   const [editingThreadId, setEditingThreadId] = useState<string | null>(null)
   const [editingTitle, setEditingTitle] = useState('')
   const [menuOpenThreadId, setMenuOpenThreadId] = useState<string | null>(null)
+
+  // Determine if user has access to Ask Antevus (everyone except VIEWER and GUEST)
+  const hasAssistantAccess = useMemo(() => {
+    if (!user?.roles) return false
+    const restrictedRoles = [UserRole.VIEWER, UserRole.GUEST]
+    return !user.roles.some(role => restrictedRoles.includes(role))
+  }, [user?.roles])
+
+  // Build navigation based on user permissions
+  const navigation = useMemo(() => {
+    if (hasAssistantAccess) {
+      // Put Ask Antevus at the top for users with access
+      return [assistantNavItem, ...baseNavigation]
+    }
+    // Just show base navigation for viewers/guests
+    return baseNavigation
+  }, [hasAssistantAccess])
 
   // Check if we're on the assistant page
   const isAssistantPage = pathname === '/assistant'
@@ -185,8 +206,8 @@ export function Sidebar({ sidebarOpen, setSidebarOpen, collapsed, setCollapsed }
             })}
             </ul>
 
-            {/* Chat History Section - Always show when not collapsed */}
-            {!collapsed && (
+            {/* Chat History Section - Only show for users with assistant access */}
+            {!collapsed && hasAssistantAccess && (
               <div className="mt-6 px-2">
                 <div className="flex items-center justify-between mb-3">
                   <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Chat History</span>
