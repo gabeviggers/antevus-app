@@ -401,8 +401,17 @@ class AuditLogger {
 
       // Make debug buffer accessible via console for dev inspection
       // Usage: window.antevusDebugLogs.getAuditLogs()
-      if (!(window as any).antevusDebugLogs) {
-        (window as any).antevusDebugLogs = {
+      interface WindowWithDebugLogs extends Window {
+        antevusDebugLogs?: {
+          getAuditLogs: () => AuditLogEntry[]
+          clearAuditLogs: () => void
+          getAuditLogCount: () => number
+        }
+      }
+
+      const windowWithDebug = window as WindowWithDebugLogs
+      if (!windowWithDebug.antevusDebugLogs) {
+        windowWithDebug.antevusDebugLogs = {
           getAuditLogs: () => [...AuditLogger.debugBuffer], // Return copy to prevent modification
           clearAuditLogs: () => { AuditLogger.debugBuffer = [] },
           getAuditLogCount: () => AuditLogger.debugBuffer.length
