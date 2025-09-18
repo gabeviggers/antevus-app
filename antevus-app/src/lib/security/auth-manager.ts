@@ -63,7 +63,9 @@ class SecureAuthManager {
       try {
         this.jwks = createRemoteJWKSet(new URL(config.jwksUri))
       } catch (error) {
-        logger.error('Failed to initialize JWKS', error)
+        logger.error('Failed to initialize JWKS', {
+          error: error instanceof Error ? error.message : 'Unknown error'
+        })
       }
     }
 
@@ -295,7 +297,9 @@ class SecureAuthManager {
         } else if (error instanceof joseErrors.JWSSignatureVerificationFailed) {
           logger.warn('JWT signature verification failed')
         } else {
-          logger.warn('JWT verification failed', error)
+          logger.warn('JWT verification failed', {
+            error: error instanceof Error ? error.message : 'Unknown error'
+          })
         }
       }
       return null
