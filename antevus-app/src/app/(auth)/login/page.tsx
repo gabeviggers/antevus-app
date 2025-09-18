@@ -9,8 +9,7 @@ import { ThemeToggle } from '@/components/theme-toggle'
 import { useSession } from '@/contexts/session-context'
 import { logger } from '@/lib/logger'
 
-// SECURITY: Demo mode must be explicitly enabled
-const isDemoMode = process.env.NEXT_PUBLIC_DEMO_MODE === 'true'
+// SECURITY: All authentication handled by backend API
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -30,7 +29,7 @@ export default function LoginPage() {
       await login(email, password)
       router.push('/dashboard')
     } catch (err) {
-      setError(isDemoMode ? 'Invalid credentials. Please try again.' : 'Authentication failed. Please contact your administrator.')
+      setError('Invalid credentials. Please try again.')
       setIsLoading(false)
     }
   }

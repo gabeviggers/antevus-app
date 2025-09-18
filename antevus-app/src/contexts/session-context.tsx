@@ -30,73 +30,8 @@ interface SessionContextType {
 
 const SessionContext = createContext<SessionContextType | undefined>(undefined)
 
-// SECURITY: Demo mode must be explicitly enabled via environment variable
-// This prevents accidental exposure of demo credentials in production
-const isDemoMode = process.env.NEXT_PUBLIC_DEMO_MODE === 'true'
-
-// Mock users only available when demo mode is explicitly enabled
-const MOCK_USERS: Record<string, { password: string; user: UserContext }> = isDemoMode ? {
-  'admin@antevus.com': {
-    password: 'demo123',
-    user: {
-      id: 'user_admin_001',
-      email: 'admin@antevus.com',
-      roles: [UserRole.ADMIN],
-      attributes: {
-        name: 'Admin User',
-        department: 'IT'
-      }
-    }
-  },
-  'scientist@antevus.com': {
-    password: 'demo123',
-    user: {
-      id: 'user_scientist_001',
-      email: 'scientist@antevus.com',
-      roles: [UserRole.SCIENTIST],
-      attributes: {
-        name: 'Dr. Jane Smith',
-        department: 'Research'
-      }
-    }
-  },
-  'director@antevus.com': {
-    password: 'demo123',
-    user: {
-      id: 'user_director_001',
-      email: 'director@antevus.com',
-      roles: [UserRole.LAB_DIRECTOR],
-      attributes: {
-        name: 'Dr. John Director',
-        department: 'Lab Management'
-      }
-    }
-  },
-  'technician@antevus.com': {
-    password: 'demo123',
-    user: {
-      id: 'user_tech_001',
-      email: 'technician@antevus.com',
-      roles: [UserRole.TECHNICIAN],
-      attributes: {
-        name: 'Bob Tech',
-        department: 'Operations'
-      }
-    }
-  },
-  'guest@antevus.com': {
-    password: 'demo123',
-    user: {
-      id: 'user_guest_001',
-      email: 'guest@antevus.com',
-      roles: [UserRole.GUEST],
-      attributes: {
-        name: 'Guest User',
-        department: 'External'
-      }
-    }
-  }
-} : {} // Empty object when demo mode is disabled
+// SECURITY: All authentication goes through the backend API
+// No client-side credentials or mock users for production security
 
 export function SessionProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserContext | null>(null)
@@ -133,50 +68,47 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const login = async (email: string, password: string) => {
     setIsLoading(true)
     try {
-      // SECURITY: Fail closed when demo mode is disabled
-      if (!isDemoMode) {
-        auditLogger.log({
-          eventType: AuditEventType.AUTH_LOGIN_FAILURE,
-          action: 'Demo login attempted when demo mode disabled',
-          metadata: {
-            email,
-            reason: 'Demo mode is not enabled'
-          },
-          severity: AuditSeverity.WARNING,
-          outcome: 'FAILURE'
-        })
-        throw new Error('Demo mode is not enabled. Please use production authentication.')
-      }
+      // Call the real API endpoint
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email, password }),
+        credentials: 'same-origin'
+      })
 
-      // In production, this would be an API call
-      const mockUser = MOCK_USERS[email.toLowerCase()]
+      const data = await response.json()
 
-      if (!mockUser || mockUser.password !== password) {
+      if (!data.success) {
         auditLogger.log({
           eventType: AuditEventType.AUTH_LOGIN_FAILURE,
           action: 'Login failed',
           metadata: {
             email,
-            reason: 'Invalid credentials'
+            reason: data.error || 'Invalid credentials'
           },
           severity: AuditSeverity.WARNING,
           outcome: 'FAILURE'
         })
-        throw new Error('Invalid credentials')
+        throw new Error(data.error || 'Invalid credentials')
       }
 
-      // Set auth token (demo token)
-      authManager.setToken(`demo_token_${Date.now()}`, 30 * 60 * 1000) // 30 minutes
+      // Set auth token from API response
+      authManager.setToken(data.session.token, 7 * 24 * 60 * 60 * 1000) // 7 days
 
-      // Set user context
-      const userContext = {
-        ...mockUser.user,
+      // Map API user to UserContext format
+      const userContext: UserContext = {
+        id: data.session.user.id,
+        email: data.session.user.email,
+        roles: [data.session.user.role.toUpperCase() as UserRole], // Convert role to UserRole enum
+        attributes: {
+          name: data.session.user.name,
+          department: data.session.user.department || 'Unknown'
+        },
         sessionId: `session_${Date.now()}`
       }
       setUser(userContext)
-
-      // SECURITY: Session stored in memory only - never in browser storage
-      // This is required for HIPAA compliance
 
       // Set user ID for audit logging
       auditLogger.setUserId(userContext.id)
