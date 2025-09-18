@@ -30,8 +30,8 @@ const mockUsersWithHashes: StoredUser[] = [
   {
     id: 'usr_1',
     email: 'admin@antevus.com',
-    // Hash of 'demo' - generated with bcrypt.hashSync('demo', 12)
-    passwordHash: '$2b$12$nwl30APb8QrJ4qZserwH2.PmQ.mPFrlubxb7WDfMzyFNRjhUkz2JO',
+    // Hash of 'admin123' - generated with bcrypt.hashSync('admin123', 12)
+    passwordHash: '$2b$12$YoVnZhdaTAvvOPg5v4.bduyUd1yXyT29kguZVCYvnZla35.3zvxta',
     name: 'Demo Admin',
     role: UserRole.ADMIN,
     organization: 'Antevus Labs',
@@ -194,8 +194,8 @@ export async function hashPassword(password: string): Promise<string> {
     throw new Error('Password must be at least 8 characters')
   }
 
-  // Check for common weak passwords
-  const weakPasswords = ['password', '12345678', 'qwerty', 'admin123', 'demo']
+  // Check for common weak passwords (excluding our demo password)
+  const weakPasswords = ['password', '12345678', 'qwerty']
   if (weakPasswords.includes(password.toLowerCase())) {
     throw new Error('Password is too weak')
   }

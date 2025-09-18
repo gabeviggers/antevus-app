@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { randomBytes } from 'crypto'
-import { validateCredentials } from '@/lib/auth/mock-users'
+import { validateSecureCredentials } from '@/lib/auth/secure-mock-users'
 import { AuthSession } from '@/lib/auth/types'
 import { logger } from '@/lib/logger'
 
@@ -15,12 +15,12 @@ export async function POST(request: Request) {
       )
     }
 
-    // Validate credentials against mock database
-    const user = validateCredentials(email, password)
+    // Validate credentials against secure mock database with bcrypt
+    const { user, error } = await validateSecureCredentials(email, password)
 
     if (!user) {
       return NextResponse.json(
-        { success: false, error: 'Invalid email or password' },
+        { success: false, error: error || 'Invalid email or password' },
         { status: 401 }
       )
     }
