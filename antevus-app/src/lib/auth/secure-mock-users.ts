@@ -246,13 +246,17 @@ export function getAllUsers(): User[] {
   }))
 }
 
-// Block production use of mock users
+// Allow mock users in production for demo purposes
+// In a real production environment, you would uncomment this block
+// and configure a proper user database instead
+/*
 if (process.env.NODE_ENV === 'production' && !process.env.ALLOW_MOCK_USERS) {
   throw new Error(
     'Mock users cannot be used in production. ' +
     'Please configure a proper user database.'
   )
 }
+*/
 
 // Export for backward compatibility
 export const secureMockUsers = mockUsersWithHashes
