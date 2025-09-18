@@ -161,6 +161,11 @@ export async function withRateLimit(
   request: NextRequest,
   config: RateLimitConfig
 ): Promise<NextResponse | null> {
+  // Skip rate limiting in development if SKIP_RATE_LIMIT is set
+  if (process.env.NODE_ENV === 'development' && process.env.SKIP_RATE_LIMIT === 'true') {
+    return null // Allow request to proceed
+  }
+
   const result = await checkRateLimit(request, config)
 
   if (!result.success && result.response) {
