@@ -1,18 +1,25 @@
 # Antevus - Universal Laboratory Instrument API Platform
 
 ## Current Status
-**Phase 1.5 In Progress** - Lab Assistant Backend Implementation (Dec 17, 2024)
+**Phase 1.5 In Progress** - Lab Assistant Backend Implementation (September 17, 2025)
 - Next.js 14 app with TypeScript running at http://localhost:3000
 - All core development tools configured and ready
 - Full dashboard with instruments, monitoring, runs, integrations, API playground
 - **Lab Assistant Frontend**: Complete with UI, state management, and security ✅
 - **Lab Assistant Backend**: In development - LLM integration and real-time streaming 🚧
+- **Pricing & Packaging**: Comprehensive pricing model defined and documented ✅
 - Production-ready security and compliance infrastructure ✅
 
 ### Lab Assistant Implementation Status
 - **Frontend (100% Complete)**: Chat UI, thread management, streaming simulation, security
 - **Backend (20% Complete)**: Thread storage API done, LLM integration in progress
 - **Next Priority**: OpenAI API integration and streaming endpoints
+
+### Pricing Model Status
+- **Pricing Strategy**: Instrument-based tiers with usage meters ✅
+- **Commercial Tiers**: Core ($1,500/mo), Team ($4,000/mo), Scale ($7,500/mo), Enterprise ✅
+- **Academic Program**: 40% discount for eligible institutions ✅
+- **Documentation**: Complete pricing guide and implementation roadmap ✅
 
 ## Product Vision
 **The Plaid for Labs** - A developer-friendly connectivity layer for laboratory instruments that eliminates integration overhead and enables faster experiments through a unified API. Now with natural language control - lab workers can command their instruments through conversational AI, making complex operations as simple as asking a question.
@@ -216,12 +223,40 @@ GET  /lab-assistant/capabilities � Get available actions per role
 4. Build custom dashboards using normalized data
 5. Trigger downstream analysis pipelines automatically
 
+## Pricing & Business Model
+
+### Pricing Philosophy
+- **Instrument-based tiers** aligned with lab operations (not seats)
+- **Modern usage meters** for events/streams, AI tokens, and storage
+- **Academic program** with 40% discount + university bundles
+- **Clear upgrade paths** with transparent overages
+
+### Commercial Tiers
+- **Core**: $1,500/month (up to 10 instruments, 1M events, 200k AI tokens)
+- **Team**: $4,000/month (up to 25 instruments, 3M events, 750k AI tokens)
+- **Scale**: $7,500/month (up to 50 instruments, 8M events, 2M AI tokens)
+- **Enterprise**: $250k-$500k/year (unlimited, 50M+ events, 10M+ tokens, 99.99% SLA)
+
+### Academic Program
+- **40% discount** on Core/Team/Scale tiers
+- **Core Facility Pack**: $2,400/month (25 instruments with iLab/PPMS integration)
+- **Campus Pilot**: $15k for 90 days (15 instruments)
+- **Teaching Lab License**: $250/month (2 instruments, unlimited students)
+
+### Add-Ons & Options
+- **Compliance Pack**: $1,500/month (21 CFR Part 11, e-signatures, WORM)
+- **Premium Connectors**: $200-500/month (Illumina, Agilent, Tecan, Hamilton)
+- **BYO-LLM**: Available on all tiers (no AI markup)
+- **Single-tenant isolation**: +$1,000/month (Team tier+)
+
 ## Success Metrics
 
 - **Adoption**: Number of connected instruments per customer
 - **Engagement**: Daily active users, API call volume
 - **Time Saved**: >50% reduction in manual data transfer time
-- **Retention**: e90% renewal rate after 6-month pilot
+- **Retention**: >90% renewal rate after 6-month pilot
+- **Revenue Growth**: MRR, net revenue retention, LTV:CAC ratio
+- **ROI**: 7-12x documented savings for typical deployments
 
 ## Implementation Roadmap
 
@@ -314,6 +349,7 @@ npm run dev  # Runs at http://localhost:3000
 - **Setup Guide**: See SETUP_GUIDE.md for detailed instructions
 - **Roadmap**: See IMPLEMENTATION_ROADMAP.md for development phases
 - **Natural Language Control**: See NL_LAB_CONTROL.md for technical specification
+- **Pricing & Packaging**: See PRICING.md for complete pricing model and implementation
 - **Project Context**: This file (CLAUDE.md)
 
 ## Contact & Support

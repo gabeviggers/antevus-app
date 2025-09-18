@@ -4,10 +4,11 @@ import { useState, useEffect } from 'react'
 import { InstrumentCard } from '@/components/instruments/instrument-card'
 import { InstrumentDetailModal } from '@/components/instruments/instrument-detail-modal'
 import { mockInstruments, type Instrument, type InstrumentStatus } from '@/lib/mock-data/instruments'
-import { Search, Filter, RefreshCw, Plus, Grid3x3, List, Bell, Activity, Power, AlertTriangle, Wrench } from 'lucide-react'
+import { Search, Filter, RefreshCw, Plus, Grid3x3, List, Activity, Power, AlertTriangle, Wrench } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { MetricCard } from '@/components/ui/metric-card'
+import { NotificationsDropdown } from '@/components/notifications/notifications-dropdown'
 
 export default function InstrumentsDashboard() {
   const [instruments, setInstruments] = useState<Instrument[]>(mockInstruments)
@@ -87,25 +88,14 @@ export default function InstrumentsDashboard() {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              aria-label="Notifications"
-              title="Notifications"
-            >
-              <Bell className="h-5 w-5" aria-hidden="true" />
-              <span className="absolute top-1 right-1 h-2 w-2 bg-red-500 rounded-full" aria-hidden="true" />
-              <span className="sr-only">You have unread notifications</span>
-            </Button>
+            <NotificationsDropdown />
             <ThemeToggle />
           </div>
         </div>
       </div>
 
       {/* Stats Overview */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6 mt-6">
         <MetricCard
           title="Total Instruments"
           value={statusCounts.all}

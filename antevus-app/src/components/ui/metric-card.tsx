@@ -56,7 +56,7 @@ export function MetricCard({
     <Component
       {...(isInteractive ? { onClick, disabled } : {})}
       className={cn(
-        'p-4 rounded-lg border transition-all',
+        'px-3 py-2 rounded-md border transition-all',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
         {
           'cursor-pointer': isInteractive,
@@ -73,41 +73,41 @@ export function MetricCard({
       aria-disabled={disabled || undefined}
     >
       {/* Header */}
-      <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-2">
+      <div className="flex items-center justify-between mb-0.5">
+        <div className="flex items-center gap-1">
           {icon && (
-            <div className="text-muted-foreground">
+            <div className="text-muted-foreground [&>svg]:h-3 [&>svg]:w-3">
               {icon}
             </div>
           )}
-          <span className="font-medium text-sm text-foreground">
+          <span className="font-medium text-[11px] text-muted-foreground uppercase tracking-wider">
             {title}
           </span>
         </div>
         {trend && trend.value !== 0 && (
           <div className={cn(
-            'text-xs font-medium',
+            'text-[10px] font-medium',
             trend.isPositive ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
           )}>
             {trend.isPositive ? '↑' : '↓'} {Math.abs(trend.value)}%
           </div>
         )}
         {trend && trend.value === 0 && (
-          <div className="text-xs font-medium text-muted-foreground">
+          <div className="text-[10px] font-medium text-muted-foreground">
             — 0%
           </div>
         )}
       </div>
 
       {/* Value */}
-      <div className="text-2xl font-bold text-foreground">
+      <div className="text-lg font-semibold text-foreground leading-tight">
         {typeof value === 'number'
           ? (Number.isInteger(value)
               ? value.toLocaleString()
               : value.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 }))
           : value}
         {unit && (
-          <span className="text-sm font-normal text-muted-foreground ml-1">
+          <span className="text-[10px] font-normal text-muted-foreground ml-1">
             {unit}
           </span>
         )}
@@ -115,7 +115,7 @@ export function MetricCard({
 
       {/* Status Text */}
       {statusText && (
-        <div className={cn('text-xs mt-1', statusStyles[status])}>
+        <div className={cn('text-[10px] leading-tight', statusStyles[status])}>
           {statusText}
         </div>
       )}

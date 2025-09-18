@@ -23,6 +23,7 @@ import {
   QC_THRESHOLDS,
   type MetricData
 } from '@/lib/mock-data/monitoring'
+import { mockInstruments } from '@/lib/mock-data/instruments'
 import {
   Activity,
   Thermometer,
@@ -33,18 +34,26 @@ import {
   AlertTriangle,
   CheckCircle,
   XCircle,
-  RefreshCw,
+  Pause,
+  Play,
   Download,
   Maximize2,
   Settings,
-  Bell
+  Search,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ThemeToggle } from '@/components/theme-toggle'
+import { NotificationsDropdown } from '@/components/notifications/notifications-dropdown'
 import { logger } from '@/lib/logger'
+import { useNotifications } from '@/hooks/use-notifications'
+import { useReportNotifications } from '@/hooks/use-report-notifications'
 
 export default function MonitoringPage() {
   const { user } = useSession()
+  const { notify } = useNotifications()
+  const { notifyExportReady } = useReportNotifications()
   const [monitoringData, setMonitoringData] = useState<Map<string, MetricData>>(
     () => generateInitialMonitoringData()
   )
@@ -54,7 +63,9 @@ export default function MonitoringPage() {
   const [isPaused, setIsPaused] = useState(false)
   const [updateInterval, setUpdateInterval] = useState(2000) // 2 seconds
   const [showThresholds, setShowThresholds] = useState(true)
+  const [instrumentSearch, setInstrumentSearch] = useState('')
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
 
   // Helper to convert UserContext to User format for audit logging
   const getAuditUser = () => {
@@ -160,6 +171,39 @@ export default function MonitoringPage() {
     value: point.value
   })), [currentMetricData])
 
+  // Filter instruments based on search
+  const filteredInstruments = useMemo(() => {
+    const instrumentIds = Array.from(monitoringData.keys())
+    if (!instrumentSearch) return instrumentIds
+
+    return instrumentIds.filter(id => {
+      const data = monitoringData.get(id)
+      const name = data?.temperature[0]?.instrumentName || id
+      const instrument = mockInstruments.find(inst => inst.id === id)
+
+      const searchLower = instrumentSearch.toLowerCase()
+      return (
+        id.toLowerCase().includes(searchLower) ||
+        name.toLowerCase().includes(searchLower) ||
+        instrument?.model.toLowerCase().includes(searchLower) ||
+        instrument?.manufacturer.toLowerCase().includes(searchLower)
+      )
+    })
+  }, [monitoringData, instrumentSearch])
+
+  // Scroll controls for instrument selector
+  const scrollLeft = () => {
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollBy({ left: -200, behavior: 'smooth' })
+    }
+  }
+
+  const scrollRight = () => {
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollBy({ left: 200, behavior: 'smooth' })
+    }
+  }
+
   // Return early if threshold not found (defensive programming)
   if (!threshold) return null
 
@@ -198,6 +242,61 @@ export default function MonitoringPage() {
     }
   }
 
+  const handleExport = () => {
+    if (!canExport) {
+      notify({
+        severity: 'error',
+        title: 'Permission denied',
+        description: 'You do not have permission to export data',
+        source: 'monitoring'
+      })
+      return
+    }
+    try {
+      notify({
+        severity: 'info',
+        title: 'Exporting data...',
+        description: 'Preparing CSV export',
+        source: 'monitoring'
+      })
+
+      // Simulate export delay
+      setTimeout(() => {
+        notifyExportReady('monitoring-data.csv', '2.4 MB')
+      }, 2000)
+
+      auditLogger.logEvent(getAuditUser(), 'data.export', {
+        resourceType: 'monitoring',
+        success: true,
+        metadata: {
+          instrument: selectedInstrument,
+          metric: selectedMetric,
+          recordCount: currentMetricData.length,
+          format: 'CSV'
+        }
+      })
+    } catch (e) {
+      logger.warn('audit log failed', {
+        error: e instanceof Error ? e.message : 'Unknown error'
+      })
+    }
+    // Export current metric data as CSV
+    const rows = [['Time', 'Value']]
+    for (const point of currentMetricData) {
+      rows.push([point.timestamp, String(point.value)])
+    }
+    const csv = rows.map(row => row.join(',')).join('\n')
+    const blob = new Blob([csv], { type: 'text/csv' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${selectedInstrument}-${selectedMetric}-${new Date().toISOString().split('T')[0]}.csv`
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    URL.revokeObjectURL(url)
+  }
+
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
@@ -209,134 +308,174 @@ export default function MonitoringPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            aria-label="Notifications"
-            title="Notifications"
-            aria-haspopup="menu"
-          >
-            <Bell className="h-5 w-5" aria-hidden="true" />
-            <span className="absolute top-1 right-1 h-2 w-2 bg-red-500 rounded-full" aria-hidden="true" />
-            <span className="sr-only">You have unread notifications</span>
-          </Button>
+          <NotificationsDropdown />
           <ThemeToggle />
         </div>
       </div>
 
-      {/* Connection Status and Controls */}
-      <div className="flex items-center gap-2">
-        {/* Connection Status */}
-        <div
-          role="status"
-          aria-atomic="true"
-          className={`flex items-center gap-2 px-3 py-1.5 rounded-md border ${
-            isConnected
-              ? 'bg-green-50 border-green-200 text-green-700 dark:bg-green-950 dark:border-green-800 dark:text-green-300'
-              : 'bg-red-50 border-red-200 text-red-700 dark:bg-red-950 dark:border-red-800 dark:text-red-300'
-          }`}
-        >
-          {isConnected ? (
-            <>
-              <Wifi className="h-4 w-4" />
-              <span className="text-sm font-medium">Connected</span>
-            </>
-          ) : (
-            <>
-              <WifiOff className="h-4 w-4" />
-              <span className="text-sm font-medium">Disconnected</span>
-            </>
-          )}
+      {/* Status Bar with Controls */}
+      <div className="bg-card border border-border rounded-lg p-4">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          {/* Connection Status */}
+          <div className="flex items-center gap-3">
+            <div
+              role="status"
+              aria-atomic="true"
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-md border ${
+                isConnected
+                  ? 'bg-green-50 border-green-200 text-green-700 dark:bg-green-950 dark:border-green-800 dark:text-green-300'
+                  : 'bg-red-50 border-red-200 text-red-700 dark:bg-red-950 dark:border-red-800 dark:text-red-300'
+              }`}
+            >
+              {isConnected ? (
+                <>
+                  <Wifi className="h-4 w-4" />
+                  <span className="text-sm font-medium">Connected</span>
+                </>
+              ) : (
+                <>
+                  <WifiOff className="h-4 w-4" />
+                  <span className="text-sm font-medium">Disconnected</span>
+                </>
+              )}
+            </div>
+
+            <div className="h-6 w-px bg-border" />
+
+            {/* Playback Controls */}
+            <Button
+              variant={isPaused ? 'default' : 'outline'}
+              size="sm"
+              type="button"
+              aria-pressed={!isPaused}
+              onClick={() => setIsPaused(!isPaused)}
+              className="gap-2"
+            >
+              {isPaused ? (
+                <>
+                  <Play className="h-3.5 w-3.5" />
+                  Resume
+                </>
+              ) : (
+                <>
+                  <Pause className="h-3.5 w-3.5" />
+                  Pause
+                </>
+              )}
+            </Button>
+          </div>
+
+          {/* Right side controls */}
+          <div className="flex items-center gap-2">
+            {/* Update Rate */}
+            <div className="flex items-center gap-1 px-2 py-1 bg-muted/50 rounded-md">
+              <span className="text-xs text-muted-foreground">Update:</span>
+              <div className="flex gap-0.5">
+                {[1, 2, 5, 10].map(seconds => (
+                  <button
+                    key={seconds}
+                    onClick={() => setUpdateInterval(seconds * 1000)}
+                    className={`px-2 py-0.5 text-xs rounded transition-colors ${
+                      updateInterval === seconds * 1000
+                        ? 'bg-primary text-primary-foreground'
+                        : 'hover:bg-muted'
+                    }`}
+                  >
+                    {seconds}s
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="h-6 w-px bg-border" />
+
+            {/* Export Button */}
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2"
+              disabled={!canExport}
+              onClick={handleExport}
+            >
+              <Download className="h-3.5 w-3.5" />
+              Export CSV
+            </Button>
+          </div>
         </div>
-
-        {/* Controls */}
-        <Button
-          variant="outline"
-          size="sm"
-          type="button"
-          aria-pressed={isPaused}
-          onClick={() => setIsPaused(!isPaused)}
-          className="gap-2"
-        >
-          {isPaused ? (
-            <>
-              <Activity className="h-4 w-4" />
-              Resume
-            </>
-          ) : (
-            <>
-              <RefreshCw className="h-4 w-4" />
-              Pause
-            </>
-          )}
-        </Button>
-
-        <Button
-          variant="outline"
-          size="sm"
-          className="gap-2"
-          disabled={!canExport}
-          onClick={() => {
-            if (!canExport) {
-              alert('You do not have permission to export data')
-              return
-            }
-            try {
-              auditLogger.logEvent(getAuditUser(), 'data.export', {
-                resourceType: 'monitoring',
-                success: true,
-                metadata: {
-                  instrument: selectedInstrument,
-                  metric: selectedMetric,
-                  recordCount: currentMetricData.length,
-                  format: 'CSV'
-                }
-              })
-            } catch (e) {
-              logger.warn('audit log failed', {
-                error: e instanceof Error ? e.message : 'Unknown error'
-              })
-            }
-            // Export current metric data as CSV
-            const rows = [['Time', 'Value']]
-            for (const point of currentMetricData) {
-              rows.push([point.timestamp, String(point.value)])
-            }
-            const csv = rows.map(row => row.join(',')).join('\n')
-            const blob = new Blob([csv], { type: 'text/csv' })
-            const url = URL.createObjectURL(blob)
-            const a = document.createElement('a')
-            a.href = url
-            a.download = `${selectedInstrument}-${selectedMetric}-${new Date().toISOString().split('T')[0]}.csv`
-            document.body.appendChild(a)
-            a.click()
-            a.remove()
-            URL.revokeObjectURL(url)
-          }}
-        >
-          <Download className="h-4 w-4" />
-          Export
-        </Button>
       </div>
 
-      {/* Instrument Selector */}
-      <div className="flex gap-2 overflow-x-auto pb-1">
-        {Array.from(monitoringData.keys()).map(instrumentId => {
-          const data = monitoringData.get(instrumentId)!
-          const name = data.temperature[0]?.instrumentName || instrumentId
-          return (
-            <Button
-              key={instrumentId}
-              variant={selectedInstrument === instrumentId ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setSelectedInstrument(instrumentId)}
+      {/* Instrument Selector with Search */}
+      <div className="bg-card border border-border rounded-lg p-4">
+        <div className="space-y-3">
+          {/* Search Bar */}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <input
+              type="text"
+              placeholder="Search instruments by name, model, or manufacturer..."
+              value={instrumentSearch}
+              onChange={(e) => setInstrumentSearch(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 bg-background border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring text-sm"
+            />
+          </div>
+
+          {/* Scrollable Instrument List */}
+          <div className="relative">
+            {/* Scroll buttons */}
+            <button
+              onClick={scrollLeft}
+              className="absolute left-0 top-1/2 -translate-y-1/2 z-10 h-8 w-8 flex items-center justify-center bg-background border border-border rounded-full shadow-sm hover:bg-muted transition-colors"
+              aria-label="Scroll left"
             >
-              {name}
-            </Button>
-          )
-        })}
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+            <button
+              onClick={scrollRight}
+              className="absolute right-0 top-1/2 -translate-y-1/2 z-10 h-8 w-8 flex items-center justify-center bg-background border border-border rounded-full shadow-sm hover:bg-muted transition-colors"
+              aria-label="Scroll right"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
+
+            {/* Instrument buttons */}
+            <div
+              ref={scrollContainerRef}
+              className="flex gap-2 overflow-x-auto scrollbar-hide pb-1 px-10"
+              style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+            >
+              {filteredInstruments.length === 0 ? (
+                <div className="text-sm text-muted-foreground py-2">No instruments found</div>
+              ) : (
+                filteredInstruments.map(instrumentId => {
+                  const data = monitoringData.get(instrumentId)!
+                  const name = data.temperature[0]?.instrumentName || instrumentId
+                  const instrument = mockInstruments.find(inst => inst.id === instrumentId)
+
+                  return (
+                    <Button
+                      key={instrumentId}
+                      variant={selectedInstrument === instrumentId ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => setSelectedInstrument(instrumentId)}
+                      className="flex-shrink-0 gap-2"
+                    >
+                      <div className={`h-2 w-2 rounded-full ${
+                        instrument?.status === 'running' ? 'bg-green-500' :
+                        instrument?.status === 'error' ? 'bg-red-500' :
+                        instrument?.status === 'maintenance' ? 'bg-yellow-500' :
+                        'bg-gray-400'
+                      }`} />
+                      <span>{name}</span>
+                      {instrument && (
+                        <span className="text-xs text-muted-foreground">({instrument.model})</span>
+                      )}
+                    </Button>
+                  )
+                })
+              )}
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Metrics Grid */}
@@ -498,48 +637,6 @@ export default function MonitoringPage() {
             </div>
           </div>
         )}
-      </div>
-
-      {/* Update Rate Control */}
-      <div className="bg-card border border-border rounded-lg p-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h3 className="font-medium">Update Frequency</h3>
-            <p className="text-sm text-muted-foreground">
-              Data refresh rate: {updateInterval / 1000}s
-            </p>
-          </div>
-          <div className="flex gap-2">
-            <Button
-              variant={updateInterval === 1000 ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setUpdateInterval(1000)}
-            >
-              1s
-            </Button>
-            <Button
-              variant={updateInterval === 2000 ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setUpdateInterval(2000)}
-            >
-              2s
-            </Button>
-            <Button
-              variant={updateInterval === 5000 ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setUpdateInterval(5000)}
-            >
-              5s
-            </Button>
-            <Button
-              variant={updateInterval === 10000 ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setUpdateInterval(10000)}
-            >
-              10s
-            </Button>
-          </div>
-        </div>
       </div>
     </div>
   )

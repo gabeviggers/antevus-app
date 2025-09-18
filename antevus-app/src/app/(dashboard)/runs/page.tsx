@@ -30,12 +30,12 @@ import {
   XCircle,
   AlertCircle,
   Clock,
-  Bell,
   Activity,
   Pause
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ThemeToggle } from '@/components/theme-toggle'
+import { NotificationsDropdown } from '@/components/notifications/notifications-dropdown'
 import { MetricCard } from '@/components/ui/metric-card'
 
 export default function RunHistoryPage() {
@@ -234,22 +234,7 @@ export default function RunHistoryPage() {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              aria-label="Notifications"
-              title="Notifications"
-              aria-haspopup="menu"
-            >
-              <Bell className="h-5 w-5" aria-hidden="true" />
-              <span
-                className="absolute top-1 right-1 h-2 w-2 bg-red-500 rounded-full"
-                aria-hidden="true"
-              />
-              <span className="sr-only">You have unread notifications</span>
-            </Button>
+            <NotificationsDropdown />
             <ThemeToggle />
           </div>
         </div>

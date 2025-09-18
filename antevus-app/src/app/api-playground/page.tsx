@@ -29,6 +29,7 @@ import { useToast } from '@/components/ui/use-toast'
 import { logger } from '@/lib/logger'
 import { cn } from '@/lib/utils'
 import { ThemeToggle } from '@/components/theme-toggle'
+import { NotificationsDropdown } from '@/components/notifications/notifications-dropdown'
 import { useRouter } from 'next/navigation'
 
 // Type definitions
@@ -720,6 +721,7 @@ export default function APIPlayground() {
             <Button variant="ghost" size="icon" aria-label="Members">
               <Users className="h-4 w-4" />
             </Button>
+            <NotificationsDropdown />
             <ThemeToggle />
         </div>
       </div>

@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Sidebar } from '@/components/dashboard/sidebar'
 import { ProtectedRoute } from '@/components/auth/protected-route'
 import { ChatProvider } from '@/contexts/chat-context'
+import { ToastContainer } from '@/components/notifications/toast-container'
 
 export default function DashboardLayout({
   children,
@@ -33,11 +34,12 @@ export default function DashboardLayout({
             >
               Skip to content
             </a>
-            <main id="dashboard-content" className="h-full overflow-y-auto" role="main">
+            <main id="dashboard-content" className="h-full" role="main">
               {children}
             </main>
           </div>
         </div>
+        <ToastContainer />
       </ChatProvider>
     </ProtectedRoute>
   )

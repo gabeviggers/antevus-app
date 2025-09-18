@@ -17,7 +17,6 @@ import { IntegrationConfigModal } from '@/components/integrations/integration-co
 import {
   Search,
   RefreshCw,
-  Bell,
   Zap,
   CheckCircle,
   AlertCircle,
@@ -25,6 +24,7 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ThemeToggle } from '@/components/theme-toggle'
+import { NotificationsDropdown } from '@/components/notifications/notifications-dropdown'
 import { logger } from '@/lib/logger'
 
 const ITEMS_PER_PAGE = 9 // 3x3 grid
@@ -260,10 +260,7 @@ export default function IntegrationsPage() {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="icon" className="relative">
-              <Bell className="h-5 w-5" />
-              <span className="absolute top-1 right-1 h-2 w-2 bg-red-500 rounded-full"></span>
-            </Button>
+            <NotificationsDropdown />
             <ThemeToggle />
           </div>
         </div>
