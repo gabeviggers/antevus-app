@@ -266,65 +266,72 @@ export default function NotificationsPage() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-6">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => router.back()}
-            className="h-8 w-8"
-          >
-            <X className="h-4 w-4" />
-          </Button>
-          <div>
-            <h1 className="text-2xl font-semibold">Notifications</h1>
-            <p className="text-sm text-muted-foreground">
-              {unreadCount > 0 ? `${unreadCount} unread` : 'All caught up'}
-            </p>
+    <div className="h-full flex flex-col overflow-hidden">
+      {/* Fixed Header */}
+      <div className="flex-shrink-0 bg-background border-b">
+        <div className="max-w-4xl mx-auto px-4 py-4">
+          {/* Header */}
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => router.back()}
+                className="h-8 w-8"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+              <div>
+                <h1 className="text-2xl font-semibold">Notifications</h1>
+                <p className="text-sm text-muted-foreground">
+                  {unreadCount > 0 ? `${unreadCount} unread` : 'All caught up'}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              {unreadCount > 0 && (
+                <Button variant="ghost" size="sm" onClick={markAllAsRead}>
+                  Mark all as read
+                </Button>
+              )}
+              {notifications.length > 0 && (
+                <Button variant="ghost" size="sm" onClick={clearAll}>
+                  Clear all
+                </Button>
+              )}
+            </div>
+          </div>
+
+          {/* Filter tabs */}
+          <div className="flex items-center gap-2 overflow-x-auto">
+            <Button
+              variant={filter === 'all' ? 'secondary' : 'ghost'}
+              size="sm"
+              onClick={() => setFilter('all')}
+            >
+              All
+            </Button>
+            {Object.entries(categoryConfig).map(([key, config]) => (
+              <Button
+                key={key}
+                variant={filter === key ? 'secondary' : 'ghost'}
+                size="sm"
+                onClick={() => setFilter(key as NotificationCategory)}
+                className="flex items-center gap-1"
+              >
+                <config.icon className="h-3 w-3" />
+                {config.label}
+              </Button>
+            ))}
           </div>
         </div>
-
-        <div className="flex items-center gap-2">
-          {unreadCount > 0 && (
-            <Button variant="ghost" size="sm" onClick={markAllAsRead}>
-              Mark all as read
-            </Button>
-          )}
-          {notifications.length > 0 && (
-            <Button variant="ghost" size="sm" onClick={clearAll}>
-              Clear all
-            </Button>
-          )}
-        </div>
       </div>
 
-      {/* Filter tabs */}
-      <div className="flex items-center gap-2 mb-4 pb-4 border-b overflow-x-auto">
-        <Button
-          variant={filter === 'all' ? 'secondary' : 'ghost'}
-          size="sm"
-          onClick={() => setFilter('all')}
-        >
-          All
-        </Button>
-        {Object.entries(categoryConfig).map(([key, config]) => (
-          <Button
-            key={key}
-            variant={filter === key ? 'secondary' : 'ghost'}
-            size="sm"
-            onClick={() => setFilter(key as NotificationCategory)}
-            className="flex items-center gap-1"
-          >
-            <config.icon className="h-3 w-3" />
-            {config.label}
-          </Button>
-        ))}
-      </div>
-
-      {/* Notifications list */}
-      <div className="space-y-2">
+      {/* Scrollable Notifications list */}
+      <div className="flex-1 overflow-y-auto">
+        <div className="max-w-4xl mx-auto px-4 py-6">
+          <div className="space-y-2">
         {filteredNotifications.length === 0 ? (
           <Card className="p-12 text-center">
             <p className="text-muted-foreground">No notifications</p>
@@ -376,6 +383,8 @@ export default function NotificationsPage() {
             )
           })
         )}
+          </div>
+        </div>
       </div>
     </div>
   )

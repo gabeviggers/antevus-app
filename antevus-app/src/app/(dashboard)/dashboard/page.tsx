@@ -9,7 +9,6 @@ import { Button } from '@/components/ui/button'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { MetricCard } from '@/components/ui/metric-card'
 import { NotificationsDropdown } from '@/components/notifications/notifications-dropdown'
-import { DemoNotifications } from './demo-notifications'
 
 export default function InstrumentsDashboard() {
   const [instruments, setInstruments] = useState<Instrument[]>(mockInstruments)
@@ -94,9 +93,6 @@ export default function InstrumentsDashboard() {
           </div>
         </div>
       </div>
-
-      {/* Demo Notifications - Remove in production */}
-      <DemoNotifications />
 
       {/* Stats Overview */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6 mt-6">
