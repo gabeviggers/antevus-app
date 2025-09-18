@@ -1,7 +1,7 @@
 # Antevus Implementation Roadmap
 ## Ship Fast, Generate Revenue Early
 
-### 📊 CURRENT STATUS (December 17, 2024 - Updated)
+### 📊 CURRENT STATUS (September 17, 2025 - Updated)
 
 #### ✅ Completed Components
 1. **Phase 0: Foundation (100% Complete)**
@@ -89,7 +89,16 @@
    - Robust state management preventing race conditions
    - Production-ready with optimized performance
 
-#### 🚧 IN PROGRESS: Lab Assistant Backend (Dec 17, 2024 - Started)
+10. **Pricing & Business Model (100% Complete - Sept 17, 2025)** ✅ 💰
+   - Comprehensive pricing structure defined
+   - Instrument-based pricing tiers (Core/Team/Scale/Enterprise)
+   - Usage metering system design (events, AI tokens, storage)
+   - Academic program with 40% discount
+   - Implementation guide for billing infrastructure
+   - ROI calculator and sales enablement tools
+   - Complete documentation in PRICING.md
+
+#### 🚧 IN PROGRESS: Lab Assistant Backend (Sept 17, 2025 - Ongoing)
 **Timeline**: 6 weeks (targeting end of January 2025)
 
 **Current Sprint (Week 1-2)**: Core LLM Infrastructure
@@ -335,7 +344,20 @@ GET  /api/stream/:id      // SSE for real-time data
 
 ---
 
-## Phase 3: Sales & Marketing Assets (Week 5)
+## Phase 3: Sales & Marketing Assets (Week 5) - ENHANCED WITH PRICING
+*Tools to close deals with clear pricing*
+
+### Pricing Implementation
+- [x] Comprehensive pricing model (PRICING.md)
+- [x] Instrument-based tiers ($1,500-$7,500/month)
+- [x] Academic discount program (40% off)
+- [x] Enterprise pricing framework ($250k-$500k/year)
+- [ ] Interactive pricing calculator (frontend)
+- [ ] ROI calculator component
+- [ ] Usage dashboard with real-time meters
+- [ ] Billing portal integration (Stripe/ChargeBee)
+
+## Phase 3.5: Original Sales & Marketing Assets
 *Tools to close deals*
 
 ### Sales Enablement
@@ -402,10 +424,14 @@ GET  /api/stream/:id      // SSE for real-time data
 - [ ] CSV exports
 - [ ] 30-day money back guarantee
 
-### Pricing Strategy
-- [ ] $500/month per instrument
-- [ ] 3-month pilot minimum
-- [ ] 50% discount for testimonial/case study
+### Pricing Strategy ✅ DEFINED
+- [x] Core: $1,500/month (up to 10 instruments)
+- [x] Team: $4,000/month (up to 25 instruments)
+- [x] Scale: $7,500/month (up to 50 instruments)
+- [x] Enterprise: $250k-$500k/year (unlimited)
+- [x] Academic discount: 40% off standard tiers
+- [x] Pilot program: $25k for 90 days
+- [x] Usage-based overages for events, AI, storage
 
 ---
 

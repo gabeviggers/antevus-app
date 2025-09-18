@@ -11,7 +11,6 @@ import { auditLogger, AuditEventType } from '@/lib/security/audit-logger'
 import { authorizationService, Resource, Action, UserRole } from '@/lib/security/authorization'
 import { useSession } from '@/contexts/session-context'
 import { PermissionDenied } from '@/components/auth/permission-denied'
-import { SensitivityIndicator } from '@/components/chat/sensitivity-indicator'
 import { ChatErrorBoundary } from '@/components/chat/chat-error-boundary'
 import { useRouter } from 'next/navigation'
 import { logger } from '@/lib/logger'
@@ -627,18 +626,6 @@ How can I assist you with your lab operations today?`
                       ? "bg-primary text-primary-foreground"
                       : "bg-muted text-foreground"
                   )}>
-                    {/* Sensitivity indicator */}
-                    {message.sensitivity && (
-                      <div className="absolute -top-2 -right-2">
-                        <SensitivityIndicator
-                          sensitivity={message.sensitivity}
-                          categories={message.categories}
-                          containsPHI={message.containsPHI}
-                          containsPII={message.containsPII}
-                          size="sm"
-                        />
-                      </div>
-                    )}
                     <SafeMessageContent
                       content={message.containsPHI || message.containsPII ? message.redactedContent || message.content : message.content}
                       isStreaming={message.isStreaming}
