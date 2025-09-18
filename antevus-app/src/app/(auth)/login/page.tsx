@@ -222,9 +222,9 @@ export default function LoginPage() {
         </div>
       </div>
 
-      {/* Footer */}
-      <footer className="absolute bottom-0 left-0 p-6 text-xs text-muted-foreground">
-        <p>&copy; 2025 Antevus. All rights reserved.</p>
+      {/* Footer - Centered on mobile, left-aligned on desktop */}
+      <footer className="absolute bottom-0 left-0 right-0 p-6 text-xs text-muted-foreground sm:left-0 sm:right-auto">
+        <p className="text-center sm:text-left">&copy; 2025 Antevus. All rights reserved.</p>
       </footer>
     </div>
   )
