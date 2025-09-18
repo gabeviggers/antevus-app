@@ -2,7 +2,7 @@
 
 import React from 'react'
 import { useRouter } from 'next/navigation'
-import { CheckCircle, AlertCircle, Info, AlertTriangle, Activity, Beaker, Clock, Link, Settings } from 'lucide-react'
+import { X, CheckCircle, AlertCircle, Info, AlertTriangle, Activity, Beaker, Clock, Link, Settings } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
@@ -266,19 +266,55 @@ export default function NotificationsPage() {
   }
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden">
+    <div className="fixed inset-0 bg-background z-50 flex flex-col">
+      {/* Close button */}
+      <Button
+        variant="ghost"
+        size="icon"
+        className="absolute top-4 right-4 z-50"
+        onClick={() => router.back()}
+        aria-label="Close notifications"
+      >
+        <X className="h-5 w-5" />
+      </Button>
+
       {/* Fixed Header */}
-      <div className="flex-shrink-0 bg-background">
-        <div className="max-w-4xl mx-auto px-4 py-4 border-b">
+      <div className="flex-shrink-0 bg-background/95 backdrop-blur-sm">
+        <div className="max-w-4xl mx-auto px-6 py-8">
           {/* Header */}
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h1 className="text-2xl font-semibold">Notifications</h1>
-              <p className="text-sm text-muted-foreground">
-                {unreadCount > 0 ? `${unreadCount} unread` : 'All caught up'}
-              </p>
+          <div className="mb-6">
+            <h1 className="text-3xl font-bold mb-2">Notifications</h1>
+            <p className="text-muted-foreground">
+              {unreadCount > 0 ? `${unreadCount} unread notifications` : 'All caught up - no unread notifications'}
+            </p>
+          </div>
+
+          {/* Actions and Filters */}
+          <div className="flex items-center justify-between">
+            {/* Filter tabs */}
+            <div className="flex items-center gap-2 overflow-x-auto">
+              <Button
+                variant={filter === 'all' ? 'secondary' : 'ghost'}
+                size="sm"
+                onClick={() => setFilter('all')}
+              >
+                All
+              </Button>
+              {Object.entries(categoryConfig).map(([key, config]) => (
+                <Button
+                  key={key}
+                  variant={filter === key ? 'secondary' : 'ghost'}
+                  size="sm"
+                  onClick={() => setFilter(key as NotificationCategory)}
+                  className="flex items-center gap-1"
+                >
+                  <config.icon className="h-3 w-3" />
+                  {config.label}
+                </Button>
+              ))}
             </div>
 
+            {/* Action buttons */}
             <div className="flex items-center gap-2">
               {unreadCount > 0 && (
                 <Button variant="ghost" size="sm" onClick={markAllAsRead}>
@@ -292,36 +328,13 @@ export default function NotificationsPage() {
               )}
             </div>
           </div>
-
-          {/* Filter tabs */}
-          <div className="flex items-center gap-2 overflow-x-auto">
-            <Button
-              variant={filter === 'all' ? 'secondary' : 'ghost'}
-              size="sm"
-              onClick={() => setFilter('all')}
-            >
-              All
-            </Button>
-            {Object.entries(categoryConfig).map(([key, config]) => (
-              <Button
-                key={key}
-                variant={filter === key ? 'secondary' : 'ghost'}
-                size="sm"
-                onClick={() => setFilter(key as NotificationCategory)}
-                className="flex items-center gap-1"
-              >
-                <config.icon className="h-3 w-3" />
-                {config.label}
-              </Button>
-            ))}
-          </div>
         </div>
       </div>
 
       {/* Scrollable Notifications list */}
-      <div className="flex-1 overflow-y-auto">
-        <div className="max-w-4xl mx-auto px-4 py-6">
-          <div className="space-y-2">
+      <div className="flex-1 overflow-y-auto bg-muted/30">
+        <div className="max-w-4xl mx-auto px-6 py-6">
+          <div className="space-y-3">
         {filteredNotifications.length === 0 ? (
           <Card className="p-12 text-center">
             <p className="text-muted-foreground">No notifications</p>
