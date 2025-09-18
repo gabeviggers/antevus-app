@@ -18,7 +18,9 @@ export async function requestDesktopPermission(): Promise<NotificationPermission
     const permission = await Notification.requestPermission()
     return permission
   } catch (error) {
-    console.error('Failed to request notification permission:', error)
+    if (process.env.NODE_ENV !== 'production') {
+      console.error('Failed to request notification permission:', error)
+    }
     return 'denied'
   }
 }
@@ -86,7 +88,9 @@ export function sendDesktopNotification(
 
     return notification
   } catch (error) {
-    console.error('Failed to send desktop notification:', error)
+    if (process.env.NODE_ENV !== 'production') {
+      console.error('Failed to send desktop notification:', error)
+    }
     return null
   }
 }

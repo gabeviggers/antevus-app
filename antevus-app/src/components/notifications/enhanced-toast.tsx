@@ -69,7 +69,7 @@ export function EnhancedToast({ notification, onDismiss, index }: EnhancedToastP
         <div className="flex items-start justify-between">
           <div className="flex-1">
             <p className="text-sm font-semibold text-foreground">
-              <span dangerouslySetInnerHTML={{ __html: escapeHtml(notification.title) }} />
+              {escapeHtml(notification.title)}
               {notification.count > 1 && (
                 <span className="ml-2 inline-flex items-center justify-center rounded-full bg-muted px-2 py-0.5 text-xs font-medium">
                   ×{notification.count}
@@ -79,7 +79,7 @@ export function EnhancedToast({ notification, onDismiss, index }: EnhancedToastP
 
             {notification.description && (
               <p className="mt-1 text-xs text-muted-foreground line-clamp-2">
-                <span dangerouslySetInnerHTML={{ __html: escapeHtml(notification.description) }} />
+                {escapeHtml(notification.description)}
               </p>
             )}
 

@@ -47,7 +47,9 @@ export function sanitizeLinkProps(href?: string): Record<string, string> {
   if (!href) return {}
 
   if (!isSafeUrl(href)) {
-    console.warn('Unsafe URL blocked:', href)
+    if (process.env.NODE_ENV !== 'production') {
+      console.warn('Unsafe URL blocked:', href)
+    }
     return {}
   }
 

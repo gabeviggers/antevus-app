@@ -41,7 +41,9 @@ export const useNotificationStore = create<NotificationStore>()(
 
         // Check rate limiting
         if (!rateLimiter(options.source)) {
-          console.warn('Notification rate limit exceeded', options.source)
+          if (process.env.NODE_ENV !== 'production') {
+            console.warn('Notification rate limit exceeded', options.source)
+          }
           return id
         }
 

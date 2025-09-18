@@ -37,7 +37,7 @@ export function useReportNotifications() {
       sticky: true,
       actions: [{
         label: 'Retry',
-        onClick: () => console.log('Retry report generation')
+        onClick: () => { /* TODO: Handle retry */ }
       }],
       source: 'reports'
     })
@@ -50,7 +50,7 @@ export function useReportNotifications() {
       description: `${fileName} (${size}) is ready for download`,
       actions: [{
         label: 'Download',
-        onClick: () => console.log('Download file')
+        onClick: () => { /* TODO: Handle download */ }
       }],
       source: 'exports',
       desktopEnabled: true
