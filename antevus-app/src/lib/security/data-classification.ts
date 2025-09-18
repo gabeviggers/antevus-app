@@ -44,6 +44,7 @@ export interface ClassificationContext {
   isInternal?: boolean
   source?: string
   userRole?: string
+  messageRole?: string
   department?: string
   projectId?: string
   timestamp?: Date
