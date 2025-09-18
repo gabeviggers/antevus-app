@@ -8,15 +8,32 @@ import { withRateLimit, checkRateLimit, addRateLimitHeaders } from '@/lib/api/ra
 const MAX_REQUEST_SIZE = 1024 * 1024 // 1MB max request size
 const MAX_LOGS_PER_REQUEST = 100 // Maximum logs in a single batch
 
+// Rate limiting constants
+const AUTHENTICATED_RATE_LIMIT = 1000 // Requests per minute for authenticated users
+const UNAUTHENTICATED_RATE_LIMIT = 50 // Requests per minute for unauthenticated users
+const RATE_LIMIT_WINDOW = 60 * 1000 // 1 minute window
+const AUTHENTICATED_BLOCK_DURATION = 5 * 60 * 1000 // 5 minutes
+const UNAUTHENTICATED_BLOCK_DURATION = 15 * 60 * 1000 // 15 minutes
+
+// Security: Allowlist of event types that can be logged without authentication
+// Only critical security events are allowed for unauthenticated requests
+const UNAUTHENTICATED_ALLOWED_EVENT_TYPES = [
+  'user.failed_login',
+  'security.suspicious_activity',
+  'security.rate_limit_exceeded',
+  'security.unauthorized_access'
+]
+
 /**
  * SECURED API endpoint for receiving audit logs
  *
  * SECURITY IMPLEMENTATION:
- * - Authentication required via Bearer token
- * - Rate limiting per client (100 requests/minute)
+ * - Authentication required via Bearer token for most events
+ * - Unauthenticated requests restricted to security event types only
+ * - Rate limiting per client (1000 requests/minute authenticated, 50/minute unauthenticated)
  * - Request size validation (max 1MB)
  * - Secure response headers (HSTS, CSP, etc.)
- * - Principal binding prevents forgery
+ * - Principal binding prevents forgery (strict userId validation)
  * - HIPAA/SOC 2 compliant audit trail
  *
  * Production recommendations:
@@ -75,13 +92,13 @@ const AuditLogBatchSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
-    // SECURITY: Apply rate limiting (1000 requests/minute per client for production)
+    // SECURITY: Apply rate limiting for authenticated requests
     // This is reasonable for audit logs while preventing abuse
     const rateLimited = await withRateLimit(request, {
       key: 'api:audit:logs',
-      limit: 1000,  // Increased for production use
-      window: 60 * 1000, // 1 minute
-      blockDuration: 5 * 60 * 1000 // 5 minutes
+      limit: AUTHENTICATED_RATE_LIMIT,
+      window: RATE_LIMIT_WINDOW,
+      blockDuration: AUTHENTICATED_BLOCK_DURATION
     })
     if (rateLimited) {
       return addSecureHeaders(rateLimited)
@@ -102,17 +119,18 @@ export async function POST(request: NextRequest) {
     // but apply stricter rate limiting
     const authHeader = request.headers.get('authorization')
     let verifiedUserId = 'anonymous'
+    let verificationMethod = 'none' // Track how the request was verified
 
     if (authHeader && authHeader.startsWith('Bearer ')) {
       // Authenticated request - full access
-      verifiedUserId = String(authHeader.substring(7))  // Will be verified below
+      verificationMethod = 'jwt' // Will be verified below
     } else {
       // Unauthenticated request - allow for security events but with stricter limits
       const unauthRateLimited = await withRateLimit(request, {
         key: 'api:audit:unauth',
-        limit: 50,  // Much stricter limit for unauthenticated requests
-        window: 60 * 1000,
-        blockDuration: 15 * 60 * 1000  // 15 minute block
+        limit: UNAUTHENTICATED_RATE_LIMIT,
+        window: RATE_LIMIT_WINDOW,
+        blockDuration: UNAUTHENTICATED_BLOCK_DURATION
       })
       if (unauthRateLimited) {
         return addSecureHeaders(unauthRateLimited)
@@ -161,12 +179,34 @@ export async function POST(request: NextRequest) {
       return createErrorResponse(`Too many logs - max ${MAX_LOGS_PER_REQUEST} per request`, 400)
     }
 
+    // SECURITY: For unauthenticated requests, only allow specific event types
+    if (verificationMethod === 'none') {
+      const disallowedEvents = logs.filter(
+        log => !UNAUTHENTICATED_ALLOWED_EVENT_TYPES.includes(log.eventType)
+      )
+      if (disallowedEvents.length > 0) {
+        logger.warn('Unauthenticated request attempted to log restricted event types', {
+          attemptedEventTypes: [...new Set(disallowedEvents.map(l => l.eventType))],
+          ip: request.headers.get('x-forwarded-for')
+        })
+        return createErrorResponse(
+          'Forbidden - unauthenticated requests can only log security events',
+          403
+        )
+      }
+    }
+
     // CRITICAL SECURITY: Enforce principal binding
     // Prevent users from forging audit logs with different userIds
-    const forgedLogs = logs.filter(log => log.userId && log.userId !== verifiedUserId)
+    // For anonymous/unauthenticated requests, userId must be 'anonymous' or undefined
+    const forgedLogs = verificationMethod === 'jwt'
+      ? logs.filter(log => log.userId && log.userId !== verifiedUserId)
+      : logs.filter(log => log.userId && log.userId !== 'anonymous')
+
     if (forgedLogs.length > 0) {
       logger.error('Attempted audit log forgery detected', {
         verifiedUserId,
+        verificationMethod,
         attemptedUserIds: [...new Set(forgedLogs.map(l => l.userId))],
         sessionId,
         ip: request.headers.get('x-forwarded-for')
@@ -178,7 +218,7 @@ export async function POST(request: NextRequest) {
     const validatedLogs = logs.map(log => ({
       ...log,
       userId: log.userId || verifiedUserId, // Ensure userId is set
-      verifiedBy: 'jwt' // Mark as verified
+      verifiedBy: verificationMethod // Mark verification method (jwt/none)
     }))
 
     // SECURITY: Audit logs are now authenticated and cannot be forged
@@ -198,12 +238,12 @@ export async function POST(request: NextRequest) {
       sessionId
     })
 
-    // Check rate limit for response headers
+    // Check rate limit for response headers (use same limits as initial check)
     const rateLimitResult = await checkRateLimit(request, {
       key: 'api:audit:logs',
-      limit: 100,
-      window: 60 * 1000,
-      blockDuration: 5 * 60 * 1000
+      limit: AUTHENTICATED_RATE_LIMIT,
+      window: RATE_LIMIT_WINDOW,
+      blockDuration: AUTHENTICATED_BLOCK_DURATION
     })
 
     // Create success response
@@ -219,7 +259,7 @@ export async function POST(request: NextRequest) {
 
     // Add rate limit headers
     if (rateLimitResult) {
-      addRateLimitHeaders(response, rateLimitResult, 100)
+      addRateLimitHeaders(response, rateLimitResult, AUTHENTICATED_RATE_LIMIT)
     }
 
     // Add secure headers and return

@@ -178,6 +178,7 @@ class AuditLogger {
   private flushTimer: NodeJS.Timeout | null = null
   private sessionId: string
   private userId: string | null = null
+  private authToken: string | null = null  // In-memory auth token (never persisted)
   private serverTransport: AuditLogServerTransport | undefined
 
   // SECURITY: In-memory debug buffer for development inspection
@@ -238,6 +239,21 @@ class AuditLogger {
         userId
       })
     }
+  }
+
+  /**
+   * Set auth token for authenticated audit requests
+   * Token is held in memory only - never persisted to storage
+   */
+  setAuthToken(token: string | null): void {
+    this.authToken = token
+  }
+
+  /**
+   * Clear auth token on logout
+   */
+  clearAuthToken(): void {
+    this.authToken = null
   }
 
   /**
@@ -472,24 +488,21 @@ class AuditLogger {
       // Only attempt fetch in browser context
       if (typeof window !== 'undefined') {
         try {
-          // Get auth token from session storage or cookie if available
-          const token = typeof window !== 'undefined'
-            ? sessionStorage.getItem('authToken') || localStorage.getItem('authToken')
-            : null
-
+          // Use in-memory auth token (never stored in browser storage)
           const headers: HeadersInit = {
             'Content-Type': 'application/json',
             'X-Audit-Session': this.sessionId
           }
 
           // Add auth token if available (but don't block if not)
-          if (token) {
-            headers['Authorization'] = `Bearer ${token}`
+          if (this.authToken) {
+            headers['Authorization'] = `Bearer ${this.authToken}`
           }
 
           const response = await fetch(this.config.remoteEndpoint, {
             method: 'POST',
             headers,
+            credentials: 'same-origin', // Include cookies for same-origin requests
             body: JSON.stringify({
               logs: logsToSend,
               clientTime: new Date().toISOString()

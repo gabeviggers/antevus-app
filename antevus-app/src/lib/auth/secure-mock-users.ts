@@ -189,18 +189,13 @@ async function simulateHashDelay(): Promise<void> {
  * Use this when creating/updating user passwords
  */
 export async function hashPassword(password: string): Promise<string> {
-  // Allow 'demo' for demo purposes only
-  if (password === 'demo') {
-    return await bcrypt.hash(password, SALT_ROUNDS)
-  }
-
-  // Validate password strength for all other passwords
+  // Validate password strength
   if (password.length < 8) {
     throw new Error('Password must be at least 8 characters')
   }
 
   // Check for common weak passwords
-  const weakPasswords = ['password', '12345678', 'qwerty', 'admin123']
+  const weakPasswords = ['password', '12345678', 'qwerty', 'admin123', 'demo']
   if (weakPasswords.includes(password.toLowerCase())) {
     throw new Error('Password is too weak')
   }
