@@ -127,6 +127,10 @@ export function NotificationsDropdown({ className }: NotificationsDropdownProps)
     router.push('/notifications')
   }
 
+  const handleBellClick = () => {
+    router.push('/notifications')
+  }
+
   return (
     <div ref={dropdownRef} className={cn("relative", className)}>
       {/* Bell Icon Button */}
@@ -136,8 +140,8 @@ export function NotificationsDropdown({ className }: NotificationsDropdownProps)
         size="icon"
         className="relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         aria-label="Notifications"
-        title="Notifications"
-        onClick={() => setIsOpen(!isOpen)}
+        title="Click to view all notifications"
+        onClick={handleBellClick}
         onMouseEnter={() => setIsOpen(true)}
       >
         <Bell className="h-5 w-5" aria-hidden="true" />
