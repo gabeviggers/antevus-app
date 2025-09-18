@@ -1,4 +1,4 @@
-export type UserRole = 'admin' | 'scientist' | 'lab_manager' | 'viewer'
+import { UserRole } from '@/lib/security/authorization'
 
 export interface User {
   id: string
@@ -28,8 +28,8 @@ export interface AuthResponse {
   error?: string
 }
 
-export const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
-  admin: [
+export const ROLE_PERMISSIONS: Partial<Record<UserRole, string[]>> = {
+  [UserRole.ADMIN]: [
     'view_all_instruments',
     'control_instruments',
     'manage_users',
@@ -38,20 +38,20 @@ export const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
     'export_data',
     'configure_system'
   ],
-  lab_manager: [
+  [UserRole.LAB_MANAGER]: [
     'view_all_instruments',
     'control_instruments',
     'view_audit_logs',
     'export_data',
     'manage_integrations'
   ],
-  scientist: [
+  [UserRole.SCIENTIST]: [
     'view_instruments',
     'control_assigned_instruments',
     'export_own_data',
     'view_own_runs'
   ],
-  viewer: [
+  [UserRole.VIEWER]: [
     'view_instruments',
     'view_own_runs'
   ]

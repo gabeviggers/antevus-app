@@ -10,6 +10,7 @@
  */
 
 import { auditLogger, AuditEventType } from './audit-logger'
+import { UserRole } from './authorization'
 
 /**
  * Data sensitivity levels
@@ -387,7 +388,7 @@ export class DataClassificationService {
   ): boolean {
     // Critical data requires admin role
     if (sensitivity === DataSensitivity.CRITICAL) {
-      return userRoles.includes('admin') || userRoles.includes('super_admin')
+      return userRoles.includes(UserRole.ADMIN) || userRoles.includes(UserRole.SUPER_ADMIN)
     }
 
     // Restricted (PHI) requires explicit PHI access permission

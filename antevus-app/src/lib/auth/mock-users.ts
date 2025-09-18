@@ -1,4 +1,5 @@
 import { User } from './types'
+import { UserRole } from '@/lib/security/authorization'
 
 // Mock user database
 // IMPORTANT: Using plaintext passwords for demo/dev only
@@ -9,7 +10,7 @@ export const mockUsers = [
     email: 'admin@antevus.com',
     password: 'admin123', // Dev-only: plaintext for demo builds
     name: 'Admin User',
-    role: 'admin' as const,
+    role: UserRole.ADMIN,
     organization: 'Antevus Labs',
     department: 'System Administration',
     createdAt: '2024-01-01T00:00:00Z'
@@ -19,7 +20,7 @@ export const mockUsers = [
     email: 'john.doe@lab.com',
     password: 'scientist123', // Dev-only: plaintext for demo builds
     name: 'John Doe',
-    role: 'scientist' as const,
+    role: UserRole.SCIENTIST,
     organization: 'Research Lab Inc',
     department: 'Genomics',
     createdAt: '2024-01-15T00:00:00Z'
@@ -29,7 +30,7 @@ export const mockUsers = [
     email: 'sarah.manager@lab.com',
     password: 'manager123', // Dev-only: plaintext for demo builds
     name: 'Sarah Johnson',
-    role: 'lab_manager' as const,
+    role: UserRole.LAB_MANAGER,
     organization: 'Research Lab Inc',
     department: 'Operations',
     createdAt: '2024-01-10T00:00:00Z'
@@ -39,7 +40,7 @@ export const mockUsers = [
     email: 'viewer@lab.com',
     password: 'viewer123', // Dev-only: plaintext for demo builds
     name: 'Viewer Account',
-    role: 'viewer' as const,
+    role: UserRole.VIEWER,
     organization: 'Research Lab Inc',
     department: 'Quality Assurance',
     createdAt: '2024-02-01T00:00:00Z'

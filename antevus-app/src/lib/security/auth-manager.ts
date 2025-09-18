@@ -15,7 +15,8 @@
  * - Configure proper JWKS endpoint or public key
  */
 
-import { jwtVerify, createRemoteJWKSet, JWTPayload, errors as joseErrors } from 'jose'
+import { jwtVerify, createRemoteJWKSet, importSPKI, JWTPayload, errors as joseErrors } from 'jose'
+import { UserRole } from '@/lib/security/authorization'
 import { logger } from '@/lib/logger'
 
 interface AuthToken {
@@ -219,7 +220,7 @@ class SecureAuthManager {
         return {
           sub: parts[3] || 'demo-user-001',
           email: 'demo@antevus.com',
-          roles: ['scientist'],
+          roles: [UserRole.SCIENTIST],
           exp: Math.floor(Date.now() / 1000) + 3600, // 1 hour from now
           iat: Math.floor(Date.now() / 1000),
           iss: 'demo-issuer',
@@ -256,18 +257,21 @@ class SecureAuthManager {
         })
         payload = result.payload
       } else if (config.jwtPublicKey) {
-        // Verify using static public key
-        const publicKey = await crypto.subtle.importKey(
-          'spki',
-          Buffer.from(config.jwtPublicKey, 'base64'),
-          { name: 'RSA-PSS', hash: 'SHA-256' },
-          false,
-          ['verify']
-        )
+        // Verify using static public key with jose.importSPKI
+        // Convert base64 to PEM format if needed
+        let pemKey = config.jwtPublicKey
+        if (!pemKey.includes('BEGIN PUBLIC KEY')) {
+          // If it's base64, wrap it in PEM format
+          pemKey = `-----BEGIN PUBLIC KEY-----\n${config.jwtPublicKey}\n-----END PUBLIC KEY-----`
+        }
+
+        // Import the public key using jose's importSPKI
+        const publicKey = await importSPKI(pemKey, 'RS256')
 
         const result = await jwtVerify(token, publicKey, {
           issuer: config.jwtIssuer,
           audience: config.jwtAudience,
+          algorithms: ['RS256']
         })
         payload = result.payload
       } else {
