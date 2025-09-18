@@ -295,7 +295,9 @@ export default function MonitoringPage() {
                 }
               })
             } catch (e) {
-              logger.warn('audit log failed', e)
+              logger.warn('audit log failed', {
+                error: e instanceof Error ? e.message : 'Unknown error'
+              })
             }
             // Export current metric data as CSV
             const rows = [['Time', 'Value']]
