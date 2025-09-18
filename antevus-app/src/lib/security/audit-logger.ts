@@ -147,6 +147,12 @@ class AuditLogger {
   private sessionId: string
   private userId: string | null = null
 
+  // SECURITY: In-memory debug buffer for development inspection
+  // This replaces sessionStorage to prevent PII/PHI from being stored in browser
+  // Buffer is limited to last 1000 entries and cleared on page refresh
+  private static debugBuffer: AuditLogEntry[] = []
+  private static readonly MAX_DEBUG_BUFFER_SIZE = 1000
+
   constructor(config: Partial<AuditLoggerConfig> = {}) {
     this.config = { ...DEFAULT_CONFIG, ...config }
     this.sessionId = this.generateSessionId()
@@ -361,12 +367,18 @@ class AuditLogger {
           })
 
           if (!response.ok) {
-            console.error('Failed to send audit logs:', response.statusText)
+            // SECURITY: Don't log error details in production
+            if (process.env.NODE_ENV === 'development') {
+              console.warn('Audit log send failed:', response.status)
+            }
             // Re-add logs to buffer for retry
             this.buffer.unshift(...logsToSend)
           }
         } catch (error) {
-          console.error('Error sending audit logs:', error)
+          // SECURITY: Don't log error details in production
+          if (process.env.NODE_ENV === 'development') {
+            console.warn('Error sending audit logs')
+          }
           // Re-add logs to buffer for retry
           this.buffer.unshift(...logsToSend)
         }
@@ -376,10 +388,26 @@ class AuditLogger {
       }
     }
 
-    // Also store in sessionStorage for debugging (not for production)
+    // SECURITY: Store in memory-only debug buffer for development inspection
+    // NEVER use sessionStorage/localStorage as it persists PII/PHI in browser
     if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
-      const existingLogs = JSON.parse(sessionStorage.getItem('audit_logs') || '[]')
-      sessionStorage.setItem('audit_logs', JSON.stringify([...existingLogs, ...logsToSend].slice(-1000)))
+      // Add new logs to debug buffer
+      AuditLogger.debugBuffer.push(...logsToSend)
+
+      // Trim buffer to max size (keep most recent entries)
+      if (AuditLogger.debugBuffer.length > AuditLogger.MAX_DEBUG_BUFFER_SIZE) {
+        AuditLogger.debugBuffer = AuditLogger.debugBuffer.slice(-AuditLogger.MAX_DEBUG_BUFFER_SIZE)
+      }
+
+      // Make debug buffer accessible via console for dev inspection
+      // Usage: window.antevusDebugLogs.getAuditLogs()
+      if (!(window as any).antevusDebugLogs) {
+        (window as any).antevusDebugLogs = {
+          getAuditLogs: () => [...AuditLogger.debugBuffer], // Return copy to prevent modification
+          clearAuditLogs: () => { AuditLogger.debugBuffer = [] },
+          getAuditLogCount: () => AuditLogger.debugBuffer.length
+        }
+      }
     }
   }
 

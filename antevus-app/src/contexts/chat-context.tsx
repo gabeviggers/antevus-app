@@ -48,7 +48,10 @@ class RateLimiter {
             RATE_LIMIT_CONFIG.maxDelay
           )
 
-          console.warn(`Rate limited on ${operationName}. Retrying in ${delay}ms (attempt ${this.retryCount}/${RATE_LIMIT_CONFIG.maxRetries})`)
+          // Only log rate limiting in development
+          if (process.env.NODE_ENV === 'development') {
+            console.warn(`Rate limited on ${operationName}. Retrying in ${delay}ms`)
+          }
 
           // Wait with exponential backoff
           await new Promise(resolve => setTimeout(resolve, delay))
@@ -56,14 +59,19 @@ class RateLimiter {
           // Retry the operation
           return this.executeWithBackoff(operation, operationName)
         } else {
-          console.error(`Max retries exceeded for ${operationName}. Falling back to local storage.`)
+          // SECURITY: Don't log details in production to avoid information leakage
+          if (process.env.NODE_ENV === 'development') {
+            console.warn(`Max retries exceeded for ${operationName}`)
+          }
           // Return null to indicate we should use fallback
           return null
         }
       }
 
-      // For other errors, just log and return null
-      console.error(`Error in ${operationName}:`, error)
+      // For other errors, return null without logging in production
+      if (process.env.NODE_ENV === 'development') {
+        console.warn(`Error in ${operationName}`)
+      }
       return null
     }
   }
@@ -132,7 +140,7 @@ interface ChatContextType {
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined)
 
-// SECURITY: Removed localStorage key - using secure session storage only
+// SECURITY: No browser storage used - memory-only for HIPAA compliance
 // const STORAGE_KEY = 'antevus-chat-threads' // REMOVED FOR HIPAA COMPLIANCE
 
 // Configuration
@@ -150,7 +158,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const creatingThreadRef = useRef(false)
   const pendingThreadIdRef = useRef<string | null>(null)
 
-  // SECURITY: Load threads from secure session storage
+  // SECURITY: Load threads from memory-only storage
   // WARNING: Data is session-only and will be lost on refresh
   useEffect(() => {
     loadFromSecureStorage()
@@ -277,7 +285,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     if (!threadIdToUse && message.role === 'assistant' && threads.length > 0) {
       // Use the most recent thread (first in array)
       threadIdToUse = threads[0].id
-      console.log('Using most recent thread for assistant message:', threadIdToUse)
+      // Debug logging only in development
+      if (process.env.NODE_ENV === 'development') {
+        console.log('Using most recent thread for assistant message')
+      }
     }
 
     // Handle thread creation synchronously if needed
@@ -543,7 +554,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
    */
   const saveToSecureStorage = async () => {
     try {
-      // Always save to secure session storage first (immediate)
+      // Always save to secure memory storage first (immediate)
       threads.forEach(thread => {
         secureChatStorage.setThread(thread)
       })
@@ -551,7 +562,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       // Try to save to server with rate limiting protection
       const token = authManager.getToken()
       if (!token) {
-        console.debug('No auth token, skipping server save')
+        // Debug logging only in development
+        if (process.env.NODE_ENV === 'development') {
+          console.debug('No auth token, skipping server save')
+        }
         return
       }
 
@@ -577,13 +591,22 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       }, 'saveToSecureStorage')
 
       if (result) {
-        console.debug('Threads saved to server successfully')
+        // Debug logging only in development
+        if (process.env.NODE_ENV === 'development') {
+          console.debug('Threads saved successfully')
+        }
       } else {
-        console.warn('Server save failed after retries, data preserved in session storage')
+        // Warn only in development
+        if (process.env.NODE_ENV === 'development') {
+          console.warn('Server save failed, data in memory only')
+        }
       }
     } catch (error) {
-      console.error('Failed to save threads:', error)
-      // Data is still safe in session storage
+      // Error logging only in development
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('Failed to save threads')
+      }
+      // Data is still safe in memory
     }
   }
 
@@ -596,7 +619,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
    */
   const loadFromSecureStorage = async () => {
     try {
-      // First, load from secure session storage (immediate)
+      // First, load from secure memory storage (immediate)
       const sessionThreads = secureChatStorage.getAllThreads()
       if (sessionThreads.length > 0) {
         setThreads(sessionThreads)
@@ -608,7 +631,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       // Try to load from server with rate limiting protection
       const token = authManager.getToken()
       if (!token) {
-        console.debug('No auth token, using session storage only')
+        // Debug logging only in development
+        if (process.env.NODE_ENV === 'development') {
+          console.debug('No auth token, using memory only')
+        }
         return
       }
 
@@ -651,14 +677,20 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           setActiveThreadId(parsedThreads[0].id)
         }
 
-        // Update session storage with server data
+        // Update memory storage with server data
         parsedThreads.forEach((thread: ChatThread) => {
           secureChatStorage.setThread(thread)
         })
 
-        console.debug('Threads loaded from server successfully')
+        // Debug logging only in development
+        if (process.env.NODE_ENV === 'development') {
+          console.debug('Threads loaded successfully')
+        }
       } else if (!result) {
-        console.warn('Server load failed after retries, using session storage')
+        // Warn only in development
+        if (process.env.NODE_ENV === 'development') {
+          console.warn('Server load failed, using memory')
+        }
       }
       // const response = await fetch('/api/chat/threads', {
       //   headers: {
@@ -686,13 +718,13 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       //       setActiveThreadId(parsedThreads[0].id)
       //     }
       //
-      //     // Cache in session storage
+      //     // Cache in memory
       //     parsedThreads.forEach((thread: ChatThread) => {
       //       secureChatStorage.setThread(thread)
       //     })
       //   }
       // } else {
-      //   // Server error - try session storage as fallback
+      //   // Server error - try memory storage as fallback
       //   const sessionThreads = secureChatStorage.getAllThreads()
       //   if (sessionThreads.length > 0) {
       //     setThreads(sessionThreads)
@@ -702,7 +734,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       //   }
       // }
     } catch (error) {
-      console.error('Failed to load threads:', error)
+      // Error logging only in development
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('Failed to load threads')
+      }
       // Session storage fallback is already handled above
     }
   }

@@ -136,6 +136,46 @@ class SecureAuthManager {
   }
 
   /**
+   * Verify token and extract claims
+   * Returns verified user information or null if invalid
+   */
+  async verifyToken(token: string): Promise<{ sub: string; email?: string; roles?: string[] } | null> {
+    // For demo: Simple token validation
+    // Check if token matches our stored token
+    if (!token || token !== this.getToken()) {
+      return null
+    }
+
+    // In production, implement proper JWT verification:
+    // 1. Verify JWT signature with public key
+    // 2. Check expiration (exp claim)
+    // 3. Validate issuer (iss) and audience (aud)
+    // 4. Return decoded claims
+
+    // For demo, extract user ID from token format: "demo_token_<timestamp>_<userId>"
+    const parts = token.split('_')
+    if (parts.length >= 4 && parts[0] === 'demo' && parts[1] === 'token') {
+      // Return mock claims
+      return {
+        sub: parts[3] || 'demo-user', // User ID
+        email: 'demo@antevus.com',
+        roles: ['scientist']
+      }
+    }
+
+    // For tokens in format "demo_token_<timestamp>", use default user
+    if (token.startsWith('demo_token_')) {
+      return {
+        sub: 'demo-user-001',
+        email: 'demo@antevus.com',
+        roles: ['scientist']
+      }
+    }
+
+    return null
+  }
+
+  /**
    * Simulate token refresh (for production implementation)
    */
   async refreshAuthToken(): Promise<boolean> {

@@ -29,8 +29,12 @@ interface SessionContextType {
 
 const SessionContext = createContext<SessionContextType | undefined>(undefined)
 
-// Mock users for demo (in production, this would come from your auth service)
-const MOCK_USERS: Record<string, { password: string; user: UserContext }> = {
+// SECURITY: Demo mode must be explicitly enabled via environment variable
+// This prevents accidental exposure of demo credentials in production
+const isDemoMode = process.env.NEXT_PUBLIC_DEMO_MODE === 'true'
+
+// Mock users only available when demo mode is explicitly enabled
+const MOCK_USERS: Record<string, { password: string; user: UserContext }> = isDemoMode ? {
   'admin@antevus.com': {
     password: 'demo123',
     user: {
@@ -91,7 +95,7 @@ const MOCK_USERS: Record<string, { password: string; user: UserContext }> = {
       }
     }
   }
-}
+} : {} // Empty object when demo mode is disabled
 
 export function SessionProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserContext | null>(null)
@@ -128,6 +132,21 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const login = async (email: string, password: string) => {
     setIsLoading(true)
     try {
+      // SECURITY: Fail closed when demo mode is disabled
+      if (!isDemoMode) {
+        auditLogger.log({
+          eventType: AuditEventType.AUTH_LOGIN_FAILURE,
+          action: 'Demo login attempted when demo mode disabled',
+          metadata: {
+            email,
+            reason: 'Demo mode is not enabled'
+          },
+          severity: AuditSeverity.WARNING,
+          outcome: 'FAILURE'
+        })
+        throw new Error('Demo mode is not enabled. Please use production authentication.')
+      }
+
       // In production, this would be an API call
       const mockUser = MOCK_USERS[email.toLowerCase()]
 

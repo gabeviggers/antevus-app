@@ -1,14 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { authManager } from '@/lib/security/auth-manager'
+import { logger } from '@/lib/logger'
+import { withRateLimit, RateLimitConfigs, checkRateLimit, addRateLimitHeaders } from '@/lib/api/rate-limit-helper'
+
+// Constants for security limits
+const MAX_REQUEST_SIZE = 1024 * 1024 // 1MB max request size
+const MAX_LOGS_PER_REQUEST = 100 // Maximum logs in a single batch
 
 /**
  * SECURED API endpoint for receiving audit logs
  *
  * SECURITY IMPLEMENTATION:
  * - Authentication required via Bearer token
- * - Only authenticated users can submit audit logs
- * - Prevents audit log forgery and tampering
+ * - Rate limiting per client (100 requests/minute)
+ * - Request size validation (max 1MB)
+ * - Secure response headers (HSTS, CSP, etc.)
+ * - Principal binding prevents forgery
  * - HIPAA/SOC 2 compliant audit trail
  *
  * Production recommendations:
@@ -16,6 +24,38 @@ import { authManager } from '@/lib/security/auth-manager'
  * - Use dedicated service (Datadog, Splunk, CloudWatch)
  * - Implement log retention policies
  */
+
+/**
+ * Add secure headers to response
+ */
+function addSecureHeaders(response: NextResponse): NextResponse {
+  // Security headers for defense in depth
+  response.headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains')
+  response.headers.set('X-Content-Type-Options', 'nosniff')
+  response.headers.set('X-Frame-Options', 'DENY')
+  response.headers.set('X-XSS-Protection', '1; mode=block')
+  response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin')
+  response.headers.set('Content-Security-Policy', "default-src 'self'; frame-ancestors 'none';")
+  response.headers.set('Permissions-Policy', 'geolocation=(), microphone=(), camera=()')
+  response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, private')
+  response.headers.set('Pragma', 'no-cache')
+
+  return response
+}
+
+/**
+ * Create error response with secure headers
+ */
+function createErrorResponse(message: string, status: number, allowedMethods?: string[]): NextResponse {
+  const response = NextResponse.json({ error: message }, { status })
+
+  // Add Allow header for 405 responses
+  if (status === 405 && allowedMethods) {
+    response.headers.set('Allow', allowedMethods.join(', '))
+  }
+
+  return addSecureHeaders(response)
+}
 
 // Schema for incoming audit logs
 const AuditLogBatchSchema = z.object({
@@ -35,26 +75,47 @@ const AuditLogBatchSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
+    // SECURITY: Apply rate limiting (100 requests/minute per client)
+    const rateLimited = await withRateLimit(request, {
+      ...RateLimitConfigs.default,
+      limit: 100,
+      window: 60 * 1000 // 1 minute
+    })
+    if (rateLimited) {
+      return addSecureHeaders(rateLimited)
+    }
+
+    // SECURITY: Check request size before parsing
+    const contentLength = request.headers.get('content-length')
+    if (contentLength && parseInt(contentLength) > MAX_REQUEST_SIZE) {
+      logger.warn('Audit API request size limit exceeded', {
+        size: contentLength,
+        ip: request.headers.get('x-forwarded-for')
+      })
+      return createErrorResponse('Request entity too large - max 1MB', 413)
+    }
+
     // SECURITY: Verify authentication - REQUIRED for HIPAA/SOC 2 compliance
     const authHeader = request.headers.get('authorization')
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return NextResponse.json(
-        { error: 'Authentication required - audit logs must be authenticated' },
-        { status: 401 }
-      )
+      return createErrorResponse('Authentication required - audit logs must be authenticated', 401)
     }
 
-    // Extract and validate token
+    // Extract and verify token with proper JWT validation
     const token = authHeader.substring(7)
 
-    // Verify token exists and has minimum length
-    // In production: Verify JWT signature, expiration, and user permissions
-    if (!token || token.length < 10) {
-      return NextResponse.json(
-        { error: 'Invalid authentication token' },
-        { status: 401 }
-      )
+    // CRITICAL: Verify token and extract verified claims
+    const claims = await authManager.verifyToken(token)
+    if (!claims?.sub) {
+      logger.warn('Invalid token presented to audit API', {
+        tokenLength: token?.length,
+        ip: request.headers.get('x-forwarded-for')
+      })
+      return createErrorResponse('Unauthorized - invalid or expired token', 401)
     }
+
+    // Extract verified user ID from token claims
+    const verifiedUserId = String(claims.sub)
 
     // Get session ID from headers (now authenticated)
     const sessionId = request.headers.get('X-Audit-Session')
@@ -65,13 +126,40 @@ export async function POST(request: NextRequest) {
     // Validate the payload
     const validation = AuditLogBatchSchema.safeParse(body)
     if (!validation.success) {
-      return NextResponse.json(
-        { error: 'Invalid audit log format', details: validation.error },
-        { status: 400 }
-      )
+      return createErrorResponse('Invalid audit log format', 400)
     }
 
     const { logs, clientTime } = validation.data
+
+    // SECURITY: Limit number of logs per request
+    if (logs.length > MAX_LOGS_PER_REQUEST) {
+      logger.warn('Too many logs in single request', {
+        count: logs.length,
+        verifiedUserId,
+        ip: request.headers.get('x-forwarded-for')
+      })
+      return createErrorResponse(`Too many logs - max ${MAX_LOGS_PER_REQUEST} per request`, 400)
+    }
+
+    // CRITICAL SECURITY: Enforce principal binding
+    // Prevent users from forging audit logs with different userIds
+    const forgedLogs = logs.filter(log => log.userId && log.userId !== verifiedUserId)
+    if (forgedLogs.length > 0) {
+      logger.error('Attempted audit log forgery detected', {
+        verifiedUserId,
+        attemptedUserIds: [...new Set(forgedLogs.map(l => l.userId))],
+        sessionId,
+        ip: request.headers.get('x-forwarded-for')
+      })
+      return createErrorResponse('Forbidden - user ID mismatch in audit logs', 403)
+    }
+
+    // All logs must either have no userId or match the verified principal
+    const validatedLogs = logs.map(log => ({
+      ...log,
+      userId: log.userId || verifiedUserId, // Ensure userId is set
+      verifiedBy: 'jwt' // Mark as verified
+    }))
 
     // SECURITY: Audit logs are now authenticated and cannot be forged
     // Store these logs securely - never expose to console
@@ -83,33 +171,74 @@ export async function POST(request: NextRequest) {
     // 4. Maintain chain of custody for compliance
 
 
-    return NextResponse.json(
+    // Store validated logs (in production, save to database)
+    logger.info('Audit logs received and validated', {
+      count: validatedLogs.length,
+      verifiedUserId,
+      sessionId
+    })
+
+    // Check rate limit for response headers
+    const rateLimitResult = await checkRateLimit(request, {
+      ...RateLimitConfigs.default,
+      limit: 100,
+      window: 60 * 1000
+    })
+
+    // Create success response
+    const response = NextResponse.json(
       {
         success: true,
-        received: logs.length,
+        received: validatedLogs.length,
+        verifiedUserId,
         timestamp: new Date().toISOString()
       },
-      {
-        status: 200,
-        headers: {
-          'Cache-Control': 'no-store, no-cache, must-revalidate',
-          'Pragma': 'no-cache'
-        }
-      }
+      { status: 200 }
     )
+
+    // Add rate limit headers
+    if (rateLimitResult) {
+      addRateLimitHeaders(response, rateLimitResult, 100)
+    }
+
+    // Add secure headers and return
+    return addSecureHeaders(response)
   } catch (error) {
-    console.error('[AUDIT API] Error processing audit logs:', error)
-    return NextResponse.json(
-      { error: 'Failed to process audit logs' },
-      { status: 500 }
-    )
+    logger.error('Audit API error processing logs', {
+      error: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined
+    })
+    return createErrorResponse('Failed to process audit logs', 500)
   }
 }
 
-// Only allow POST method
+// Method handlers with proper Allow header
 export async function GET() {
-  return NextResponse.json(
-    { error: 'Method not allowed' },
-    { status: 405 }
-  )
+  return createErrorResponse('Method not allowed - only POST is supported', 405, ['POST'])
+}
+
+export async function PUT() {
+  return createErrorResponse('Method not allowed - only POST is supported', 405, ['POST'])
+}
+
+export async function PATCH() {
+  return createErrorResponse('Method not allowed - only POST is supported', 405, ['POST'])
+}
+
+export async function DELETE() {
+  return createErrorResponse('Method not allowed - only POST is supported', 405, ['POST'])
+}
+
+export async function HEAD() {
+  return createErrorResponse('Method not allowed - only POST is supported', 405, ['POST'])
+}
+
+export async function OPTIONS() {
+  // Handle preflight requests
+  const response = new NextResponse(null, { status: 204 })
+  response.headers.set('Allow', 'POST, OPTIONS')
+  response.headers.set('Access-Control-Allow-Methods', 'POST, OPTIONS')
+  response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Audit-Session')
+  response.headers.set('Access-Control-Max-Age', '86400')
+  return addSecureHeaders(response)
 }

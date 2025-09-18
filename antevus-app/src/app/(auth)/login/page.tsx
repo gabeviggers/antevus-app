@@ -3,13 +3,18 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { Eye, EyeOff } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { useSession } from '@/contexts/session-context'
 
+// SECURITY: Demo mode must be explicitly enabled
+const isDemoMode = process.env.NEXT_PUBLIC_DEMO_MODE === 'true'
+
 export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
   const { login } = useSession()
@@ -24,26 +29,11 @@ export default function LoginPage() {
       await login(email, password)
       router.push('/dashboard')
     } catch (err) {
-      setError('Invalid credentials. Please try again.')
+      setError(isDemoMode ? 'Invalid credentials. Please try again.' : 'Authentication failed. Please contact your administrator.')
       setIsLoading(false)
     }
   }
 
-  // Quick fill for demo personas
-  const fillDemoCredentials = (role: string) => {
-    const credentials = {
-      admin: { email: 'admin@antevus.com', password: 'demo123' },
-      scientist: { email: 'scientist@antevus.com', password: 'demo123' },
-      director: { email: 'director@antevus.com', password: 'demo123' },
-      technician: { email: 'technician@antevus.com', password: 'demo123' }
-    }
-
-    const cred = credentials[role as keyof typeof credentials]
-    if (cred) {
-      setEmail(cred.email)
-      setPassword(cred.password)
-    }
-  }
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -114,17 +104,30 @@ export default function LoginPage() {
                 <label htmlFor="password" className="block text-sm font-medium mb-2">
                   Password
                 </label>
-                <input
-                  id="password"
-                  name="password"
-                  type="password"
-                  autoComplete="current-password"
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="w-full px-3 py-2 border border-input bg-background rounded-md focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-colors"
-                  placeholder="••••••••"
-                />
+                <div className="relative">
+                  <input
+                    id="password"
+                    name="password"
+                    type={showPassword ? 'text' : 'password'}
+                    autoComplete="current-password"
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="w-full px-3 py-2 pr-10 border border-input bg-background rounded-md focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-colors"
+                    placeholder="••••••••"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    {showPassword ? (
+                      <EyeOff className="h-4 w-4" />
+                    ) : (
+                      <Eye className="h-4 w-4" />
+                    )}
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -152,52 +155,6 @@ export default function LoginPage() {
             >
               {isLoading ? 'Signing in...' : 'Sign in'}
             </Button>
-
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-border"></div>
-              </div>
-              <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-background px-2 text-muted-foreground">
-                  Or continue with
-                </span>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => fillDemoCredentials('admin')}
-                title="Admin Demo Account"
-              >
-                👨‍💼 Admin
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => fillDemoCredentials('scientist')}
-                title="Scientist Demo Account"
-              >
-                🧬 Scientist
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => fillDemoCredentials('director')}
-                title="Lab Director Demo Account"
-              >
-                🔬 Director
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => fillDemoCredentials('technician')}
-                title="Technician Demo Account"
-              >
-                🔧 Technician
-              </Button>
-            </div>
 
             <div className="relative">
               <div className="absolute inset-0 flex items-center">
