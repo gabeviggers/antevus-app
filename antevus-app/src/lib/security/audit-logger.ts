@@ -160,12 +160,12 @@ if (!HMAC_SECRET && process.env.NODE_ENV === 'production') {
 
 const DEFAULT_CONFIG: AuditLoggerConfig = {
   enableConsole: process.env.NODE_ENV === 'development',
-  enableRemote: true,
+  enableRemote: true,  // Keep enabled for production HIPAA/SOC 2 compliance
   remoteEndpoint: process.env.AUDIT_LOG_ENDPOINT || '/api/audit',
-  batchSize: 100,
-  flushInterval: 5000, // 5 seconds
+  batchSize: 50,  // Reduced batch size to avoid overwhelming the endpoint
+  flushInterval: 10000, // 10 seconds - less frequent to reduce load
   redactPII: true,
-  retentionDays: 2555, // 7 years
+  retentionDays: 2555, // 7 years for HIPAA compliance
   hmacSecret: HMAC_SECRET
 }
 
@@ -178,6 +178,7 @@ class AuditLogger {
   private flushTimer: NodeJS.Timeout | null = null
   private sessionId: string
   private userId: string | null = null
+  private authToken: string | null = null  // In-memory auth token (never persisted)
   private serverTransport: AuditLogServerTransport | undefined
 
   // SECURITY: In-memory debug buffer for development inspection
@@ -238,6 +239,21 @@ class AuditLogger {
         userId
       })
     }
+  }
+
+  /**
+   * Set auth token for authenticated audit requests
+   * Token is held in memory only - never persisted to storage
+   */
+  setAuthToken(token: string | null): void {
+    this.authToken = token
+  }
+
+  /**
+   * Clear auth token on logout
+   */
+  clearAuthToken(): void {
+    this.authToken = null
   }
 
   /**
@@ -472,12 +488,21 @@ class AuditLogger {
       // Only attempt fetch in browser context
       if (typeof window !== 'undefined') {
         try {
+          // Use in-memory auth token (never stored in browser storage)
+          const headers: HeadersInit = {
+            'Content-Type': 'application/json',
+            'X-Audit-Session': this.sessionId
+          }
+
+          // Add auth token if available (but don't block if not)
+          if (this.authToken) {
+            headers['Authorization'] = `Bearer ${this.authToken}`
+          }
+
           const response = await fetch(this.config.remoteEndpoint, {
             method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'X-Audit-Session': this.sessionId
-            },
+            headers,
+            credentials: 'same-origin', // Include cookies for same-origin requests
             body: JSON.stringify({
               logs: logsToSend,
               clientTime: new Date().toISOString()
