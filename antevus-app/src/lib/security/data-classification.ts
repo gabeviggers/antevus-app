@@ -37,6 +37,20 @@ export enum DataCategory {
 }
 
 /**
+ * Classification context for additional metadata
+ */
+export interface ClassificationContext {
+  isLabData?: boolean
+  isInternal?: boolean
+  source?: string
+  userRole?: string
+  department?: string
+  projectId?: string
+  timestamp?: Date
+  ipAddress?: string
+}
+
+/**
  * Classification result
  */
 export interface ClassificationResult {
@@ -127,7 +141,7 @@ export class DataClassificationService {
   /**
    * Classify content based on sensitivity patterns
    */
-  classify(content: string, context?: Record<string, unknown>): ClassificationResult {
+  classify(content: string, context: ClassificationContext = {}): ClassificationResult {
     const detectedPatterns: string[] = []
     let containsPHI = false
     let containsPII = false
@@ -193,7 +207,7 @@ export class DataClassificationService {
     )
 
     // Context-based adjustment - upgrade to at least CONFIDENTIAL if lab data
-    if (context?.isLabData && sensitivity === DataSensitivity.PUBLIC) {
+    if (context.isLabData === true && sensitivity === DataSensitivity.PUBLIC) {
       sensitivity = DataSensitivity.CONFIDENTIAL
     }
 
