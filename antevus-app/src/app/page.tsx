@@ -28,7 +28,7 @@ export default function LoginPage() {
 
     try {
       await login(email, password)
-      router.push('/dashboard')
+      router.push('/assistant')
     } catch (err) {
       setError(isDemoMode ? 'Invalid credentials. Please try again.' : 'Authentication failed. Please contact your administrator.')
       setIsLoading(false)

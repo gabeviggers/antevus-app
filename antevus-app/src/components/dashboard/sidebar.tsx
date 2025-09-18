@@ -28,12 +28,12 @@ import {
 } from 'lucide-react'
 
 const navigation = [
+  { name: 'Lab Assistant', href: '/assistant', icon: Sparkles },
   { name: 'Instruments', href: '/dashboard', icon: LayoutDashboard },
-  { name: 'Monitoring', href: '/monitoring', icon: Activity },
   { name: 'Run History', href: '/runs', icon: History },
+  { name: 'Monitoring', href: '/monitoring', icon: Activity },
   { name: 'Integrations', href: '/integrations', icon: Plug },
   { name: 'API Playground', href: '/api-playground', icon: Code2 },
-  { name: 'Lab Assistant', href: '/assistant', icon: Sparkles },
 ]
 
 interface SidebarProps {
@@ -47,7 +47,7 @@ export function Sidebar({ sidebarOpen, setSidebarOpen, collapsed, setCollapsed }
   const pathname = usePathname()
   const router = useRouter()
   const { logout } = useSession()
-  const { threads, activeThreadId, switchThread, deleteThread, renameThread, searchThreads, saveToLocalStorage } = useChat()
+  const { threads, activeThreadId, switchThread, deleteThread, renameThread, searchThreads } = useChat()
   const [searchQuery, setSearchQuery] = useState('')
   const [editingThreadId, setEditingThreadId] = useState<string | null>(null)
   const [editingTitle, setEditingTitle] = useState('')
