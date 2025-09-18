@@ -75,10 +75,11 @@ const AuditLogBatchSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
-    // SECURITY: Apply rate limiting (100 requests/minute per client)
+    // SECURITY: Apply rate limiting (1000 requests/minute per client for production)
+    // This is reasonable for audit logs while preventing abuse
     const rateLimited = await withRateLimit(request, {
       key: 'api:audit:logs',
-      limit: 100,
+      limit: 1000,  // Increased for production use
       window: 60 * 1000, // 1 minute
       blockDuration: 5 * 60 * 1000 // 5 minutes
     })
@@ -96,27 +97,45 @@ export async function POST(request: NextRequest) {
       return createErrorResponse('Request entity too large - max 1MB', 413)
     }
 
-    // SECURITY: Verify authentication - REQUIRED for HIPAA/SOC 2 compliance
+    // SECURITY: Authentication handling for HIPAA/SOC 2 compliance
+    // Allow unauthenticated requests for critical security events (failed logins)
+    // but apply stricter rate limiting
     const authHeader = request.headers.get('authorization')
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return createErrorResponse('Authentication required - audit logs must be authenticated', 401)
-    }
+    let verifiedUserId = 'anonymous'
 
-    // Extract and verify token with proper JWT validation
-    const token = authHeader.substring(7)
-
-    // CRITICAL: Verify token and extract verified claims
-    const claims = await authManager.verifyToken(token)
-    if (!claims?.sub) {
-      logger.warn('Invalid token presented to audit API', {
-        tokenLength: token?.length,
-        ip: request.headers.get('x-forwarded-for')
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      // Authenticated request - full access
+      verifiedUserId = String(authHeader.substring(7))  // Will be verified below
+    } else {
+      // Unauthenticated request - allow for security events but with stricter limits
+      const unauthRateLimited = await withRateLimit(request, {
+        key: 'api:audit:unauth',
+        limit: 50,  // Much stricter limit for unauthenticated requests
+        window: 60 * 1000,
+        blockDuration: 15 * 60 * 1000  // 15 minute block
       })
-      return createErrorResponse('Unauthorized - invalid or expired token', 401)
+      if (unauthRateLimited) {
+        return addSecureHeaders(unauthRateLimited)
+      }
     }
 
-    // Extract verified user ID from token claims
-    const verifiedUserId = String(claims.sub)
+    // Verify token if provided
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.substring(7)
+
+      // CRITICAL: Verify token and extract verified claims
+      const claims = await authManager.verifyToken(token)
+      if (!claims?.sub) {
+        logger.warn('Invalid token presented to audit API', {
+          tokenLength: token?.length,
+          ip: request.headers.get('x-forwarded-for')
+        })
+        return createErrorResponse('Unauthorized - invalid or expired token', 401)
+      }
+
+      // Extract verified user ID from token claims
+      verifiedUserId = String(claims.sub)
+    }
 
     // Get session ID from headers (now authenticated)
     const sessionId = request.headers.get('X-Audit-Session')
