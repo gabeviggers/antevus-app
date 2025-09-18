@@ -327,9 +327,9 @@ DEMO_ACCOUNT_RESTRICTED_IPS=      # Optional: Comma-separated IP whitelist
 
 #### Demo Account Credentials
 
-```
+```text
 Email: admin@antevus.com
-Password: admin123
+Password: AntevusDemo2024!SecureAccess#
 Role: Admin (sandboxed)
 ```
 

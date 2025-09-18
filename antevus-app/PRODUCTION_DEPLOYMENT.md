@@ -277,7 +277,7 @@ DEMO_ACCOUNT_SANDBOXED=true
 # Test login
 curl -X POST https://app.antevus.com/api/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"email":"admin@antevus.com","password":"admin123"}'
+  -d '{"email":"admin@antevus.com","password":"AntevusDemo2024!SecureAccess#"}'
 ```
 
 ---
