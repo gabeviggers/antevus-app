@@ -2,7 +2,7 @@
 
 import React from 'react'
 import { useRouter } from 'next/navigation'
-import { X, CheckCircle, AlertCircle, Info, AlertTriangle, Activity, Beaker, Clock, Link, Settings } from 'lucide-react'
+import { CheckCircle, AlertCircle, Info, AlertTriangle, Activity, Beaker, Clock, Link, Settings } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
@@ -266,27 +266,17 @@ export default function NotificationsPage() {
   }
 
   return (
-    <div className="h-full flex flex-col overflow-hidden">
+    <div className="h-screen flex flex-col overflow-hidden">
       {/* Fixed Header */}
-      <div className="flex-shrink-0 bg-background border-b">
-        <div className="max-w-4xl mx-auto px-4 py-4">
+      <div className="flex-shrink-0 bg-background">
+        <div className="max-w-4xl mx-auto px-4 py-4 border-b">
           {/* Header */}
           <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-3">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => router.back()}
-                className="h-8 w-8"
-              >
-                <X className="h-4 w-4" />
-              </Button>
-              <div>
-                <h1 className="text-2xl font-semibold">Notifications</h1>
-                <p className="text-sm text-muted-foreground">
-                  {unreadCount > 0 ? `${unreadCount} unread` : 'All caught up'}
-                </p>
-              </div>
+            <div>
+              <h1 className="text-2xl font-semibold">Notifications</h1>
+              <p className="text-sm text-muted-foreground">
+                {unreadCount > 0 ? `${unreadCount} unread` : 'All caught up'}
+              </p>
             </div>
 
             <div className="flex items-center gap-2">

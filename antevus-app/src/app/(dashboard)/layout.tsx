@@ -34,7 +34,7 @@ export default function DashboardLayout({
             >
               Skip to content
             </a>
-            <main id="dashboard-content" className="h-full overflow-y-auto" role="main">
+            <main id="dashboard-content" className="h-full" role="main">
               {children}
             </main>
           </div>
