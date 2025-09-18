@@ -458,8 +458,8 @@ class AuditLogger {
     // Add to buffer
     this.buffer.push(auditLog)
 
-    // Console output in development
-    if (this.config.enableConsole) {
+    // Console output in development (unless disabled)
+    if (this.config.enableConsole && process.env.DISABLE_AUDIT_CONSOLE !== 'true') {
       const logLevel = this.getConsoleMethod(auditLog.severity)
       console[logLevel](`[AUDIT] ${auditLog.eventType}: ${auditLog.action}`, {
         ...auditLog,

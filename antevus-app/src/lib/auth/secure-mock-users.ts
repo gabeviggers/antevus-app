@@ -30,8 +30,8 @@ const mockUsersWithHashes: StoredUser[] = [
   {
     id: 'usr_1',
     email: 'admin@antevus.com',
-    // Hash of 'admin123' - generated with bcrypt.hashSync('admin123', 12)
-    passwordHash: '$2b$12$YoVnZhdaTAvvOPg5v4.bduyUd1yXyT29kguZVCYvnZla35.3zvxta',
+    // Hash of 'AntevusDemo2024!SecureAccess#' - generated with bcrypt.hashSync('AntevusDemo2024!SecureAccess#', 12)
+    passwordHash: '$2b$12$yC48.ybB5LQh2ec0TO2SL.86.fX9X5BFWzPQt.y3TMXV2TK6uUM7a',
     name: 'Demo Admin',
     role: UserRole.ADMIN,
     organization: 'Antevus Labs',
