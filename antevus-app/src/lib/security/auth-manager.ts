@@ -16,6 +16,7 @@
  */
 
 import { jwtVerify, createRemoteJWKSet, JWTPayload, errors as joseErrors } from 'jose'
+import { logger } from '@/lib/logger'
 
 interface AuthToken {
   value: string
@@ -62,7 +63,7 @@ class SecureAuthManager {
       try {
         this.jwks = createRemoteJWKSet(new URL(config.jwksUri))
       } catch (error) {
-        console.error('Failed to initialize JWKS:', error)
+        logger.error('Failed to initialize JWKS', error)
       }
     }
 
@@ -212,7 +213,7 @@ class SecureAuthManager {
 
       // Format: demo_token_<timestamp>_<userId>
       if (parts.length >= 4 && parts[0] === 'demo' && parts[1] === 'token') {
-        console.log('Demo mode: Accepting demo_token with userId:', parts[3])
+        logger.info('Demo mode: Accepting demo_token with userId', { userId: parts[3] })
         return {
           sub: parts[3] || 'demo-user-001',
           email: 'demo@antevus.com',
@@ -225,7 +226,7 @@ class SecureAuthManager {
       }
 
       // Simple format: demo_token_<timestamp> or just demo_token_*
-      console.log('Demo mode: Accepting simple demo_token')
+      logger.info('Demo mode: Accepting simple demo_token')
       return {
         sub: 'demo-user-001',
         email: 'demo@antevus.com',
@@ -269,7 +270,7 @@ class SecureAuthManager {
         payload = result.payload
       } else {
         // No verification configuration available
-        console.error('JWT verification not configured. Set JWKS_URI or JWT_PUBLIC_KEY')
+        logger.error('JWT verification not configured. Set JWKS_URI or JWT_PUBLIC_KEY')
         return null
       }
 
@@ -288,13 +289,13 @@ class SecureAuthManager {
       // Log verification errors in development only
       if (process.env.NODE_ENV === 'development') {
         if (error instanceof joseErrors.JWTExpired) {
-          console.warn('JWT expired')
+          logger.warn('JWT expired')
         } else if (error instanceof joseErrors.JWTInvalid) {
-          console.warn('JWT invalid')
+          logger.warn('JWT invalid')
         } else if (error instanceof joseErrors.JWSSignatureVerificationFailed) {
-          console.warn('JWT signature verification failed')
+          logger.warn('JWT signature verification failed')
         } else {
-          console.warn('JWT verification failed:', error)
+          logger.warn('JWT verification failed', error)
         }
       }
       return null

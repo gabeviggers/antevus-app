@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { randomBytes } from 'crypto'
 import { validateCredentials } from '@/lib/auth/mock-users'
 import { AuthSession } from '@/lib/auth/types'
+import { logger } from '@/lib/logger'
 
 export async function POST(request: Request) {
   try {
@@ -41,7 +42,7 @@ export async function POST(request: Request) {
       session
     })
   } catch (error) {
-    console.error('Login error:', error)
+    logger.error('Login error', error)
     return NextResponse.json(
       { success: false, error: 'An error occurred during login' },
       { status: 500 }

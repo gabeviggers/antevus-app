@@ -14,6 +14,7 @@ import { PermissionDenied } from '@/components/auth/permission-denied'
 import { SensitivityIndicator } from '@/components/chat/sensitivity-indicator'
 import { ChatErrorBoundary } from '@/components/chat/chat-error-boundary'
 import { useRouter } from 'next/navigation'
+import { logger } from '@/lib/logger'
 
 interface SuggestedPrompt {
   icon: React.ReactNode
@@ -229,12 +230,12 @@ function AssistantPageContent() {
       const threadId = userMessageResult.threadId
 
       if (!threadId) {
-        console.error('No threadId returned from user message')
+        logger.error('No threadId returned from user message')
         setIsLoading(false)
         return
       }
 
-      console.log('User message added with threadId:', threadId)
+      logger.info('User message added with threadId', { threadId })
 
       // Clear any existing timeout
       if (timeoutRef.current) {
@@ -246,7 +247,7 @@ function AssistantPageContent() {
 
       // Add assistant message after delay
       timeoutRef.current = setTimeout(() => {
-        console.log('Adding assistant message to thread:', currentThreadId)
+        logger.info('Adding assistant message to thread', { threadId: currentThreadId })
 
         // Ensure thread is active
         switchThread(currentThreadId)
@@ -260,10 +261,10 @@ function AssistantPageContent() {
               isStreaming: true
             })
 
-            console.log('Assistant message result:', assistantMessageResult)
+            logger.info('Assistant message result', { assistantMessageResult })
 
             if (!assistantMessageResult) {
-              console.error('Failed to add assistant message')
+              logger.error('Failed to add assistant message')
               setIsLoading(false)
               return
             }
@@ -271,7 +272,7 @@ function AssistantPageContent() {
             const assistantMessageId = assistantMessageResult.messageId
             const assistantThreadId = assistantMessageResult.threadId
 
-            console.log('Assistant IDs:', { assistantMessageId, assistantThreadId })
+            logger.info('Assistant IDs', { assistantMessageId, assistantThreadId })
 
             // Generate response based on input
             let response = ""
@@ -394,7 +395,7 @@ How can I assist you with your lab operations today?`
             }
 
             // Debug logging
-            console.log('Streaming response:', {
+            logger.info('Streaming response', {
               threadId: assistantThreadId,
               messageId: assistantMessageId,
               responseLength: response.length,
@@ -458,7 +459,7 @@ How can I assist you with your lab operations today?`
       await navigator.clipboard.writeText(shareContent)
       // You could show a toast here
     } catch (err) {
-      console.error('Failed to copy:', err)
+      logger.error('Failed to copy', err)
     }
   }
 

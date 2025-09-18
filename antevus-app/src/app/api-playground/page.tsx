@@ -26,6 +26,7 @@ import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useToast } from '@/components/ui/use-toast'
+import { logger } from '@/lib/logger'
 import { cn } from '@/lib/utils'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { useRouter } from 'next/navigation'
@@ -200,7 +201,7 @@ export default function APIPlayground() {
         setApiKeys(data.keys)
       }
     } catch (error) {
-      console.error('Failed to fetch API keys:', error)
+      logger.error('Failed to fetch API keys', error)
     }
   }
 
@@ -312,7 +313,7 @@ export default function APIPlayground() {
         }, 5000)
       }
     } catch (error) {
-      console.error('Failed to reveal key:', error)
+      logger.error('Failed to reveal key', error)
     }
   }
 

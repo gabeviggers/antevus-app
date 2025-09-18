@@ -6,6 +6,7 @@ import { type Integration, type IntegrationConfig } from '@/lib/mock-data/integr
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { secureApiCall } from '@/lib/security/auth-manager'
+import { logger } from '@/lib/logger'
 import {
   X,
   Save,
@@ -149,7 +150,7 @@ export function IntegrationConfigModal({
 
       onClose()
     } catch (error) {
-      console.error('Error saving integration:', error)
+      logger.error('Error saving integration', error)
       setValidationErrors([{
         code: 'custom',
         message: 'Failed to save credentials securely. Please try again.',

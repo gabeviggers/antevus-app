@@ -11,6 +11,7 @@
 
 import { z } from 'zod'
 import * as crypto from 'crypto'
+import { logger } from '@/lib/logger'
 
 /**
  * Audit event types for comprehensive tracking
@@ -154,7 +155,7 @@ const HMAC_SECRET = process.env.AUDIT_LOG_HMAC_SECRET ||
   (process.env.NODE_ENV === 'development' ? 'dev-only-not-for-production-use' : '')
 
 if (!HMAC_SECRET && process.env.NODE_ENV === 'production') {
-  console.error('CRITICAL: AUDIT_LOG_HMAC_SECRET not configured. Audit log integrity cannot be guaranteed.')
+  logger.error('CRITICAL: AUDIT_LOG_HMAC_SECRET not configured. Audit log integrity cannot be guaranteed.')
 }
 
 const DEFAULT_CONFIG: AuditLoggerConfig = {
@@ -192,7 +193,7 @@ class AuditLogger {
 
     // Warn if running on server without transport
     if (typeof window === 'undefined' && !this.serverTransport) {
-      console.warn('AuditLogger: Running on server without serverTransport. Logs will not be persisted.')
+      logger.warn('AuditLogger: Running on server without serverTransport. Logs will not be persisted.')
     }
 
     this.startFlushTimer()
@@ -434,7 +435,7 @@ class AuditLogger {
     try {
       AuditLogSchema.parse(auditLog)
     } catch (error) {
-      console.error('Invalid audit log entry:', error)
+      logger.error('Invalid audit log entry', error)
       return
     }
 
@@ -486,7 +487,7 @@ class AuditLogger {
           if (!response.ok) {
             // SECURITY: Don't log error details in production
             if (process.env.NODE_ENV === 'development') {
-              console.warn('Audit log send failed:', response.status)
+              logger.warn('Audit log send failed', { status: response.status })
             }
             // Re-add logs to buffer for retry
             this.buffer.unshift(...logsToSend)
@@ -494,7 +495,7 @@ class AuditLogger {
         } catch (error) {
           // SECURITY: Don't log error details in production
           if (process.env.NODE_ENV === 'development') {
-            console.warn('Error sending audit logs')
+            logger.warn('Error sending audit logs')
           }
           // Re-add logs to buffer for retry
           this.buffer.unshift(...logsToSend)
@@ -513,12 +514,12 @@ class AuditLogger {
 
             // Logs successfully persisted
             if (process.env.NODE_ENV === 'development') {
-              console.log(`AuditLogger: Persisted ${logsToSend.length} log(s) via server transport`)
+              logger.info(`AuditLogger: Persisted ${logsToSend.length} log(s) via server transport`)
             }
           } catch (error) {
             // Log error and re-add logs to buffer for retry
             if (process.env.NODE_ENV === 'development') {
-              console.error('AuditLogger: Failed to persist logs via server transport:', error)
+              logger.error('AuditLogger: Failed to persist logs via server transport', error)
             }
 
             // Re-add logs to buffer for retry
@@ -527,7 +528,7 @@ class AuditLogger {
         } else {
           // No server transport configured - logs will be lost
           if (process.env.NODE_ENV === 'development') {
-            console.warn(`AuditLogger: No server transport configured. ${logsToSend.length} log(s) dropped.`)
+            logger.warn(`AuditLogger: No server transport configured. ${logsToSend.length} log(s) dropped.`)
           }
         }
       }
@@ -709,7 +710,7 @@ export class ExampleServerTransport implements AuditLogServerTransport {
     //   body: JSON.stringify(logs)
     // })
 
-    console.log(`[ExampleServerTransport] Would persist ${logs.length} audit log(s)`)
+    logger.info(`[ExampleServerTransport] Would persist ${logs.length} audit log(s)`)
   }
 
   isConfigured(): boolean {

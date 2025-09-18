@@ -41,6 +41,7 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ThemeToggle } from '@/components/theme-toggle'
+import { logger } from '@/lib/logger'
 
 export default function MonitoringPage() {
   const { user } = useSession()
@@ -294,7 +295,7 @@ export default function MonitoringPage() {
                 }
               })
             } catch (e) {
-              console.warn('audit log failed', e)
+              logger.warn('audit log failed', e)
             }
             // Export current metric data as CSV
             const rows = [['Time', 'Value']]

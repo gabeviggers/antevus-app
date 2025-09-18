@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { randomBytes } from 'crypto'
 import { getServerSession } from '@/lib/auth/session'
 import { auditLogger } from '@/lib/audit/logger'
+import { logger } from '@/lib/logger'
 
 // Validation schemas
 const IntegrationConfigSchema = z.object({
@@ -97,7 +98,7 @@ export async function GET(request: NextRequest) {
       }
     })
   } catch (error) {
-    console.error('Error fetching integrations:', error)
+    logger.error('Error fetching integrations', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
@@ -212,7 +213,7 @@ export async function POST(request: NextRequest) {
       }
     })
   } catch (error) {
-    console.error('Error configuring integration:', error)
+    logger.error('Error configuring integration', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
@@ -272,7 +273,7 @@ export async function DELETE(request: NextRequest) {
       message: 'Integration disconnected successfully'
     })
   } catch (error) {
-    console.error('Error disconnecting integration:', error)
+    logger.error('Error disconnecting integration', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

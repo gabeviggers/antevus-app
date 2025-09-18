@@ -7,6 +7,7 @@
  * - This module provides additional protection for special cases
  * - Never use dangerouslySetInnerHTML with unsanitized content
  */
+import { logger } from '@/lib/logger'
 
 /**
  * HTML entities that need escaping to prevent XSS
@@ -116,7 +117,7 @@ export function sanitizeJson<T>(data: unknown): T | null {
     // Additional validation can be added here
     return parsed as T
   } catch (error) {
-    console.error('Invalid JSON data:', error)
+    logger.error('Invalid JSON data', error)
     return null
   }
 }

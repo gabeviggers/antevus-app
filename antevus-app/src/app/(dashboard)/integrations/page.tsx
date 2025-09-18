@@ -25,6 +25,7 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ThemeToggle } from '@/components/theme-toggle'
+import { logger } from '@/lib/logger'
 
 const ITEMS_PER_PAGE = 9 // 3x3 grid
 
@@ -158,7 +159,7 @@ export default function IntegrationsPage() {
         setIntegrations(prev => prev.map(i => i.id === integration.id ? updated : i))
       }
     } catch (error) {
-      console.error('Error saving config:', error)
+      logger.error('Error saving config', error)
       // Log failure event
       auditLogger.logEvent(getAuditUser(), 'integration.error', {
         resourceType: 'integration',
@@ -236,7 +237,7 @@ export default function IntegrationsPage() {
         return syncResult || integration
       }))
     } catch (error) {
-      console.error('Sync all failed:', error)
+      logger.error('Sync all failed', error)
 
       // Revert all to connected status on catastrophic failure
       setIntegrations(prev => prev.map(i =>

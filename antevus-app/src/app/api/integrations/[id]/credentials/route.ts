@@ -8,6 +8,7 @@ import { z } from 'zod'
 import { getServerSession } from '@/lib/auth/session'
 import { auditLogger } from '@/lib/audit/logger'
 import { validateCSRFToken, createCSRFTokenForUser } from '@/lib/security/csrf'
+import { logger } from '@/lib/logger'
 
 // AES-256-GCM encryption configuration
 const ALGORITHM = 'aes-256-gcm'
@@ -34,7 +35,7 @@ function getMasterKey(): string {
 
     // In development, use a consistent development key
     if (process.env.NODE_ENV !== 'production') {
-      console.error(`[CRITICAL] ${errorMsg}`)
+      logger.error(`[CRITICAL] ${errorMsg}`)
       // Use a development-only key for local testing
       // This ensures developers know they need to set the key
       cachedMasterKey = 'DEVELOPMENT_ONLY_KEY_DO_NOT_USE_IN_PRODUCTION_' + crypto.randomBytes(16).toString('hex')
@@ -241,7 +242,7 @@ export async function POST(
       configuredFields: Object.keys(validation.data)
     })
   } catch (error) {
-    console.error('Error storing credentials:', error)
+    logger.error('Error storing credentials', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
@@ -311,7 +312,7 @@ export async function GET(
       })
     }
   } catch (error) {
-    console.error('Error fetching credential status:', error)
+    logger.error('Error fetching credential status', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
@@ -362,7 +363,7 @@ export async function DELETE(
       message: 'Credentials removed securely'
     })
   } catch (error) {
-    console.error('Error deleting credentials:', error)
+    logger.error('Error deleting credentials', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

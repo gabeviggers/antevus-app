@@ -4,6 +4,7 @@ import { createContext, useContext, useState, useEffect, ReactNode } from 'react
 import { UserContext, UserRole } from '@/lib/security/authorization'
 import { authManager } from '@/lib/security/auth-manager'
 import { auditLogger, AuditEventType, AuditSeverity } from '@/lib/security/audit-logger'
+import { logger } from '@/lib/logger'
 
 /**
  * Session Context for User Authentication and Authorization
@@ -234,7 +235,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         userId: user.id
       })
     } catch (error) {
-      console.error('Session refresh failed:', error)
+      logger.error('Session refresh failed', error)
       await logout()
     }
   }

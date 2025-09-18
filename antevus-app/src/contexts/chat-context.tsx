@@ -50,7 +50,7 @@ class RateLimiter {
 
           // Only log rate limiting in development
           if (process.env.NODE_ENV === 'development') {
-            console.warn(`Rate limited on ${operationName}. Retrying in ${delay}ms`)
+            logger.warn(`Rate limited on ${operationName}. Retrying in ${delay}ms`)
           }
 
           // Wait with exponential backoff
@@ -61,7 +61,7 @@ class RateLimiter {
         } else {
           // SECURITY: Don't log details in production to avoid information leakage
           if (process.env.NODE_ENV === 'development') {
-            console.warn(`Max retries exceeded for ${operationName}`)
+            logger.warn(`Max retries exceeded for ${operationName}`)
           }
           // Return null to indicate we should use fallback
           return null
@@ -70,7 +70,7 @@ class RateLimiter {
 
       // For other errors, return null without logging in production
       if (process.env.NODE_ENV === 'development') {
-        console.warn(`Error in ${operationName}`)
+        logger.warn(`Error in ${operationName}`)
       }
       return null
     }
@@ -287,7 +287,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       threadIdToUse = threads[0].id
       // Debug logging only in development
       if (process.env.NODE_ENV === 'development') {
-        console.log('Using most recent thread for assistant message')
+        logger.info('Using most recent thread for assistant message')
       }
     }
 
@@ -564,7 +564,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       if (!token) {
         // Debug logging only in development
         if (process.env.NODE_ENV === 'development') {
-          console.debug('No auth token, skipping server save')
+          logger.debug('No auth token, skipping server save')
         }
         return
       }
@@ -593,18 +593,18 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       if (result) {
         // Debug logging only in development
         if (process.env.NODE_ENV === 'development') {
-          console.debug('Threads saved successfully')
+          logger.debug('Threads saved successfully')
         }
       } else {
         // Warn only in development
         if (process.env.NODE_ENV === 'development') {
-          console.warn('Server save failed, data in memory only')
+          logger.warn('Server save failed, data in memory only')
         }
       }
     } catch (error) {
       // Error logging only in development
       if (process.env.NODE_ENV === 'development') {
-        console.warn('Failed to save threads')
+        logger.warn('Failed to save threads')
       }
       // Data is still safe in memory
     }
@@ -633,7 +633,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       if (!token) {
         // Debug logging only in development
         if (process.env.NODE_ENV === 'development') {
-          console.debug('No auth token, using memory only')
+          logger.debug('No auth token, using memory only')
         }
         return
       }
@@ -684,12 +684,12 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
         // Debug logging only in development
         if (process.env.NODE_ENV === 'development') {
-          console.debug('Threads loaded successfully')
+          logger.debug('Threads loaded successfully')
         }
       } else if (!result) {
         // Warn only in development
         if (process.env.NODE_ENV === 'development') {
-          console.warn('Server load failed, using memory')
+          logger.warn('Server load failed, using memory')
         }
       }
       // const response = await fetch('/api/chat/threads', {
@@ -736,7 +736,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       // Error logging only in development
       if (process.env.NODE_ENV === 'development') {
-        console.warn('Failed to load threads')
+        logger.warn('Failed to load threads')
       }
       // Session storage fallback is already handled above
     }
