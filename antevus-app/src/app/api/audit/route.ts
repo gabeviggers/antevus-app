@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { authManager } from '@/lib/security/auth-manager'
 import { logger } from '@/lib/logger'
-import { withRateLimit, RateLimitConfigs, checkRateLimit, addRateLimitHeaders } from '@/lib/api/rate-limit-helper'
+import { withRateLimit, checkRateLimit, addRateLimitHeaders } from '@/lib/api/rate-limit-helper'
 
 // Constants for security limits
 const MAX_REQUEST_SIZE = 1024 * 1024 // 1MB max request size
@@ -77,9 +77,10 @@ export async function POST(request: NextRequest) {
   try {
     // SECURITY: Apply rate limiting (100 requests/minute per client)
     const rateLimited = await withRateLimit(request, {
-      ...RateLimitConfigs.default,
+      key: 'api:audit:logs',
       limit: 100,
-      window: 60 * 1000 // 1 minute
+      window: 60 * 1000, // 1 minute
+      blockDuration: 5 * 60 * 1000 // 5 minutes
     })
     if (rateLimited) {
       return addSecureHeaders(rateLimited)
@@ -180,9 +181,10 @@ export async function POST(request: NextRequest) {
 
     // Check rate limit for response headers
     const rateLimitResult = await checkRateLimit(request, {
-      ...RateLimitConfigs.default,
+      key: 'api:audit:logs',
       limit: 100,
-      window: 60 * 1000
+      window: 60 * 1000,
+      blockDuration: 5 * 60 * 1000
     })
 
     // Create success response
