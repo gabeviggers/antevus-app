@@ -101,7 +101,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       const userContext: UserContext = {
         id: data.session.user.id,
         email: data.session.user.email,
-        roles: [data.session.user.role.toUpperCase() as UserRole], // Convert role to UserRole enum
+        roles: [data.session.user.role.toLowerCase() as UserRole], // UserRole enum uses lowercase values
         attributes: {
           name: data.session.user.name,
           department: data.session.user.department || 'Unknown'
