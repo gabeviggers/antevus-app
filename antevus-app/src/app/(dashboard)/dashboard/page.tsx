@@ -65,7 +65,7 @@ export default function InstrumentsDashboard() {
         setTimeout(() => {
           setToastMessage({
             title: 'Team invitations sent',
-            description: `${teamInvites.teamMembers.length} invitations sent successfully`
+            description: `${teamInvites.teamMembers!.length} invitations sent successfully`
           })
           setTimeout(() => setToastMessage(null), 3000)
         }, 500)
