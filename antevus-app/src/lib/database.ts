@@ -22,13 +22,18 @@ const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined
 }
 
-// Configure Prisma client with appropriate logging
+// Configure Prisma client with appropriate logging and connection pooling
 const prismaClientSingleton = () => {
   const client = new PrismaClient({
     log:
       process.env.NODE_ENV === 'development'
         ? ['query', 'error', 'warn']
         : ['error'],
+    datasources: {
+      db: {
+        url: process.env.DATABASE_URL,
+      },
+    },
   })
 
   // Log database connection
