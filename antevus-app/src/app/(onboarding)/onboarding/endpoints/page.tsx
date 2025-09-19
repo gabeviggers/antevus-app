@@ -94,19 +94,11 @@ export default function EndpointsConfigPage() {
 
       const userRole = roleData.role || 'scientist' // Default to scientist if no role
 
-      logger.info('Endpoints: Checking user role for navigation', {
-        userRole,
-        roleData,
-        isAdmin: userRole === 'admin' || userRole === 'lab_manager'
-      })
-
       if (userRole === 'admin' || userRole === 'lab_manager') {
         // Admins/Lab Managers go to team invite
-        logger.info('Endpoints: Navigating admin to team page')
         router.push('/onboarding/team')
       } else {
         // Everyone else (scientist, developer) goes to hello workflow
-        logger.info('Endpoints: Navigating non-admin to hello page')
         router.push('/onboarding/hello')
       }
     } catch (error) {
