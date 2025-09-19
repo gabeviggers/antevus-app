@@ -1,0 +1,1093 @@
+openapi: 3.0.3
+info:
+  title: Antevus Onboarding & Pilot API
+  description: API specification for 90-day pilot program and subscription onboarding
+  version: 1.0.0
+  contact:
+    name: Antevus API Support
+    email: api@antevus.com
+    url: https://docs.antevus.com
+
+servers:
+  - url: https://api.antevus.com/v1
+    description: Production API
+  - url: https://staging-api.antevus.com/v1
+    description: Staging API
+  - url: http://localhost:3000/api
+    description: Local Development
+
+security:
+  - BearerAuth: []
+  - ApiKeyAuth: []
+
+paths:
+  # Authentication & Registration
+  /auth/register:
+    post:
+      summary: Register new user and create workspace
+      tags: [Authentication]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password, name]
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  minLength: 12
+                name:
+                  type: string
+                provider:
+                  type: string
+                  enum: [email, google, github]
+                organizationName:
+                  type: string
+      responses:
+        201:
+          description: User created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        400:
+          $ref: '#/components/responses/BadRequest'
+        409:
+          description: Email already exists
+
+  /auth/login:
+    post:
+      summary: Login user
+      tags: [Authentication]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+      responses:
+        200:
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        401:
+          $ref: '#/components/responses/Unauthorized'
+
+  # Provisioning & Billing
+  /provision/checkout:
+    post:
+      summary: Handle Stripe checkout completion webhook
+      tags: [Provisioning]
+      security:
+        - WebhookAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                type:
+                  type: string
+                  enum: [checkout.session.completed]
+                data:
+                  type: object
+                  properties:
+                    object:
+                      type: object
+      responses:
+        200:
+          description: Provisioning completed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProvisioningResult'
+
+  /billing/pilot/invoice:
+    post:
+      summary: Create pilot invoice ($25k)
+      tags: [Billing]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [organizationId, contactEmail]
+              properties:
+                organizationId:
+                  type: string
+                  format: uuid
+                contactEmail:
+                  type: string
+                  format: email
+                companyDetails:
+                  type: object
+                  properties:
+                    name:
+                      type: string
+                    address:
+                      type: string
+                    taxId:
+                      type: string
+      responses:
+        201:
+          description: Invoice created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  invoiceId:
+                    type: string
+                  invoiceUrl:
+                    type: string
+                  status:
+                    type: string
+                    enum: [draft, sent, paid, void]
+                  amountDue:
+                    type: number
+                  dueDate:
+                    type: string
+                    format: date-time
+
+  /billing/subscription:
+    get:
+      summary: Get subscription details
+      tags: [Billing]
+      responses:
+        200:
+          description: Subscription details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Subscription'
+
+  # API Key Management
+  /keys:
+    post:
+      summary: Create organization API key
+      tags: [API Keys]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, scopes]
+              properties:
+                name:
+                  type: string
+                scopes:
+                  type: array
+                  items:
+                    type: string
+                    enum: [agent, webhooks, data, admin]
+                expiresIn:
+                  type: integer
+                  description: Expiry in seconds (optional)
+      responses:
+        201:
+          description: API key created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  key:
+                    type: string
+                    description: Only returned once, never stored
+                  name:
+                    type: string
+                  scopes:
+                    type: array
+                    items:
+                      type: string
+                  expiresAt:
+                    type: string
+                    format: date-time
+
+    get:
+      summary: List organization API keys
+      tags: [API Keys]
+      responses:
+        200:
+          description: List of API keys
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ApiKey'
+
+  /keys/{keyId}/rotate:
+    post:
+      summary: Rotate API key
+      tags: [API Keys]
+      parameters:
+        - name: keyId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        200:
+          description: Key rotated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  oldKeyId:
+                    type: string
+                  newKey:
+                    type: string
+                    description: Only returned once
+                  expiresAt:
+                    type: string
+                    format: date-time
+
+  # Webhook Management
+  /webhooks/secret:
+    post:
+      summary: Generate HMAC webhook secret
+      tags: [Webhooks]
+      responses:
+        201:
+          description: Secret created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  secret:
+                    type: string
+                    description: Only returned once
+                  createdAt:
+                    type: string
+                    format: date-time
+
+    get:
+      summary: Get webhook secret metadata
+      tags: [Webhooks]
+      responses:
+        200:
+          description: Secret metadata (not the actual secret)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  lastRotated:
+                    type: string
+                    format: date-time
+
+  /webhooks/test:
+    post:
+      summary: Send test webhook with HMAC
+      tags: [Webhooks]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url]
+              properties:
+                url:
+                  type: string
+                  format: uri
+                payload:
+                  type: object
+      responses:
+        200:
+          description: Test result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  statusCode:
+                    type: integer
+                  hmacValid:
+                    type: boolean
+                  responseTime:
+                    type: integer
+                  error:
+                    type: string
+
+  # Edge Agent Management
+  /edge/join-token:
+    post:
+      summary: Generate join token for Edge Agent
+      tags: [Edge Agent]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                ttl:
+                  type: integer
+                  default: 1800
+                  description: TTL in seconds (default 30 min)
+      responses:
+        201:
+          description: Token created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+                    pattern: '^ANT-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$'
+                  expiresAt:
+                    type: string
+                    format: date-time
+
+  /edge/register:
+    post:
+      summary: Register Edge Agent with join token
+      tags: [Edge Agent]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, fingerprint]
+              properties:
+                token:
+                  type: string
+                fingerprint:
+                  type: string
+                  description: Unique device fingerprint
+                metadata:
+                  type: object
+                  properties:
+                    hostname:
+                      type: string
+                    os:
+                      type: string
+                    version:
+                      type: string
+      responses:
+        200:
+          description: Agent registered
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  agentId:
+                    type: string
+                  apiKey:
+                    type: string
+                  endpoints:
+                    type: object
+                    properties:
+                      ingest:
+                        type: string
+                      events:
+                        type: string
+                      control:
+                        type: string
+
+  /edge/agents:
+    get:
+      summary: List registered agents
+      tags: [Edge Agent]
+      responses:
+        200:
+          description: List of agents
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/EdgeAgent'
+
+  # Instrument Management
+  /instruments/discover:
+    post:
+      summary: Start instrument discovery
+      tags: [Instruments]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                agentId:
+                  type: string
+                scanOptions:
+                  type: object
+                  properties:
+                    timeout:
+                      type: integer
+                    protocols:
+                      type: array
+                      items:
+                        type: string
+      responses:
+        202:
+          description: Discovery started
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  discoveryId:
+                    type: string
+                  status:
+                    type: string
+                    enum: [scanning, completed, failed]
+
+  /instruments/discoveries/{discoveryId}:
+    get:
+      summary: Get discovery results
+      tags: [Instruments]
+      parameters:
+        - name: discoveryId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: Discovery results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  instruments:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/DiscoveredInstrument'
+
+  /instruments/attach:
+    post:
+      summary: Attach selected instruments
+      tags: [Instruments]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [instruments]
+              properties:
+                instruments:
+                  type: array
+                  items:
+                    type: object
+                    required: [id, name]
+                    properties:
+                      id:
+                        type: string
+                      name:
+                        type: string
+                      model:
+                        type: string
+                      serial:
+                        type: string
+                      config:
+                        type: object
+      responses:
+        200:
+          description: Instruments attached
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  attached:
+                    type: integer
+                  failed:
+                    type: integer
+                  instruments:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Instrument'
+
+  /instruments:
+    get:
+      summary: List attached instruments
+      tags: [Instruments]
+      responses:
+        200:
+          description: List of instruments
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Instrument'
+
+  # Usage & Metering
+  /usage/summary:
+    get:
+      summary: Get current usage summary
+      tags: [Usage]
+      parameters:
+        - name: period
+          in: query
+          schema:
+            type: string
+            enum: [current, previous, custom]
+        - name: startDate
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: endDate
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        200:
+          description: Usage summary
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UsageSummary'
+
+  /usage/forecast:
+    get:
+      summary: Get usage forecast
+      tags: [Usage]
+      responses:
+        200:
+          description: Usage forecast
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  currentUsage:
+                    $ref: '#/components/schemas/UsageMetrics'
+                  projectedUsage:
+                    $ref: '#/components/schemas/UsageMetrics'
+                  estimatedCost:
+                    type: number
+                  overageRisk:
+                    type: string
+                    enum: [low, medium, high]
+
+  # AI Proxy (Platform-Managed)
+  /ai/chat:
+    post:
+      summary: Send chat message through platform LLM proxy
+      tags: [AI]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [messages]
+              properties:
+                messages:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      role:
+                        type: string
+                        enum: [system, user, assistant]
+                      content:
+                        type: string
+                stream:
+                  type: boolean
+                  default: false
+                temperature:
+                  type: number
+                  minimum: 0
+                  maximum: 2
+                maxTokens:
+                  type: integer
+      responses:
+        200:
+          description: AI response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  choices:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        message:
+                          type: object
+                          properties:
+                            role:
+                              type: string
+                            content:
+                              type: string
+                  usage:
+                    type: object
+                    properties:
+                      promptTokens:
+                        type: integer
+                      completionTokens:
+                        type: integer
+                      totalTokens:
+                        type: integer
+                      cost:
+                        type: number
+            text/event-stream:
+              schema:
+                type: string
+                description: SSE stream for real-time responses
+
+  /ai/usage:
+    get:
+      summary: Get AI usage statistics
+      tags: [AI]
+      responses:
+        200:
+          description: AI usage stats
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  currentPeriod:
+                    type: object
+                    properties:
+                      tokensUsed:
+                        type: integer
+                      tokensIncluded:
+                        type: integer
+                      cost:
+                        type: number
+                  history:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        date:
+                          type: string
+                          format: date
+                        tokens:
+                          type: integer
+                        cost:
+                          type: number
+
+  # Onboarding Progress
+  /onboarding/progress:
+    get:
+      summary: Get onboarding progress
+      tags: [Onboarding]
+      responses:
+        200:
+          description: Onboarding progress
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingProgress'
+
+    post:
+      summary: Update onboarding step
+      tags: [Onboarding]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [step, completed]
+              properties:
+                step:
+                  type: string
+                  enum: [profile, agent, instruments, endpoints, hello]
+                completed:
+                  type: boolean
+                metadata:
+                  type: object
+      responses:
+        200:
+          description: Progress updated
+
+  # Workflows
+  /workflows/hello:
+    post:
+      summary: Run hello workflow (demo)
+      tags: [Workflows]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                instrumentId:
+                  type: string
+                dryRun:
+                  type: boolean
+                  default: true
+      responses:
+        200:
+          description: Workflow started
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  runId:
+                    type: string
+                  status:
+                    type: string
+                    enum: [pending, running, completed, failed]
+                  streamUrl:
+                    type: string
+                    description: WebSocket URL for real-time updates
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+    WebhookAuth:
+      type: apiKey
+      in: header
+      name: X-Webhook-Secret
+
+  schemas:
+    AuthResponse:
+      type: object
+      properties:
+        token:
+          type: string
+        refreshToken:
+          type: string
+        user:
+          $ref: '#/components/schemas/User'
+        organization:
+          $ref: '#/components/schemas/Organization'
+
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+        role:
+          type: string
+          enum: [scientist, it, manager, compliance]
+        createdAt:
+          type: string
+          format: date-time
+
+    Organization:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        subscriptionTier:
+          type: string
+          enum: [core, team, scale, enterprise]
+        pilotActive:
+          type: boolean
+        pilotEndDate:
+          type: string
+          format: date-time
+
+    ProvisioningResult:
+      type: object
+      properties:
+        organizationId:
+          type: string
+        workspaceId:
+          type: string
+        apiKeys:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              name:
+                type: string
+              scopes:
+                type: array
+                items:
+                  type: string
+        simulatedInstruments:
+          type: integer
+
+    Subscription:
+      type: object
+      properties:
+        tier:
+          type: string
+          enum: [core, team, scale, enterprise]
+        status:
+          type: string
+          enum: [active, past_due, canceled]
+        currentPeriodEnd:
+          type: string
+          format: date-time
+        usage:
+          $ref: '#/components/schemas/UsageMetrics'
+        limits:
+          $ref: '#/components/schemas/UsageLimits'
+
+    ApiKey:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        scopes:
+          type: array
+          items:
+            type: string
+        lastUsed:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+
+    EdgeAgent:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        status:
+          type: string
+          enum: [online, offline, error]
+        lastSeen:
+          type: string
+          format: date-time
+        metadata:
+          type: object
+
+    DiscoveredInstrument:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        model:
+          type: string
+        serial:
+          type: string
+        protocol:
+          type: string
+        status:
+          type: string
+          enum: [online, offline, idle, running]
+
+    Instrument:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        model:
+          type: string
+        serial:
+          type: string
+        status:
+          type: string
+        agentId:
+          type: string
+        attachedAt:
+          type: string
+          format: date-time
+        config:
+          type: object
+
+    UsageSummary:
+      type: object
+      properties:
+        period:
+          type: object
+          properties:
+            start:
+              type: string
+              format: date-time
+            end:
+              type: string
+              format: date-time
+        usage:
+          $ref: '#/components/schemas/UsageMetrics'
+        limits:
+          $ref: '#/components/schemas/UsageLimits'
+        overages:
+          type: object
+          properties:
+            events:
+              type: integer
+            aiTokens:
+              type: integer
+            storage:
+              type: number
+        estimatedCost:
+          type: number
+
+    UsageMetrics:
+      type: object
+      properties:
+        events:
+          type: integer
+        aiTokens:
+          type: integer
+        storageGb:
+          type: number
+        instruments:
+          type: integer
+
+    UsageLimits:
+      type: object
+      properties:
+        events:
+          type: integer
+        aiTokens:
+          type: integer
+        storageGb:
+          type: number
+        instruments:
+          type: integer
+
+    OnboardingProgress:
+      type: object
+      properties:
+        completedSteps:
+          type: array
+          items:
+            type: string
+        currentStep:
+          type: string
+        percentComplete:
+          type: integer
+        checklist:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              label:
+                type: string
+              completed:
+                type: boolean
+              completedAt:
+                type: string
+                format: date-time
+
+  responses:
+    BadRequest:
+      description: Bad request
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+              details:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    field:
+                      type: string
+                    message:
+                      type: string
+
+    Unauthorized:
+      description: Unauthorized
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                default: Unauthorized
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                default: Not found
+
+    RateLimited:
+      description: Rate limit exceeded
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+              retryAfter:
+                type: integer
