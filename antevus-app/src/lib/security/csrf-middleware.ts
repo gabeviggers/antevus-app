@@ -15,6 +15,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { validateCSRFToken } from './csrf'
 import { auditLogger, AuditEventType, AuditSeverity } from '@/lib/security/audit-logger'
 import { logger } from '@/lib/logger'
+import { isFeatureEnabled } from '@/lib/config/features'
 
 /**
  * CSRF protection middleware for API routes
@@ -24,9 +25,13 @@ export function withCSRF<T extends unknown[]>(
   handler: (request: NextRequest, ...args: T) => Promise<NextResponse | Response>
 ) {
   return async (request: NextRequest, ...args: T): Promise<NextResponse | Response> => {
-    // Skip CSRF validation in development/demo mode
-    if (process.env.NODE_ENV === 'development' || process.env.NEXT_PUBLIC_DEMO_MODE === 'true') {
-      logger.debug('CSRF validation skipped in development/demo mode')
+    // Server-side check: Skip CSRF if feature is disabled or in demo mode
+    // Note: This uses server-side env vars only, never NEXT_PUBLIC_* vars
+    const csrfEnabled = isFeatureEnabled('csrfProtection')
+    const isDemoMode = process.env.NODE_ENV === 'development' && process.env.DEMO_MODE === 'true'
+
+    if (!csrfEnabled || isDemoMode) {
+      logger.debug('CSRF validation skipped', { csrfEnabled, isDemoMode })
       return handler(request, ...args)
     }
 
@@ -46,7 +51,7 @@ export function withCSRF<T extends unknown[]>(
     if (!validation.valid) {
       // Log the CSRF failure
       await auditLogger.log({
-        eventType: AuditEventType.AUTH_LOGIN_FAILURE,
+        eventType: AuditEventType.SECURITY_CSRF_DETECTED,
         action: 'CSRF validation failed',
         userId,
         metadata: {

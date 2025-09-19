@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { authManager } from '@/lib/security/auth-manager'
 import { auditLogger, AuditEventType, AuditSeverity } from '@/lib/security/audit-logger'
+import { isDemoMode } from '@/lib/config/demo-mode'
 import { encryptionService } from '@/lib/security/encryption-service'
 import { prisma } from '@/lib/database'
 import { logger } from '@/lib/logger'
@@ -20,7 +21,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
     const userId = session.userId
-    const isDemo = process.env.NEXT_PUBLIC_DEMO_MODE === 'true'
+    const isDemo = isDemoMode()
 
     // Retrieve complete onboarding progress
     const onboardingProgress = await prisma.onboardingProgress.findUnique({

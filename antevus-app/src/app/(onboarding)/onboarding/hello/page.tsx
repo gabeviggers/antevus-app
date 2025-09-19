@@ -34,7 +34,7 @@ export default function HelloWorkflowPage() {
       .then(res => res.json())
       .then(data => {
         // Admins should have gone to team invite instead
-        if (data.role === 'admin' || data.role === 'manager') {
+        if (data.role === 'admin' || data.role === 'lab_manager') {
           router.push('/onboarding/team')
         }
       })

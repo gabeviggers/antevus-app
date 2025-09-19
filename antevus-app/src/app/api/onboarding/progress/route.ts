@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { logger } from '@/lib/logger'
+import { isDemoMode, shouldEnforceCSRF } from '@/lib/config/demo-mode'
 import { authManager } from '@/lib/security/auth-manager'
 import { auditLogger, AuditEventType, AuditSeverity } from '@/lib/security/audit-logger'
+import { validateCSRFToken } from '@/lib/security/csrf'
 
 export async function POST(request: NextRequest) {
   try {
@@ -17,12 +19,33 @@ export async function POST(request: NextRequest) {
       })
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
-    // userId available via session.userId if needed
+    const userId = session.userId
+
+    // CSRF validation for state-changing operations
+    if (shouldEnforceCSRF()) {
+      const csrfValidation = validateCSRFToken(request, userId)
+      if (!csrfValidation.valid) {
+        await auditLogger.log({
+          eventType: AuditEventType.SECURITY_CSRF_DETECTED,
+          action: 'CSRF token validation failed',
+          userId,
+          metadata: {
+            endpoint: `${request.method} ${request.url}`,
+            reason: csrfValidation.error || 'Unknown'
+          },
+          severity: AuditSeverity.WARNING
+        })
+        return NextResponse.json(
+          { error: 'Invalid CSRF token' },
+          { status: 403 }
+        )
+      }
+    }
 
     const body = await request.json()
 
     // For demo mode, track progress
-    if (process.env.NODE_ENV === 'development' && process.env.DEMO_MODE === 'true') {
+    if (isDemoMode()) {
       logger.info('Demo onboarding progress', {
         step: body.step,
         completed: body.completed,
@@ -40,7 +63,7 @@ export async function POST(request: NextRequest) {
       if (body.onboardingComplete) {
         response.cookies.set('demo-onboarding-complete', 'true', {
           httpOnly: true,
-          secure: false, // Development only
+          secure: process.env.NODE_ENV === 'production', // HTTPS in production, HTTP in dev
           sameSite: 'strict',
           maxAge: 60 * 60 * 24 * 7, // 7 days
           path: '/'
@@ -49,16 +72,17 @@ export async function POST(request: NextRequest) {
         // Ensure demo session stays active
         response.cookies.set('demo-session', 'demo-active', {
           httpOnly: true,
-          secure: false, // Development only
+          secure: process.env.NODE_ENV === 'production', // HTTPS in production, HTTP in dev
           sameSite: 'strict',
           maxAge: 60 * 60 * 24 * 7, // 7 days
           path: '/'
         })
 
-        // Set auth token for the session context to recognize
-        response.cookies.set('auth-token', 'demo-token-admin', {
-          httpOnly: false, // Needs to be accessible by client
-          secure: false, // Development only
+        // Set session identifier for the session context to recognize
+        // Using httpOnly cookie for security - no raw tokens in client-readable storage
+        response.cookies.set('session-id', 'demo-session-admin', {
+          httpOnly: true, // Security: prevent client-side JS access
+          secure: process.env.NODE_ENV === 'production', // HTTPS in production, HTTP in dev
           sameSite: 'strict',
           maxAge: 60 * 60 * 24 * 7, // 7 days
           path: '/'
@@ -100,7 +124,7 @@ export async function GET(request: NextRequest) {
     // userId available via session.userId if needed
 
     // Check progress for demo
-    if (process.env.NODE_ENV === 'development' && process.env.DEMO_MODE === 'true') {
+    if (isDemoMode()) {
       const completeCookie = request.cookies.get('demo-onboarding-complete')
       const roleCookie = request.cookies.get('demo-role')
 

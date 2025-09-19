@@ -92,8 +92,8 @@ export default function EndpointsConfigPage() {
       const response = await fetch('/api/onboarding/profile')
       const data = await response.json()
 
-      if (data.role === 'admin' || data.role === 'manager') {
-        // Admins/Managers go to team invite
+      if (data.role === 'admin' || data.role === 'lab_manager') {
+        // Admins/Lab Managers go to team invite
         router.push('/onboarding/team')
       } else {
         // Everyone else goes to hello workflow

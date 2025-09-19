@@ -3,6 +3,8 @@ import { z } from 'zod'
 import { logger } from '@/lib/logger'
 import { authManager } from '@/lib/security/auth-manager'
 import { auditLogger, AuditEventType, AuditSeverity } from '@/lib/security/audit-logger'
+import { validateCSRFToken } from '@/lib/security/csrf'
+import { shouldEnforceCSRF, isDemoMode } from '@/lib/config/demo-mode'
 
 const instrumentsSchema = z.object({
   selectedInstruments: z.array(z.object({
@@ -16,7 +18,7 @@ const instrumentsSchema = z.object({
     .max(50, "Too many instruments selected")
 })
 
-export async function POST(request: NextRequest) {
+async function handlePost(request: NextRequest) {
   try {
     // Authentication
     const token = authManager.getTokenFromRequest(request)
@@ -30,7 +32,34 @@ export async function POST(request: NextRequest) {
       })
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
-    // userId available via session.userId if needed
+    const userId = session.userId
+
+    // CSRF Protection for state-changing operation
+    // Skip CSRF validation in demo mode
+    if (shouldEnforceCSRF()) {
+      const csrfValidation = validateCSRFToken(request, userId)
+      if (!csrfValidation.valid) {
+        await auditLogger.log({
+          eventType: AuditEventType.AUTH_LOGIN_FAILURE,
+          action: 'CSRF validation failed',
+          userId,
+          metadata: {
+            endpoint: `${request.method} ${request.url}`,
+            error: csrfValidation.error,
+            ip: request.headers.get('x-forwarded-for') || 'unknown'
+          },
+          severity: AuditSeverity.WARNING
+        })
+
+        return NextResponse.json(
+          {
+            error: 'CSRF validation failed',
+            message: csrfValidation.error || 'Invalid or missing CSRF token'
+          },
+          { status: 403 }
+        )
+      }
+    }
 
     // Parse and validate input
     const body = await request.json()
@@ -49,7 +78,7 @@ export async function POST(request: NextRequest) {
     const instrumentsData = validation.data
 
     // For demo mode
-    if (process.env.NODE_ENV === 'development' && process.env.DEMO_MODE === 'true') {
+    if (isDemoMode()) {
       logger.info('Demo instruments saved', {
         count: instrumentsData.selectedInstruments.length
       })
@@ -115,7 +144,7 @@ export async function GET(request: NextRequest) {
     // userId available via session.userId if needed
 
     // For demo mode
-    if (process.env.NODE_ENV === 'development' && process.env.DEMO_MODE === 'true') {
+    if (isDemoMode()) {
       const instrumentsCookie = request.cookies.get('demo-instruments')
 
       if (instrumentsCookie) {
@@ -147,3 +176,6 @@ export async function GET(request: NextRequest) {
     )
   }
 }
+
+// Export POST handler (CSRF validation is done inline)
+export const POST = handlePost

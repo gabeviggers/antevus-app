@@ -8,7 +8,7 @@ import { logger } from '@/lib/logger'
 
 interface TeamMember {
   email: string
-  role: 'scientist' | 'developer' | 'manager' | 'compliance'
+  role: 'scientist' | 'developer' | 'lab_manager' | 'compliance'
 }
 
 export default function TeamInvitePage() {
@@ -26,8 +26,8 @@ export default function TeamInvitePage() {
     fetch('/api/onboarding/profile')
       .then(res => res.json())
       .then(data => {
-        // If not admin/manager, redirect to hello workflow
-        if (data.role && data.role !== 'admin' && data.role !== 'manager') {
+        // If not admin/lab_manager, redirect to hello workflow
+        if (data.role && data.role !== 'admin' && data.role !== 'lab_manager') {
           router.push('/onboarding/hello')
         }
       })
@@ -90,12 +90,12 @@ export default function TeamInvitePage() {
             email = cleaned
           }
           // Check if this part is a role
-          else if (['scientist', 'developer', 'manager', 'compliance'].includes(cleaned)) {
+          else if (['scientist', 'developer', 'lab_manager', 'compliance'].includes(cleaned)) {
             role = cleaned as TeamMember['role']
           }
           // Check for role aliases
-          else if (cleaned === 'admin') {
-            role = 'manager'
+          else if (cleaned === 'admin' || cleaned === 'manager') {
+            role = 'lab_manager'
           } else if (cleaned === 'dev' || cleaned === 'it') {
             role = 'developer'
           } else if (cleaned === 'compliance officer' || cleaned === 'qa') {
@@ -187,7 +187,7 @@ export default function TeamInvitePage() {
         return 'View all data, start dry-runs, request approvals'
       case 'developer':
         return 'Install agents, manage APIs, configure integrations'
-      case 'manager':
+      case 'lab_manager':
         return 'Monitor usage, manage billing, full admin access'
       case 'compliance':
         return 'View audit logs, manage e-signatures, export records'
@@ -292,10 +292,10 @@ export default function TeamInvitePage() {
                         email,role<br/>
                         john@lab.com,scientist<br/>
                         sarah@lab.com,developer<br/>
-                        mike@lab.com,manager
+                        mike@lab.com,lab_manager
                       </div>
                       <p className="text-xs text-muted-foreground mt-2">
-                        <strong>Accepted roles:</strong> scientist, developer, manager, compliance, admin, researcher, dev, it, qa
+                        <strong>Accepted roles:</strong> scientist, developer, lab_manager, compliance, admin, manager, researcher, dev, it, qa
                       </p>
                     </div>
                   )}
@@ -370,7 +370,7 @@ export default function TeamInvitePage() {
               >
                 <option value="scientist">Scientist/Researcher</option>
                 <option value="developer">Developer/IT</option>
-                <option value="manager">Lab Manager</option>
+                <option value="lab_manager">Lab Manager</option>
                 <option value="compliance">Compliance Officer</option>
               </select>
 

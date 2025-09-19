@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { logger } from '@/lib/logger'
+import { isDemoMode, shouldEnforceCSRF } from '@/lib/config/demo-mode'
 import { authManager } from '@/lib/security/auth-manager'
 import { auditLogger, AuditEventType, AuditSeverity } from '@/lib/security/audit-logger'
+import { validateCSRFToken } from '@/lib/security/csrf'
 
 const roleSchema = z.object({
   role: z.enum(['admin', 'developer', 'scientist'])
@@ -22,7 +24,28 @@ export async function POST(request: NextRequest) {
       })
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
-    // userId available via session.userId if needed
+    const userId = session.userId
+
+    // CSRF validation for state-changing operations
+    if (shouldEnforceCSRF()) {
+      const csrfValidation = validateCSRFToken(request, userId)
+      if (!csrfValidation.valid) {
+        await auditLogger.log({
+          eventType: AuditEventType.SECURITY_CSRF_DETECTED,
+          action: 'CSRF token validation failed',
+          userId,
+          metadata: {
+            endpoint: `${request.method} ${request.url}`,
+            reason: csrfValidation.error || 'Unknown'
+          },
+          severity: AuditSeverity.WARNING
+        })
+        return NextResponse.json(
+          { error: 'Invalid CSRF token' },
+          { status: 403 }
+        )
+      }
+    }
 
     // Parse and validate input
     const body = await request.json()
@@ -41,7 +64,7 @@ export async function POST(request: NextRequest) {
     const { role } = validation.data
 
     // For demo mode, store in cookie
-    if (process.env.NODE_ENV === 'development' && process.env.DEMO_MODE === 'true') {
+    if (isDemoMode()) {
       logger.info('Demo role saved', { role })
 
       const response = NextResponse.json({
@@ -53,7 +76,7 @@ export async function POST(request: NextRequest) {
       // Store role in cookie for demo
       response.cookies.set('demo-role', role, {
         httpOnly: true,
-        secure: false, // Development only
+        secure: process.env.NODE_ENV === 'production', // HTTPS in production, HTTP in dev
         sameSite: 'strict',
         maxAge: 60 * 60 * 24, // 24 hours
         path: '/'
@@ -95,7 +118,7 @@ export async function GET(request: NextRequest) {
     // userId available via session.userId if needed
 
     // For demo mode, retrieve from cookie
-    if (process.env.NODE_ENV === 'development' && process.env.DEMO_MODE === 'true') {
+    if (isDemoMode()) {
       const roleCookie = request.cookies.get('demo-role')
 
       if (roleCookie) {

@@ -11,16 +11,32 @@ import { MetricCard } from '@/components/ui/metric-card'
 import { NotificationsDropdown } from '@/components/notifications/notifications-dropdown'
 import { logger } from '@/lib/logger'
 
+// Extended type for instruments with UI-specific fields
+type InstrumentWithUi = Instrument & {
+  isSynced?: boolean
+  syncedAt?: string | null
+  serialNumber?: string | null
+}
+
+// Type for synced instrument data from API
+interface SyncedInstrumentData {
+  id?: string
+  name: string
+  model?: string
+  serial?: string
+  status: string
+}
+
 export default function InstrumentsDashboard() {
-  const [instruments, setInstruments] = useState<Instrument[]>([])
+  const [instruments, setInstruments] = useState<InstrumentWithUi[]>([])
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<InstrumentStatus | 'all'>('all')
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
-  const [selectedInstrument, setSelectedInstrument] = useState<Instrument | null>(null)
+  const [selectedInstrument, setSelectedInstrument] = useState<InstrumentWithUi | null>(null)
   const [isRefreshing, setIsRefreshing] = useState(false)
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [syncedInstruments, setSyncedInstruments] = useState<any[]>([]) // eslint-disable-line @typescript-eslint/no-explicit-any
-  const [teamInvites, setTeamInvites] = useState<{teamMembers?: any[]} | null>(null) // eslint-disable-line @typescript-eslint/no-explicit-any
+  const [syncedInstruments, setSyncedInstruments] = useState<SyncedInstrumentData[]>([])
+  const [teamInvites, setTeamInvites] = useState<{teamMembers?: unknown[]} | null>(null)
   const [toastMessage, setToastMessage] = useState<{ title: string; description: string } | null>(null)
 
   // Load instruments from onboarding on mount
@@ -107,20 +123,36 @@ export default function InstrumentsDashboard() {
 
             // Create proper Instrument objects with sync timestamp
             const syncTime = new Date().toISOString()
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const instrumentsWithSync = storedInstruments.map((inst: any, index: number) => ({
-              id: inst.id || `synced-${index}`,
-              name: inst.name,
-              manufacturer: inst.model?.split(' ')[0] || 'Unknown',
-              model: inst.model || 'Model Unknown',
-              serialNumber: inst.serial || `SN-${Date.now()}-${index}`,
-              location: 'Lab A - Bench 1',
-              status: inst.status as InstrumentStatus,
-              lastRun: syncTime,
-              nextMaintenance: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString(),
-              syncedAt: syncTime,
-              isSynced: true
-            }))
+            const instrumentsWithSync: InstrumentWithUi[] = storedInstruments.map((inst: SyncedInstrumentData, index: number) => {
+              // Validate and default status to a safe value
+              const validStatuses: InstrumentStatus[] = ['running', 'idle', 'error', 'maintenance']
+              const status = (validStatuses.includes(inst.status as InstrumentStatus)
+                ? inst.status
+                : 'idle') as InstrumentStatus
+
+              return {
+                // Required Instrument fields
+                id: inst.id || `synced-${index}`,
+                name: inst.name,
+                manufacturer: inst.model?.split(' ')[0] || 'Unknown',
+                model: inst.model || 'Model Unknown',
+                type: 'Laboratory Instrument', // Default type when not provided
+                status,
+                location: 'Lab A - Bench 1',
+                lastRun: syncTime,
+                nextMaintenance: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString(),
+                usage: 0, // Default usage percentage
+                metrics: {
+                  totalRuns: 0,
+                  successRate: 100,
+                  avgRunTime: '0h 0m'
+                },
+                // UI-specific fields
+                serialNumber: inst.serial || `SN-${Date.now()}-${index}`,
+                syncedAt: syncTime,
+                isSynced: true
+              }
+            })
 
             // Merge with default mock instruments for demo
             const allInstruments = [...instrumentsWithSync, ...mockInstruments.slice(instrumentsWithSync.length)]
@@ -346,8 +378,7 @@ export default function InstrumentsDashboard() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {filteredInstruments.map((instrument) => (
             <div key={instrument.id} className="relative">
-              {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-              {(instrument as any).isSynced && (
+              {instrument.isSynced && (
                 <div className="absolute -top-2 -right-2 z-10 bg-green-500 text-white text-xs px-2 py-1 rounded-full">
                   ✓ Synced
                 </div>

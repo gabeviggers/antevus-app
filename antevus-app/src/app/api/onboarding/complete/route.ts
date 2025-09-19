@@ -4,6 +4,7 @@ import { withRateLimit } from '@/lib/api/rate-limit-helper'
 import { authManager } from '@/lib/security/auth-manager'
 import { auditLogger, AuditEventType, AuditSeverity } from '@/lib/security/audit-logger'
 import { validateCSRFToken } from '@/lib/security/csrf'
+import { shouldEnforceCSRF, isDemoMode } from '@/lib/config/demo-mode'
 // import { encryptionService } from '@/lib/security/encryption-service' // TODO: Re-enable when needed
 import { prisma } from '@/lib/database'
 import { logger } from '@/lib/logger'
@@ -31,8 +32,8 @@ export async function POST(request: NextRequest) {
     if (rateLimited) return rateLimited
 
     // CSRF Protection for state-changing operation
-    // Skip CSRF validation in development/demo mode
-    if (process.env.NODE_ENV === 'production' || process.env.NEXT_PUBLIC_DEMO_MODE !== 'true') {
+    // Skip CSRF validation in demo mode
+    if (shouldEnforceCSRF()) {
       // Extract user ID from token for CSRF validation
       const token = authManager.getTokenFromRequest(request)
       const tempSession = await authManager.validateToken(token)
@@ -165,7 +166,7 @@ export async function POST(request: NextRequest) {
     })
 
     // Update user record to mark onboarding as complete (skip in demo mode)
-    if (process.env.NEXT_PUBLIC_DEMO_MODE !== 'true') {
+    if (!isDemoMode()) {
       try {
         await prisma.user.update({
           where: { id: userId },

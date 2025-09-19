@@ -24,7 +24,8 @@ export const FEATURES = {
   integrations: process.env.ENABLE_INTEGRATIONS === 'true',
 
   // Security Features
-  demoMode: process.env.NEXT_PUBLIC_DEMO_MODE === 'true' && process.env.NODE_ENV === 'development',
+  // Server-side demo mode uses DEMO_MODE env var (not public)
+  demoMode: process.env.DEMO_MODE === 'true' && process.env.NODE_ENV === 'development',
   csrfProtection: process.env.ENABLE_CSRF_PROTECTION !== 'false', // Enabled by default
   rateLimit: process.env.ENABLE_RATE_LIMIT !== 'false', // Enabled by default
 
@@ -47,6 +48,12 @@ export const FEATURES = {
   betaFeatures: process.env.ENABLE_BETA_FEATURES === 'true',
   alphaFeatures: process.env.ENABLE_ALPHA_FEATURES === 'true' && process.env.NODE_ENV === 'development'
 } as const
+
+/**
+ * Client-side demo mode flag (derived from public env var)
+ * This is ONLY for client-side UI decisions, never for server-side logic
+ */
+export const CLIENT_DEMO_MODE = process.env.NEXT_PUBLIC_DEMO_MODE === 'true'
 
 /**
  * Type-safe feature flag type
@@ -87,7 +94,7 @@ export function getEnabledFeatures(): FeatureFlag[] {
  */
 export function getClientFeatures() {
   return {
-    demoMode: FEATURES.demoMode,
+    demoMode: CLIENT_DEMO_MODE, // Use client-side flag for UI
     assistant: FEATURES.assistant,
     apiPlayground: FEATURES.apiPlayground,
     integrations: FEATURES.integrations,
@@ -108,7 +115,7 @@ const FEATURE_ENV_VAR_MAP: Record<FeatureFlag, string> = {
   integrations: 'ENABLE_INTEGRATIONS',
 
   // Security Features
-  demoMode: 'NEXT_PUBLIC_DEMO_MODE',
+  demoMode: 'DEMO_MODE', // Server-side env var, not public
   csrfProtection: 'ENABLE_CSRF_PROTECTION',
   rateLimit: 'ENABLE_RATE_LIMIT',
 

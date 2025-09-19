@@ -3,6 +3,8 @@ import { z } from 'zod'
 import { logger } from '@/lib/logger'
 import { authManager } from '@/lib/security/auth-manager'
 import { auditLogger, AuditEventType, AuditSeverity } from '@/lib/security/audit-logger'
+import { validateCSRFToken } from '@/lib/security/csrf'
+import { shouldEnforceCSRF, isDemoMode } from '@/lib/config/demo-mode'
 
 const profileSchema = z.object({
   name: z.string()
@@ -22,7 +24,7 @@ const profileSchema = z.object({
   theme: z.enum(['light', 'dark', 'system']).default('system')
 })
 
-export async function POST(request: NextRequest) {
+async function handlePost(request: NextRequest) {
   try {
     // Authentication
     const token = authManager.getTokenFromRequest(request)
@@ -36,7 +38,34 @@ export async function POST(request: NextRequest) {
       })
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
-    // userId available via session.userId if needed
+    const userId = session.userId
+
+    // CSRF Protection for state-changing operation
+    // Skip CSRF validation in demo mode
+    if (shouldEnforceCSRF()) {
+      const csrfValidation = validateCSRFToken(request, userId)
+      if (!csrfValidation.valid) {
+        await auditLogger.log({
+          eventType: AuditEventType.AUTH_LOGIN_FAILURE,
+          action: 'CSRF validation failed',
+          userId,
+          metadata: {
+            endpoint: `${request.method} ${request.url}`,
+            error: csrfValidation.error,
+            ip: request.headers.get('x-forwarded-for') || 'unknown'
+          },
+          severity: AuditSeverity.WARNING
+        })
+
+        return NextResponse.json(
+          {
+            error: 'CSRF validation failed',
+            message: csrfValidation.error || 'Invalid or missing CSRF token'
+          },
+          { status: 403 }
+        )
+      }
+    }
 
     // Parse and validate input
     const body = await request.json()
@@ -55,7 +84,7 @@ export async function POST(request: NextRequest) {
     const profileData = validation.data
 
     // For demo mode, check if this is the demo user
-    if (process.env.NODE_ENV === 'development' && process.env.DEMO_MODE === 'true') {
+    if (isDemoMode()) {
       // Store profile data in session storage for demo
       // In a real app, this would be stored in the database with proper authentication
 
@@ -99,7 +128,7 @@ export async function POST(request: NextRequest) {
 
     // In production, this would require proper authentication
     // For now, return an error if not in demo mode
-    if (process.env.NODE_ENV === 'production') {
+    if (!isDemoMode()) {
       return NextResponse.json(
         { error: 'Authentication required' },
         { status: 401 }
@@ -142,7 +171,7 @@ export async function GET(request: NextRequest) {
     // userId available via session.userId if needed
 
     // For demo mode, retrieve from cookies
-    if (process.env.NODE_ENV === 'development' && process.env.DEMO_MODE === 'true') {
+    if (isDemoMode()) {
       const profileCookie = request.cookies.get('demo-profile')
       const roleCookie = request.cookies.get('demo-role')
 
@@ -185,3 +214,6 @@ export async function GET(request: NextRequest) {
     )
   }
 }
+
+// Export POST handler (CSRF validation is done inline)
+export const POST = handlePost
