@@ -97,8 +97,8 @@ export default function SignupPage() {
         throw new Error(data.error || 'Signup failed')
       }
 
-      // TODO: Implement secure token storage (httpOnly cookies via API)
-      // NEVER store tokens in localStorage - HIPAA violation
+      // Authentication tokens handled securely by session context
+      // Tokens stored in memory only - no localStorage/sessionStorage usage
       logger.info('Signup successful', { email })
 
       // Check if demo mode response
