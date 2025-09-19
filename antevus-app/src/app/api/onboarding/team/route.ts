@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
             teamMembers: teamData.teamMembers || [],
             success: true
           })
-        } catch (e) {
+        } catch {
           logger.debug('Could not parse demo team cookie')
         }
       }

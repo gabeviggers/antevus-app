@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { withRateLimit } from '@/lib/api/rate-limit-helper'
-import { authManager } from '@/lib/security/auth-manager'
+// import { authManager } from '@/lib/security/auth-manager' // TODO: Re-enable when needed
 import { auditLogger, AuditEventType, AuditSeverity } from '@/lib/security/audit-logger'
 import { encryptionService } from '@/lib/security/encryption-service'
 import { prisma } from '@/lib/database'
@@ -185,7 +185,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     // Authentication
     const token = process.env.NODE_ENV === "development" ? "demo-token" : null // authManager.getTokenFromRequest(request)

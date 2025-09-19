@@ -96,7 +96,7 @@ export async function GET(request: NextRequest) {
             currentStep: 'instruments',
             completedSteps: ['profile', 'instruments']
           })
-        } catch (e) {
+        } catch {
           logger.debug('Could not parse demo instruments cookie')
         }
       }

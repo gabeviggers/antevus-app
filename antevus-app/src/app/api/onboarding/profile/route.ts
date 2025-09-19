@@ -122,7 +122,7 @@ export async function GET(request: NextRequest) {
       if (profileCookie) {
         try {
           profileData = JSON.parse(profileCookie.value)
-        } catch (e) {
+        } catch {
           logger.debug('Could not parse demo profile cookie')
         }
       }

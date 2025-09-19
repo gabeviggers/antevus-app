@@ -176,7 +176,7 @@ export default function HelloWorkflowPage() {
           <div className="text-center mb-2">
             <h1 className="text-2xl font-bold">Run Your First Workflow</h1>
             <p className="text-sm text-muted-foreground mt-0.5">
-              Let's test your setup with a sample ELISA run
+              Let&apos;s test your setup with a sample ELISA run
             </p>
           </div>
 

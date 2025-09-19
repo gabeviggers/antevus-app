@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { authManager } from '@/lib/security/auth-manager'
+// import { authManager } from '@/lib/security/auth-manager' // TODO: Re-enable when needed
 import { encryptionService } from '@/lib/security/encryption-service'
 import { prisma } from '@/lib/database'
 import { logger } from '@/lib/logger'
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     // Authentication
     const token = process.env.NODE_ENV === "development" ? "demo-token" : null // authManager.getTokenFromRequest(request)
