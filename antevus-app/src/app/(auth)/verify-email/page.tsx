@@ -10,7 +10,7 @@ function VerifyEmailContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const email = searchParams.get('email') || 'your email'
-  const isDemo = process.env.NODE_ENV === 'development' && (searchParams.get('demo') === 'true' || email === 'admin@antevus.com')
+  // No client-side demo detection - handle on server
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -45,42 +45,45 @@ function VerifyEmailContent() {
             </div>
 
             <div className="mt-8 space-y-4">
-              {isDemo ? (
+              {/* Info */}
+              <p className="text-xs text-center text-muted-foreground">
+                Click the link in the email to verify your account.
+                The link expires in 24 hours.
+              </p>
+
+              {/* Resend Button */}
+              <button
+                type="button"
+                className="w-full flex justify-center py-2 px-4 border rounded-md text-sm font-medium bg-card hover:bg-accent transition-colors"
+              >
+                Resend email
+              </button>
+
+              {/* CEO/Founder Demo Skip - ONLY for admin@antevus.com in development */}
+              {process.env.NODE_ENV === 'development' && email === 'admin@antevus.com' && (
                 <>
-                  {/* Demo Mode Info */}
-                  <div className="bg-muted/50 border border-border rounded-md p-3">
-                    <div className="flex items-center space-x-2">
-                      <Sparkles className="h-4 w-4 text-muted-foreground" />
-                      <p className="text-xs text-muted-foreground">
-                        Demo Mode: Click below to instantly verify and proceed
-                      </p>
+                  <div className="relative">
+                    <div className="absolute inset-0 flex items-center">
+                      <span className="w-full border-t border-border" />
+                    </div>
+                    <div className="relative flex justify-center text-xs uppercase">
+                      <span className="bg-background px-2 text-muted-foreground">
+                        Demo Mode (CEO Access)
+                      </span>
                     </div>
                   </div>
 
-                  {/* Instant Verify Button */}
                   <button
-                    type="button"
                     onClick={() => router.push('/onboarding/role')}
-                    className="w-full flex justify-center py-2.5 px-4 border border-transparent rounded-md text-sm font-medium text-primary-foreground bg-primary hover:bg-primary/90 transition-colors"
+                    className="w-full flex items-center justify-center gap-2 py-2 px-4 bg-primary text-primary-foreground rounded-md text-sm font-medium hover:bg-primary/90 transition-colors"
                   >
-                    Instantly Verify & Continue →
+                    <Sparkles className="h-4 w-4" />
+                    Skip Verification (Demo)
                   </button>
-                </>
-              ) : (
-                <>
-                  {/* Info */}
-                  <p className="text-xs text-center text-muted-foreground">
-                    Click the link in the email to verify your account.
-                    The link expires in 24 hours.
-                  </p>
 
-                  {/* Resend Button */}
-                  <button
-                    type="button"
-                    className="w-full flex justify-center py-2 px-4 border rounded-md text-sm font-medium bg-card hover:bg-accent transition-colors"
-                  >
-                    Resend email
-                  </button>
+                  <p className="text-xs text-center text-muted-foreground">
+                    This option is only available for the founder account in development mode
+                  </p>
                 </>
               )}
 

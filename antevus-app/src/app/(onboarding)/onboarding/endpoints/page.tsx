@@ -74,20 +74,33 @@ export default function EndpointsConfigPage() {
     }, 1500)
   }
 
-  const handleContinue = () => {
+  const handleContinue = async () => {
     setIsLoading(true)
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('onboarding_endpoints_configured', 'true')
+    try {
+      // Update progress via secure API
+      await fetch('/api/onboarding/progress', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          step: 'endpoints',
+          completed: true
+        })
+      })
 
-      // Check user role to determine next step
-      const userRole = localStorage.getItem('onboarding_role')
-      if (userRole === 'admin' || userRole === 'manager') {
+      // Get user role from secure API
+      const response = await fetch('/api/onboarding/profile')
+      const data = await response.json()
+
+      if (data.role === 'admin' || data.role === 'manager') {
         // Admins/Managers go to team invite
         router.push('/onboarding/team')
       } else {
         // Everyone else goes to hello workflow
         router.push('/onboarding/hello')
       }
+    } catch (error) {
+      console.error('Failed to update progress:', error)
+      setIsLoading(false)
     }
   }
 

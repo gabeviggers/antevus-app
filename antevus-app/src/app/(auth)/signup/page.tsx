@@ -66,17 +66,14 @@ export default function SignupPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    // Demo mode bypass ONLY in development
-    const isDemo = process.env.NODE_ENV === 'development' && email === 'admin@antevus.com'
-
-    // Basic validation (skip for demo in dev only)
-    if (!isDemo && password !== confirmPassword) {
+    // Basic validation - NO BYPASSES
+    if (password !== confirmPassword) {
       setError('Passwords do not match')
       return
     }
 
-    // Check if all password requirements are met (skip for demo)
-    if (!isDemo && passwordStrength.percentage < 100) {
+    // Check if all password requirements are met
+    if (passwordStrength.percentage < 100) {
       setError('Password must meet all security requirements')
       return
     }
@@ -101,17 +98,11 @@ export default function SignupPage() {
       // Tokens stored in memory only - no localStorage/sessionStorage usage
       logger.info('Signup successful', { email })
 
-      // Check if demo mode response
-      const isDemo = data.isDemo || email === 'admin@antevus.com'
+      // No client-side demo mode handling
+      // All authentication handled server-side
 
-      // Store demo email for protected route check
-      if (isDemo && process.env.NODE_ENV === 'development') {
-        localStorage.setItem('demo_email', email)
-      }
-
-      // Redirect to email verification page with demo flag if applicable
+      // Redirect to email verification page
       const queryParams = new URLSearchParams({ email })
-      if (isDemo) queryParams.append('demo', 'true')
       router.push(`/verify-email?${queryParams.toString()}`)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create account')
@@ -304,7 +295,7 @@ export default function SignupPage() {
             <Button
               type="submit"
               className="w-full"
-              disabled={isLoading || !email || (!(process.env.NODE_ENV === 'development' && email === 'admin@antevus.com') && (passwordStrength.percentage < 100 || password !== confirmPassword))}
+              disabled={isLoading || !email || passwordStrength.percentage < 100 || password !== confirmPassword}
             >
               {isLoading ? 'Creating account...' : 'Create account'}
             </Button>

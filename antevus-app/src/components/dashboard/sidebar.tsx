@@ -59,18 +59,19 @@ export function Sidebar({ sidebarOpen, setSidebarOpen, collapsed, setCollapsed }
 
   // Determine if user has access to Ask Antevus (everyone except VIEWER and GUEST)
   const hasAssistantAccess = useMemo(() => {
-    // Check for demo mode admin
-    if (process.env.NODE_ENV === 'development') {
-      const demoEmail = localStorage.getItem('demo_email')
-      const onboardingRole = localStorage.getItem('onboarding_role')
+    // For demo mode or authenticated users with proper roles
+    if (!user?.roles) return false
 
-      // Admin and manager roles should have full access
-      if (demoEmail === 'admin@antevus.com' || onboardingRole === 'admin' || onboardingRole === 'manager') {
-        return true
-      }
+    // Check if user has admin or manager roles
+    const hasAdminAccess = user.roles.includes(UserRole.ADMIN) ||
+                           user.roles.includes(UserRole.SUPER_ADMIN) ||
+                           user.roles.includes(UserRole.LAB_DIRECTOR)
+
+    if (hasAdminAccess) {
+      return true
     }
 
-    if (!user?.roles) return false
+    // Check if user is NOT a viewer or guest
     const restrictedRoles = [UserRole.VIEWER, UserRole.GUEST]
     return !user.roles.some(role => restrictedRoles.includes(role))
   }, [user?.roles])

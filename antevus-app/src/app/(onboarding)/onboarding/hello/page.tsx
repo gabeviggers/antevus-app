@@ -28,11 +28,16 @@ export default function HelloWorkflowPage() {
 
   // Check if admin was redirected here
   useEffect(() => {
-    const userRole = localStorage.getItem('onboarding_role')
-    // Admins should have gone to team invite instead
-    if (userRole === 'admin' || userRole === 'manager') {
-      router.push('/onboarding/team')
-    }
+    // Check user role from secure API
+    fetch('/api/onboarding/profile')
+      .then(res => res.json())
+      .then(data => {
+        // Admins should have gone to team invite instead
+        if (data.role === 'admin' || data.role === 'manager') {
+          router.push('/onboarding/team')
+        }
+      })
+      .catch(console.error)
   }, [router])
 
   const [timeline, setTimeline] = useState<TimelineStep[]>([
@@ -100,25 +105,33 @@ export default function HelloWorkflowPage() {
     a.click()
   }
 
-  const finishSetup = () => {
+  const finishSetup = async () => {
     setIsLoading(true)
 
-    // Mark onboarding as complete with timestamp
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('onboarding_complete', 'true')
-      localStorage.setItem('onboarding_completed_at', new Date().toISOString())
+    try {
+      // Mark onboarding as complete via secure API
+      await fetch('/api/onboarding/progress', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          step: 'hello',
+          completed: true,
+          onboardingComplete: true,
+          firstRun: {
+            runId: 'ELISA-001',
+            instrument: 'PlateReader-03',
+            completedAt: new Date().toISOString(),
+            results: mockResults
+          }
+        })
+      })
 
-      // Store the run results as well for dashboard
-      localStorage.setItem('onboarding_first_run', JSON.stringify({
-        runId: 'ELISA-001',
-        instrument: 'PlateReader-03',
-        completedAt: new Date().toISOString(),
-        results: mockResults
-      }))
+      // Navigate to dashboard
+      router.push('/dashboard')
+    } catch (error) {
+      console.error('Failed to complete onboarding:', error)
+      setIsLoading(false)
     }
-
-    // Navigate to dashboard
-    router.push('/dashboard')
   }
 
   const getStatusEmoji = (status: 'positive' | 'negative' | 'control') => {
@@ -130,73 +143,79 @@ export default function HelloWorkflowPage() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col">
-      {/* Header */}
-      <header className="absolute top-0 left-0 right-0 flex justify-between items-center p-6">
-        <button
-          onClick={() => router.push('/onboarding/endpoints')}
-          className="flex items-center text-sm text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <ArrowLeft className="h-4 w-4 mr-1" />
-          Back
-        </button>
-        <ThemeToggle />
-      </header>
-
-      {/* Progress Bar */}
-      <div className="absolute top-0 left-0 right-0 h-1 bg-muted">
-        <div className="h-full w-full bg-foreground transition-all duration-300" />
+    <div className="h-screen flex flex-col overflow-hidden">
+      {/* Progress bar */}
+      <div className="w-full bg-muted">
+        <div className="h-1.5 bg-primary transition-all duration-500" style={{ width: '100%' }} />
       </div>
 
-      {/* Main Content */}
-      <div className="flex-1 flex items-center justify-center px-4 sm:px-6 lg:px-8">
-        <div className="max-w-md w-full space-y-8">
-          {/* Step Indicator */}
-          <div className="text-center">
-            <p className="text-xs text-muted-foreground uppercase tracking-wide">
+      {/* Header */}
+      <div className="border-b bg-card">
+        <div className="container max-w-4xl mx-auto px-4 py-3">
+          <div className="flex items-center justify-between">
+            <button
+              onClick={() => router.push('/onboarding/agent')}
+              className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
+              disabled={isLoading}
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Back
+            </button>
+            <div className="text-sm text-muted-foreground">
               Step 5 of 5
+            </div>
+            <ThemeToggle />
+          </div>
+        </div>
+      </div>
+
+      {/* Main content - scrollable */}
+      <div className="flex-1 overflow-y-auto">
+        <div className="container max-w-2xl mx-auto px-4 py-3 h-full flex flex-col">
+          {/* Title - compact */}
+          <div className="text-center mb-2">
+            <h1 className="text-2xl font-bold">Run Your First Workflow</h1>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              Let's test your setup with a sample ELISA run
             </p>
-            <h2 className="mt-2 text-2xl font-semibold">
-              Run Your First Workflow
-            </h2>
           </div>
 
-          {/* Online Instruments */}
-          <div className="text-center">
-            <p className="text-sm text-muted-foreground mb-2">Online Instruments:</p>
-            <div className="flex justify-center gap-3 text-xs">
+          {/* Online Instruments - compact */}
+          <div className="text-center mb-3">
+            <p className="text-xs text-muted-foreground mb-1">Online Instruments:</p>
+            <div className="flex justify-center gap-2 text-xs">
               <span className="flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full bg-green-500"></span>
+                <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span>
                 HPLC-01
               </span>
               <span className="flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full bg-green-500"></span>
+                <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span>
                 qPCR-02
               </span>
               <span className="flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full bg-green-500"></span>
+                <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span>
                 PR-03
               </span>
             </div>
           </div>
 
-          {/* Start Button */}
+          {/* Start Button - compact */}
           {!isRunning && !isComplete && (
             <button
               onClick={startWorkflow}
-              className="w-full py-3 px-4 rounded-md bg-foreground text-background hover:bg-foreground/90 transition-colors flex items-center justify-center gap-2"
+              className="w-full py-2.5 px-4 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors flex items-center justify-center gap-2 mb-3"
             >
               <Play className="h-4 w-4" />
-              <span className="font-medium">Start ELISA dry-run</span>
-              <span className="text-sm opacity-80">on PlateReader-03</span>
+              <span className="font-medium text-sm">Start ELISA dry-run</span>
+              <span className="text-xs opacity-80">on PlateReader-03</span>
             </button>
           )}
 
-          {/* Status Timeline */}
+          {/* Status Timeline - compact */}
           {(isRunning || isComplete) && (
-            <div>
-              <p className="text-sm font-medium mb-3">Status Timeline:</p>
-              <div className="space-y-2">
+            <div className="mb-3">
+              <p className="text-sm font-medium mb-2">Status Timeline:</p>
+              <div className="space-y-1">
                 {timeline.map((step) => (
                   <div key={step.id} className="flex items-center gap-3 text-sm">
                     {step.status === 'complete' && (
@@ -220,26 +239,26 @@ export default function HelloWorkflowPage() {
             </div>
           )}
 
-          {/* Results Table */}
+          {/* Results Table - compact and scrollable */}
           {isComplete && (
-            <div>
-              <p className="text-sm font-medium mb-3">Results:</p>
-              <div className="border border-border rounded-md overflow-hidden">
-                <table className="w-full text-sm">
+            <div className="flex-1 flex flex-col mb-3">
+              <p className="text-sm font-medium mb-2">Results:</p>
+              <div className="border border-border rounded-md overflow-hidden flex-1">
+                <table className="w-full text-xs">
                   <thead className="bg-muted/50">
                     <tr>
-                      <th className="text-left p-2">Well</th>
-                      <th className="text-left p-2">OD450</th>
-                      <th className="text-left p-2">Status</th>
+                      <th className="text-left p-1.5">Well</th>
+                      <th className="text-left p-1.5">OD450</th>
+                      <th className="text-left p-1.5">Status</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
                     {mockResults.slice(0, 4).map((result) => (
                       <tr key={result.well}>
-                        <td className="p-2">{result.well}</td>
-                        <td className="p-2">{result.od450.toFixed(2)}</td>
-                        <td className="p-2">
-                          <span className="flex items-center gap-1">
+                        <td className="p-1.5">{result.well}</td>
+                        <td className="p-1.5">{result.od450.toFixed(2)}</td>
+                        <td className="p-1.5">
+                          <span className="flex items-center gap-0.5">
                             {getStatusEmoji(result.status)}
                             <span className="capitalize">{result.status}</span>
                           </span>
@@ -247,7 +266,7 @@ export default function HelloWorkflowPage() {
                       </tr>
                     ))}
                     <tr>
-                      <td colSpan={3} className="p-2 text-center text-xs text-muted-foreground">
+                      <td colSpan={3} className="p-1.5 text-center text-xs text-muted-foreground">
                         ... {mockResults.length - 4} more rows
                       </td>
                     </tr>
@@ -255,54 +274,54 @@ export default function HelloWorkflowPage() {
                 </table>
               </div>
 
-              {/* Action Buttons */}
-              <div className="flex gap-3 mt-4">
+              {/* Action Buttons - compact */}
+              <div className="flex gap-2 mt-2">
                 <button
                   onClick={downloadCSV}
-                  className="flex-1 py-2 px-3 rounded-md border border-border text-sm hover:bg-accent transition-colors flex items-center justify-center gap-2"
+                  className="flex-1 py-1.5 px-2 rounded-md border border-border text-xs hover:bg-accent transition-colors flex items-center justify-center gap-1"
                 >
-                  <Download className="h-4 w-4" />
+                  <Download className="h-3.5 w-3.5" />
                   Download CSV
                 </button>
                 <button
                   onClick={() => router.push('/dashboard')}
-                  className="flex-1 py-2 px-3 rounded-md border border-border text-sm hover:bg-accent transition-colors flex items-center justify-center gap-2"
+                  className="flex-1 py-1.5 px-2 rounded-md border border-border text-xs hover:bg-accent transition-colors flex items-center justify-center gap-1"
                 >
-                  <BarChart3 className="h-4 w-4" />
+                  <BarChart3 className="h-3.5 w-3.5" />
                   Open in Dashboard
                 </button>
               </div>
             </div>
           )}
 
-          {/* Optional Setup */}
+          {/* Optional Setup - compact */}
           {isComplete && (
-            <div>
+            <div className="mb-3">
               <button
                 onClick={() => setShowOptionalSetup(!showOptionalSetup)}
-                className="w-full flex items-center justify-between text-sm text-muted-foreground hover:text-foreground transition-colors"
+                className="w-full flex items-center justify-between text-xs text-muted-foreground hover:text-foreground transition-colors p-1"
               >
                 <span>Optional Setup</span>
                 {showOptionalSetup ? (
-                  <ChevronUp className="h-4 w-4" />
+                  <ChevronUp className="h-3 w-3" />
                 ) : (
-                  <ChevronDown className="h-4 w-4" />
+                  <ChevronDown className="h-3 w-3" />
                 )}
               </button>
 
               {showOptionalSetup && (
-                <div className="mt-3 space-y-3 p-3 rounded-md border border-border bg-card">
-                  <div className="text-sm space-y-2">
+                <div className="mt-2 space-y-2 p-2 rounded-md border border-border bg-card">
+                  <div className="text-xs space-y-1.5">
                     <label className="flex items-center gap-2 cursor-pointer">
-                      <input type="checkbox" className="rounded border-input" />
+                      <input type="checkbox" className="rounded border-input h-3 w-3" />
                       Configure Slack Integration
                     </label>
                     <label className="flex items-center gap-2 cursor-pointer">
-                      <input type="checkbox" className="rounded border-input" />
+                      <input type="checkbox" className="rounded border-input h-3 w-3" />
                       Set Usage Alerts (80% / 95%)
                     </label>
                     <label className="flex items-center gap-2 cursor-pointer">
-                      <input type="checkbox" className="rounded border-input" />
+                      <input type="checkbox" className="rounded border-input h-3 w-3" />
                       Enable Email Notifications
                     </label>
                   </div>
@@ -311,13 +330,13 @@ export default function HelloWorkflowPage() {
             </div>
           )}
 
-          {/* Finish Button */}
+          {/* Finish Button - always at bottom */}
           {isComplete && (
-            <div className="flex justify-end">
+            <div className="mt-auto pt-3 border-t flex justify-end">
               <button
                 onClick={finishSetup}
                 disabled={isLoading}
-                className="px-6 py-2 rounded-md text-sm font-medium bg-foreground text-background hover:bg-foreground/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="px-6 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 {isLoading ? 'Setting up dashboard...' : 'Finish Setup →'}
               </button>

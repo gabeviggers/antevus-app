@@ -3,320 +3,522 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { ThemeToggle } from '@/components/theme-toggle'
-import { Search, ArrowLeft } from 'lucide-react'
+import { Search, ArrowLeft, Loader2, AlertCircle, CheckCircle, Wifi, WifiOff, Activity, CheckSquare, Square } from 'lucide-react'
+import { logger } from '@/lib/logger'
 
 interface Instrument {
   id: string
   name: string
   model: string
   serial: string
-  status: 'online' | 'idle' | 'offline'
+  status: 'online' | 'offline' | 'idle' | 'running' | 'error' | 'maintenance'
+  location?: string
   selected: boolean
 }
 
-// Generate more realistic mock data for testing
-const generateMockInstruments = (): Instrument[] => {
-  const types = ['HPLC', 'qPCR', 'PlateReader', 'Centrifuge', 'Incubator', 'Freezer', 'Spectrophotometer', 'Microscope']
-  const brands = ['Agilent', 'BioRad', 'Tecan', 'Thermo', 'Eppendorf', 'Zeiss', 'Waters', 'PerkinElmer']
-  const statuses: Array<'online' | 'idle' | 'offline'> = ['online', 'idle', 'offline']
+// Generate realistic mock instruments for demo
+const generateMockInstruments = (): Omit<Instrument, 'selected'>[] => {
+  const types = ['HPLC', 'qPCR', 'PlateReader', 'Centrifuge', 'Incubator', 'Freezer', 'Spectrophotometer', 'Microscope', 'MassSpec', 'FlowCytometer']
+  const brands = ['Agilent', 'BioRad', 'Tecan', 'Thermo', 'Eppendorf', 'Zeiss', 'Waters', 'PerkinElmer', 'Beckman', 'Illumina']
+  const statuses: Instrument['status'][] = ['online', 'idle', 'offline', 'running']
+  const locations = ['Lab A - Bench 1', 'Lab B - Room 201', 'Core Facility', 'Cold Room', 'Instrument Room']
 
-  const instruments: Instrument[] = []
-
-  // Generate 15 instruments for demo (would be 30-100 in real lab)
-  for (let i = 1; i <= 15; i++) {
-    const type = types[Math.floor(Math.random() * types.length)]
-    const brand = brands[Math.floor(Math.random() * brands.length)]
-    instruments.push({
-      id: i.toString(),
-      name: `${type}-${brand}-${1000 + i}`,
-      model: `Model ${2020 + (i % 5)}`,
+  return Array.from({ length: 20 }, (_, i) => {
+    const type = types[i % types.length]
+    const brand = brands[i % brands.length]
+    return {
+      id: `inst-${i + 1}`,
+      name: `${brand} ${type}-${1000 + i}`,
+      model: `${brand} Model ${2020 + (i % 5)}`,
       serial: `${brand.substring(0, 2).toUpperCase()}${10000000 + i}`,
-      status: statuses[Math.floor(Math.random() * statuses.length)],
-      selected: false
-    })
-  }
-
-  return instruments
+      status: statuses[i % statuses.length],
+      location: locations[i % locations.length]
+    }
+  })
 }
-
-const mockInstruments = generateMockInstruments()
 
 export default function InstrumentsDiscoveryPage() {
   const [instruments, setInstruments] = useState<Instrument[]>([])
   const [scanning, setScanning] = useState(true)
   const [isLoading, setIsLoading] = useState(false)
-  const [filterStatus, setFilterStatus] = useState<'all' | 'online' | 'idle' | 'offline'>('all')
+  const [isLoadingData, setIsLoadingData] = useState(false)
+  const [error, setError] = useState('')
+  const [success, setSuccess] = useState(false)
+  const [filterStatus, setFilterStatus] = useState<'all' | Instrument['status']>('all')
   const [searchQuery, setSearchQuery] = useState('')
   const router = useRouter()
 
-  // Simulate network scanning
+  // Load existing instrument selections from API
   useEffect(() => {
-    const scanTimer = setTimeout(() => {
-      // In development, show mock instruments
-      // In production, this would scan the real network
-      if (process.env.NODE_ENV === 'development') {
-        setInstruments(mockInstruments)
-      } else {
-        // Production: would call real API to scan network
-        // For now, still show mock data
-        setInstruments(mockInstruments)
-      }
-      setScanning(false)
-    }, 2000)
+    const loadInstrumentsData = async () => {
+      setIsLoadingData(true)
+      try {
+        const response = await fetch('/api/onboarding/instruments', {
+          method: 'GET',
+          credentials: 'include',
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        })
 
-    return () => clearTimeout(scanTimer)
+        if (response.ok) {
+          const data = await response.json()
+
+          // If user has already selected instruments, pre-populate
+          if (data.instrumentsData?.selectedInstruments) {
+            const savedInstruments = data.instrumentsData.selectedInstruments
+            const mockInsts = generateMockInstruments()
+
+            // Merge saved selections with mock data
+            const mergedInstruments = mockInsts.map(inst => ({
+              ...inst,
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              selected: savedInstruments.some((saved: any) => saved.serial === inst.serial)
+            }))
+
+            setInstruments(mergedInstruments)
+            setScanning(false)
+          } else {
+            // First time - simulate scanning
+            simulateNetworkScan()
+          }
+        } else {
+          // No existing data - simulate scanning
+          simulateNetworkScan()
+        }
+      } catch (err) {
+        logger.error('Failed to load instruments data', err)
+        simulateNetworkScan()
+      } finally {
+        setIsLoadingData(false)
+      }
+    }
+
+    loadInstrumentsData()
   }, [])
 
-  const toggleInstrument = (id: string) => {
-    setInstruments(instruments.map(inst =>
-      inst.id === id ? { ...inst, selected: !inst.selected } : inst
-    ))
+  const simulateNetworkScan = () => {
+    setScanning(true)
+    // Simulate network scanning animation
+    setTimeout(() => {
+      const mockInsts = generateMockInstruments()
+      setInstruments(mockInsts.map(inst => ({ ...inst, selected: false })))
+      setScanning(false)
+    }, 2000)
   }
 
-  const selectAll = () => {
-    setInstruments(instruments.map(inst => ({ ...inst, selected: true })))
+  const handleToggleInstrument = (id: string) => {
+    setInstruments(prev =>
+      prev.map(inst =>
+        inst.id === id ? { ...inst, selected: !inst.selected } : inst
+      )
+    )
+    // Clear any previous errors when user makes changes
+    if (error) setError('')
   }
 
-  const selectNone = () => {
-    setInstruments(instruments.map(inst => ({ ...inst, selected: false })))
+  const handleSelectAll = () => {
+    const filtered = getFilteredInstruments()
+    const allSelected = filtered.every(inst => inst.selected)
+
+    setInstruments(prev =>
+      prev.map(inst => {
+        const isInFiltered = filtered.some(f => f.id === inst.id)
+        return isInFiltered ? { ...inst, selected: !allSelected } : inst
+      })
+    )
   }
 
-  const selectOnline = () => {
-    setInstruments(instruments.map(inst => ({
-      ...inst,
-      selected: inst.status === 'online'
-    })))
+  const getFilteredInstruments = () => {
+    return instruments.filter(inst => {
+      const matchesStatus = filterStatus === 'all' || inst.status === filterStatus
+      const matchesSearch = searchQuery === '' ||
+        inst.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        inst.model.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        inst.serial.toLowerCase().includes(searchQuery.toLowerCase())
+      return matchesStatus && matchesSearch
+    })
   }
 
-  // Filter instruments based on search and status
-  const filteredInstruments = instruments.filter(inst => {
-    const matchesSearch = inst.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         inst.model.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         inst.serial.toLowerCase().includes(searchQuery.toLowerCase())
-    const matchesStatus = filterStatus === 'all' || inst.status === filterStatus
-    return matchesSearch && matchesStatus
-  })
+  const getSelectedCount = () => instruments.filter(i => i.selected).length
 
-  const selectedCount = instruments.filter(i => i.selected).length
+  const handleContinue = async () => {
+    const selectedInstruments = instruments.filter(i => i.selected)
 
-  const handleContinue = () => {
+    if (selectedInstruments.length === 0) {
+      setError('Please select at least one instrument to continue')
+      return
+    }
+
+    if (selectedInstruments.length > 50) {
+      setError('Maximum 50 instruments can be selected at once')
+      return
+    }
+
     setIsLoading(true)
-    // Save selected instruments (if any)
-    if (typeof window !== 'undefined' && selectedCount > 0) {
-      localStorage.setItem('onboarding_instruments', JSON.stringify(
-        instruments.filter(i => i.selected)
-      ))
+    setError('')
+
+    try {
+      // ✅ SECURE: Save to server API, not localStorage
+      const response = await fetch('/api/onboarding/instruments', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          selectedInstruments: selectedInstruments.map(inst => ({
+            id: inst.id,
+            name: inst.name,
+            model: inst.model,
+            serial: inst.serial,
+            status: inst.status,
+            location: inst.location
+          }))
+        })
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to save instruments')
+      }
+
+      setSuccess(true)
+
+      logger.info('Instruments saved successfully', {
+        count: selectedInstruments.length,
+        nextStep: data.nextStep
+      })
+
+      // Navigate to next step
+      setTimeout(() => {
+        router.push(`/onboarding/${data.nextStep || 'agent'}`)
+      }, 500)
+
+    } catch (err) {
+      logger.error('Instruments save error', err)
+      setError(err instanceof Error ? err.message : 'Failed to save instruments. Please try again.')
+      setSuccess(false)
+    } finally {
+      setIsLoading(false)
     }
-    router.push('/onboarding/endpoints')
   }
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'online':
-        return 'text-green-600'
-      case 'idle':
-        return 'text-yellow-600'
-      case 'offline':
-        return 'text-muted-foreground'
-      default:
-        return 'text-muted-foreground'
-    }
+  const handleBack = () => {
+    router.push('/onboarding/profile')
+  }
+
+  const filteredInstruments = getFilteredInstruments()
+  const selectedCount = getSelectedCount()
+
+  if (isLoadingData || scanning) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center">
+        <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
+        <h2 className="text-xl font-semibold mb-2">
+          {scanning ? 'Scanning Network for Instruments...' : 'Loading...'}
+        </h2>
+        {scanning && (
+          <p className="text-muted-foreground text-sm">
+            Discovering laboratory instruments on your network
+          </p>
+        )}
+      </div>
+    )
   }
 
   return (
-    <div className="min-h-screen flex flex-col">
-      {/* Header */}
-      <header className="absolute top-0 left-0 right-0 flex justify-between items-center p-6">
-        <button
-          onClick={() => router.push('/onboarding/agent')}
-          className="flex items-center text-sm text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <ArrowLeft className="h-4 w-4 mr-1" />
-          Back
-        </button>
-        <ThemeToggle />
-      </header>
-
-      {/* Progress Bar */}
-      <div className="absolute top-0 left-0 right-0 h-1 bg-muted">
-        <div className="h-full w-3/5 bg-foreground transition-all duration-300" />
+    <div className="h-screen flex flex-col overflow-hidden">
+      {/* Progress bar */}
+      <div className="w-full bg-muted">
+        <div className="h-1.5 bg-primary transition-all duration-500" style={{ width: '40%' }} />
       </div>
 
-      {/* Main Content */}
-      <div className="flex-1 flex items-center justify-center px-4 sm:px-6 lg:px-8">
-        <div className="max-w-md w-full space-y-8">
-          {/* Step Indicator */}
-          <div className="text-center">
-            <p className="text-xs text-muted-foreground uppercase tracking-wide">
-              Step 3 of 5
+      {/* Header */}
+      <div className="border-b bg-card">
+        <div className="container max-w-6xl mx-auto px-4 py-3">
+          <div className="flex items-center justify-between">
+            <button
+              onClick={handleBack}
+              className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
+              disabled={isLoading}
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Back
+            </button>
+            <div className="text-sm text-muted-foreground">
+              Step 2 of 5
+            </div>
+            <ThemeToggle />
+          </div>
+        </div>
+      </div>
+
+      {/* Main content - scrollable */}
+      <div className="flex-1 overflow-y-auto">
+        <div className="container max-w-6xl mx-auto px-4 py-4 h-full flex flex-col">
+          {/* Title - compact */}
+          <div className="text-center mb-2">
+            <h1 className="text-2xl font-bold">Select Your Instruments</h1>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Found {instruments.length} instruments • Select the ones to connect
             </p>
-            <h2 className="mt-2 text-2xl font-semibold">
-              Discover & Select Instruments
-            </h2>
           </div>
 
-          {/* Scanning Status */}
-          {scanning ? (
-            <div className="flex items-center justify-center py-8">
-              <Search className="h-5 w-5 animate-pulse mr-2" />
-              <span className="text-sm text-muted-foreground">
-                Scanning network...
+          {/* Error/Success Messages - more compact */}
+          {error && (
+            <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-2.5 flex items-start gap-2 mb-2">
+              <AlertCircle className="h-4 w-4 text-destructive mt-0.5" />
+              <p className="text-xs font-medium text-destructive flex-1">{error}</p>
+            </div>
+          )}
+
+          {success && (
+            <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-2.5 flex items-start gap-2 mb-2">
+              <CheckCircle className="h-4 w-4 text-green-600 mt-0.5" />
+              <p className="text-xs font-medium text-green-600 flex-1">
+                {selectedCount} instruments saved successfully!
+              </p>
+            </div>
+          )}
+
+          {/* Search Bar - elegant and prominent */}
+          <div className="mb-3">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <input
+                type="text"
+                placeholder="Search by name, model, or serial number..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-10 pr-4 py-2.5 text-sm bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                >
+                  <span className="text-sm">×</span>
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Status Filter Buttons */}
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex gap-2">
+              <button
+                onClick={() => setFilterStatus('all')}
+                className={`px-3 py-1.5 text-xs rounded-md transition-colors ${
+                  filterStatus === 'all'
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                }`}
+              >
+                All ({instruments.length})
+              </button>
+              <button
+                onClick={() => setFilterStatus('online')}
+                className={`px-3 py-1.5 text-xs rounded-md transition-colors flex items-center gap-1 ${
+                  filterStatus === 'online'
+                    ? 'bg-green-500 text-white'
+                    : 'bg-green-500/10 text-green-600 hover:bg-green-500/20'
+                }`}
+              >
+                <Wifi className="h-3 w-3" />
+                Online ({instruments.filter(i => i.status === 'online').length})
+              </button>
+              <button
+                onClick={() => setFilterStatus('idle')}
+                className={`px-3 py-1.5 text-xs rounded-md transition-colors flex items-center gap-1 ${
+                  filterStatus === 'idle'
+                    ? 'bg-yellow-500 text-white'
+                    : 'bg-yellow-500/10 text-yellow-600 hover:bg-yellow-500/20'
+                }`}
+              >
+                <Activity className="h-3 w-3" />
+                Idle ({instruments.filter(i => i.status === 'idle').length})
+              </button>
+              <button
+                onClick={() => setFilterStatus('running')}
+                className={`px-3 py-1.5 text-xs rounded-md transition-colors flex items-center gap-1 ${
+                  filterStatus === 'running'
+                    ? 'bg-blue-500 text-white'
+                    : 'bg-blue-500/10 text-blue-600 hover:bg-blue-500/20'
+                }`}
+              >
+                <Activity className="h-3 w-3 animate-pulse" />
+                Running ({instruments.filter(i => i.status === 'running').length})
+              </button>
+              <button
+                onClick={() => setFilterStatus('offline')}
+                className={`px-3 py-1.5 text-xs rounded-md transition-colors flex items-center gap-1 ${
+                  filterStatus === 'offline'
+                    ? 'bg-gray-500 text-white'
+                    : 'bg-gray-500/10 text-gray-600 hover:bg-gray-500/20'
+                }`}
+              >
+                <WifiOff className="h-3 w-3" />
+                Offline ({instruments.filter(i => i.status === 'offline').length})
+              </button>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground">
+                {selectedCount} of {filteredInstruments.length} selected
               </span>
             </div>
-          ) : (
-            <>
-              {/* Search and Filters */}
-              <div className="space-y-3">
-                {/* Search Bar */}
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <input
-                    type="text"
-                    placeholder="Search instruments..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full pl-9 pr-3 py-2 text-sm border border-input bg-background rounded-md focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent"
-                  />
-                </div>
+          </div>
 
-                {/* Quick Actions Bar */}
-                <div className="flex items-center justify-between">
-                  <div className="flex gap-2">
-                    <button
-                      onClick={selectAll}
-                      className="text-xs px-2 py-1 rounded border border-border hover:bg-accent transition-colors"
-                    >
-                      Select All
-                    </button>
-                    <button
-                      onClick={selectNone}
-                      className="text-xs px-2 py-1 rounded border border-border hover:bg-accent transition-colors"
-                    >
-                      Clear
-                    </button>
-                    <button
-                      onClick={selectOnline}
-                      className="text-xs px-2 py-1 rounded border border-border hover:bg-accent transition-colors"
-                    >
-                      Online Only
-                    </button>
-                  </div>
-                  <div className="text-xs text-muted-foreground">
-                    {selectedCount} of {instruments.length} selected
-                  </div>
-                </div>
-
-                {/* Status Filter Tabs */}
-                <div className="flex gap-1 p-1 bg-muted rounded-md">
-                  {(['all', 'online', 'idle', 'offline'] as const).map((status) => (
-                    <button
-                      key={status}
-                      onClick={() => setFilterStatus(status)}
-                      className={`flex-1 text-xs py-1.5 px-2 rounded transition-colors ${
-                        filterStatus === status
-                          ? 'bg-background text-foreground shadow-sm'
-                          : 'text-muted-foreground hover:text-foreground'
-                      }`}
-                    >
-                      {status === 'all' ? 'All' : status.charAt(0).toUpperCase() + status.slice(1)}
-                      {status !== 'all' && (
-                        <span className="ml-1 opacity-60">
-                          ({instruments.filter(i => i.status === status).length})
-                        </span>
-                      )}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Compact Table View */}
-              <div className="border border-border rounded-md overflow-hidden">
-                <div className="max-h-[320px] overflow-y-auto">
-                  <table className="w-full">
-                    <thead className="bg-muted/50 sticky top-0">
-                      <tr className="text-xs">
-                        <th className="text-left p-2 w-8">
-                          <input
-                            type="checkbox"
-                            checked={filteredInstruments.length > 0 && filteredInstruments.every(i => i.selected)}
-                            onChange={(e) => {
-                              const checked = e.target.checked
-                              setInstruments(instruments.map(inst =>
-                                filteredInstruments.find(f => f.id === inst.id)
-                                  ? { ...inst, selected: checked }
-                                  : inst
-                              ))
-                            }}
-                            className="w-3 h-3"
-                          />
-                        </th>
-                        <th className="text-left p-2">Name</th>
-                        <th className="text-left p-2 hidden sm:table-cell">Model</th>
-                        <th className="text-left p-2">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border">
-                      {filteredInstruments.length > 0 ? (
-                        filteredInstruments.map((instrument) => (
-                          <tr
-                            key={instrument.id}
-                            className="text-xs hover:bg-accent/50 cursor-pointer"
-                            onClick={() => toggleInstrument(instrument.id)}
-                          >
-                            <td className="p-2" onClick={(e) => e.stopPropagation()}>
-                              <input
-                                type="checkbox"
-                                checked={instrument.selected}
-                                onChange={() => toggleInstrument(instrument.id)}
-                                className="w-3 h-3"
-                              />
-                            </td>
-                            <td className="p-2">
-                              <div className="font-medium">{instrument.name}</div>
-                              <div className="text-[10px] text-muted-foreground">{instrument.serial}</div>
-                            </td>
-                            <td className="p-2 hidden sm:table-cell text-muted-foreground">
-                              {instrument.model}
-                            </td>
-                            <td className="p-2">
-                              <span className={`inline-flex items-center gap-1 ${getStatusColor(instrument.status)}`}>
-                                <span className="w-1.5 h-1.5 rounded-full bg-current" />
-                                {instrument.status}
-                              </span>
-                            </td>
-                          </tr>
-                        ))
-                      ) : (
-                        <tr>
-                          <td colSpan={4} className="text-center py-8 text-sm text-muted-foreground">
-                            No instruments found
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              {/* Actions */}
-              <div className="space-y-3">
+          {/* Batch Selection Actions */}
+          {filteredInstruments.length > 0 && (
+            <div className="flex gap-2 mb-3 border-t pt-3">
+              <button
+                onClick={handleSelectAll}
+                className="px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
+              >
+                {filteredInstruments.every(i => i.selected) ? 'Deselect All' : 'Select All'}
+              </button>
+              {selectedCount > 0 && (
                 <button
-                  onClick={handleContinue}
-                  disabled={isLoading}
-                  className="w-full py-2.5 px-4 rounded-md text-sm font-medium bg-foreground text-background hover:bg-foreground/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  onClick={() => setInstruments(prev => prev.map(inst => ({ ...inst, selected: false })))}
+                  className="px-3 py-1.5 text-xs bg-muted text-muted-foreground rounded-md hover:bg-muted/80 transition-colors"
                 >
-                  {isLoading ? 'Loading...' :
-                    selectedCount > 0 ? `Onboard ${selectedCount} Selected →` : 'Continue →'
-                  }
+                  Clear Selection
                 </button>
-                {selectedCount === 0 && (
-                  <p className="text-center text-xs text-muted-foreground">
-                    No instruments selected - continue with demo data
-                  </p>
-                )}
-              </div>
-            </>
+              )}
+              <button
+                onClick={() => {
+                  // Toggle selection
+                  setInstruments(prev => prev.map(inst => {
+                    const isInFiltered = filteredInstruments.some(f => f.id === inst.id)
+                    return isInFiltered ? { ...inst, selected: !inst.selected } : inst
+                  }))
+                }}
+                className="px-3 py-1.5 text-xs bg-muted text-muted-foreground rounded-md hover:bg-muted/80 transition-colors"
+              >
+                Invert Selection
+              </button>
+            </div>
           )}
+
+          {/* Instruments grid - scrollable area */}
+          <div className="flex-1 overflow-y-auto mb-2">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+            {filteredInstruments.map((instrument) => (
+              <div
+                key={instrument.id}
+                onClick={() => handleToggleInstrument(instrument.id)}
+                className={`relative border rounded-lg p-2.5 cursor-pointer transition-all ${
+                  instrument.selected
+                    ? 'border-primary bg-primary/5 ring-1 ring-primary ring-opacity-20'
+                    : 'border-border hover:border-primary/50 hover:bg-accent/5'
+                }`}
+              >
+                {/* Selection indicator */}
+                <div className="absolute top-2 right-2">
+                  {instrument.selected ? (
+                    <CheckSquare className="h-4 w-4 text-primary" />
+                  ) : (
+                    <Square className="h-4 w-4 text-muted-foreground" />
+                  )}
+                </div>
+
+                <div className="flex items-start justify-between pr-6">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-1.5">
+                      {instrument.status === 'online' && (
+                        <Wifi className="h-3 w-3 text-green-500" />
+                      )}
+                      {instrument.status === 'offline' && (
+                        <WifiOff className="h-3 w-3 text-gray-400" />
+                      )}
+                      {instrument.status === 'idle' && (
+                        <Activity className="h-3 w-3 text-yellow-500" />
+                      )}
+                      {instrument.status === 'running' && (
+                        <Activity className="h-3 w-3 text-blue-500 animate-pulse" />
+                      )}
+                      <h3 className="font-medium text-xs">{instrument.name}</h3>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {instrument.model}
+                    </p>
+                    {instrument.location && (
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        📍 {instrument.location}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <div className="mt-1 flex items-center justify-between">
+                  <span className={`inline-block px-1.5 py-0.5 text-xs rounded-full ${
+                    instrument.status === 'online' ? 'bg-green-100 text-green-700' :
+                    instrument.status === 'idle' ? 'bg-yellow-100 text-yellow-700' :
+                    instrument.status === 'running' ? 'bg-blue-100 text-blue-700' :
+                    'bg-gray-100 text-gray-700'
+                  }`}>
+                    {instrument.status}
+                  </span>
+                  {instrument.selected && (
+                    <span className="text-xs text-primary font-medium">Selected</span>
+                  )}
+                </div>
+              </div>
+            ))}
+            </div>
+          </div>
+
+          {filteredInstruments.length === 0 && (
+            <div className="text-center py-8">
+              <p className="text-sm text-muted-foreground">
+                No instruments found matching your filters
+              </p>
+            </div>
+          )}
+
+          {/* Continue button - always visible at bottom */}
+          <div className="flex justify-between items-center pt-2 mt-auto border-t">
+            <div className="flex items-center gap-2">
+              {selectedCount > 0 && (
+                <button
+                  onClick={() => {
+                    // Quick connect selected instruments
+                    const onlineInstruments = instruments.filter(i => i.selected && i.status === 'online')
+                    if (onlineInstruments.length > 0) {
+                      setSuccess(true)
+                      setTimeout(() => setSuccess(false), 3000)
+                    }
+                  }}
+                  className="px-3 py-1.5 text-xs bg-green-500/10 text-green-600 rounded-md hover:bg-green-500/20 transition-colors flex items-center gap-1"
+                >
+                  <Wifi className="h-3 w-3" />
+                  Connect {selectedCount} Now
+                </button>
+              )}
+              <p className="text-xs text-muted-foreground">
+                {selectedCount > 0
+                  ? `${selectedCount} instrument${selectedCount > 1 ? 's' : ''} ready`
+                  : 'Select instruments to continue'
+                }
+              </p>
+            </div>
+            <button
+              onClick={handleContinue}
+              disabled={selectedCount === 0 || isLoading}
+              className="px-6 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+            >
+              {isLoading ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                <>Continue {selectedCount > 0 && `with ${selectedCount}`}</>
+              )}
+            </button>
+          </div>
         </div>
       </div>
     </div>

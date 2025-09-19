@@ -21,12 +21,16 @@ export default function TeamInvitePage() {
 
   // Check if user is admin
   useEffect(() => {
-    // Check stored role from onboarding
-    const userRole = localStorage.getItem('onboarding_role')
-    // If not admin/manager, redirect to hello workflow
-    if (userRole && userRole !== 'admin' && userRole !== 'manager') {
-      router.push('/onboarding/hello')
-    }
+    // Check user role from secure API
+    fetch('/api/onboarding/profile')
+      .then(res => res.json())
+      .then(data => {
+        // If not admin/manager, redirect to hello workflow
+        if (data.role && data.role !== 'admin' && data.role !== 'manager') {
+          router.push('/onboarding/hello')
+        }
+      })
+      .catch(console.error)
   }, [router])
 
   const handleAddEmail = (e?: React.KeyboardEvent<HTMLInputElement>) => {
@@ -121,35 +125,59 @@ export default function TeamInvitePage() {
 
     setIsLoading(true)
 
-    // In production, this would call the API to send invites
-    // For now, simulate sending
-    setTimeout(() => {
-      setInvitesSent(true)
-      // Store that invites were sent and mark onboarding complete
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('onboarding_invites_sent', JSON.stringify({
-          teamMembers,
-          sentAt: new Date().toISOString()
-        }))
-        localStorage.setItem('onboarding_complete', 'true')
-        localStorage.setItem('onboarding_completed_at', new Date().toISOString())
-      }
+    // Call secure API to send invites and update progress
+    setTimeout(async () => {
+      try {
+        // Send invites via secure API
+        await fetch('/api/onboarding/team', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ teamMembers })
+        })
 
-      // After showing success, continue to dashboard
-      setTimeout(() => {
-        router.push('/dashboard')
-      }, 2000)
+        // Mark onboarding complete via secure API
+        await fetch('/api/onboarding/progress', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            step: 'team',
+            completed: true,
+            onboardingComplete: true
+          })
+        })
+
+        setInvitesSent(true)
+
+        // After showing success, continue to dashboard
+        setTimeout(() => {
+          router.push('/dashboard')
+        }, 2000)
+      } catch (error) {
+        console.error('Failed to send invites:', error)
+        setIsLoading(false)
+      }
     }, 1500)
   }
 
-  const handleSkip = () => {
+  const handleSkip = async () => {
     setIsLoading(true)
-    // Mark onboarding complete even when skipping
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('onboarding_complete', 'true')
-      localStorage.setItem('onboarding_completed_at', new Date().toISOString())
+    try {
+      // Mark onboarding complete via secure API even when skipping
+      await fetch('/api/onboarding/progress', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          step: 'team',
+          completed: true,
+          onboardingComplete: true,
+          skipped: true
+        })
+      })
+      router.push('/dashboard')
+    } catch (error) {
+      console.error('Failed to update progress:', error)
+      setIsLoading(false)
     }
-    router.push('/dashboard')
   }
 
   const getRoleDescription = (role: TeamMember['role']) => {

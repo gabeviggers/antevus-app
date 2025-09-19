@@ -44,14 +44,25 @@ export default function RoleSelectionPage() {
 
     setIsLoading(true)
 
-    // Save role to user profile (would call API in production)
-    // For now, just store in localStorage for the onboarding flow
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('onboarding_role', selectedRole)
-    }
+    try {
+      // Save role via dedicated API
+      const response = await fetch('/api/onboarding/role', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ role: selectedRole })
+      })
 
-    // Navigate to profile setup
-    router.push('/onboarding/profile')
+      if (response.ok) {
+        // Navigate to profile setup
+        router.push('/onboarding/profile')
+      } else {
+        console.error('Failed to save role')
+        setIsLoading(false)
+      }
+    } catch (error) {
+      console.error('Failed to save role:', error)
+      setIsLoading(false)
+    }
   }
 
   return (

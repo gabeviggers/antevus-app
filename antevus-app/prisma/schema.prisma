@@ -28,6 +28,10 @@ model User {
   sessions          Session[]
   auditEvents       AuditEvent[]
   verificationToken VerificationToken?
+  onboardingProgress OnboardingProgress?
+
+  // Track onboarding completion
+  onboardingCompletedAt DateTime?
 
   @@index([email])
 }
@@ -181,4 +185,32 @@ model VerificationToken {
   @@index([token])
   @@index([tokenHash])
   @@index([expiresAt])
+}
+
+// Onboarding progress tracking
+model OnboardingProgress {
+  id                String    @id @default(cuid())
+  userId            String    @unique
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Encrypted onboarding data (stored as encrypted JSON)
+  profileData       String?   // Encrypted profile information
+  instrumentsData   String?   // Encrypted selected instruments
+  agentData         String?   // Encrypted agent configuration
+  endpointsData     String?   // Encrypted API endpoints config
+  teamData          String?   // Encrypted team invitations
+
+  // Progress tracking
+  completedSteps    String[]  // Array of completed step names
+  currentStep       String    @default("role")
+  isCompleted       Boolean   @default(false)
+
+  // Audit fields
+  startedAt         DateTime  @default(now())
+  completedAt       DateTime?
+  updatedAt         DateTime  @updatedAt
+
+  @@map("onboarding_progress")
+  @@index([userId])
+  @@index([isCompleted])
 }

@@ -24,98 +24,136 @@ export default function InstrumentsDashboard() {
 
   // Load instruments from onboarding on mount
   useEffect(() => {
-    // Check if user just completed onboarding
-    const onboardingComplete = localStorage.getItem('onboarding_complete')
-    const storedInstruments = localStorage.getItem('onboarding_instruments')
-    const storedInvites = localStorage.getItem('onboarding_invites_sent')
-    const demoEmail = localStorage.getItem('demo_email')
-
-    // Load team invites if available
-    if (storedInvites) {
+    // Load user data from secure API
+    const loadDashboardData = async () => {
       try {
-        const parsedInvites = JSON.parse(storedInvites)
-        setTeamInvites(parsedInvites)
+        const [profileRes, instrumentsRes, teamRes, progressRes] = await Promise.all([
+          fetch('/api/onboarding/profile'),
+          fetch('/api/onboarding/instruments'),
+          fetch('/api/onboarding/team'),
+          fetch('/api/onboarding/progress')
+        ])
+
+        const profile = await profileRes.json()
+        const instrumentsData = await instrumentsRes.json()
+        const teamData = await teamRes.json()
+        const progress = await progressRes.json()
+
+        const onboardingComplete = progress.onboardingComplete
+        const storedInstruments = instrumentsData.instruments || []
+        const storedInvites = teamData.teamMembers || []
+
+        // Load team invites if available
+        if (storedInvites.length > 0) {
+          setTeamInvites({ teamMembers: storedInvites })
+        }
+
+        // Check for demo mode via server API
+        if (process.env.NODE_ENV === 'development') {
+          try {
+            const demoResponse = await fetch('/api/auth/demo', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ email: profile.email })
+            })
+
+            if (demoResponse.ok) {
+              const demoData = await demoResponse.json()
+              if (demoData.isDemo) {
+                // Use full mock instruments for demo
+                setInstruments(mockInstruments)
+
+                // Show sync notification if just completed onboarding
+                if (onboardingComplete && storedInstruments.length > 0) {
+                  setSyncedInstruments(storedInstruments)
+
+                  // Show toast notification for synced instruments
+                  setToastMessage({
+                    title: 'Instruments synced',
+                    description: `Successfully connected ${storedInstruments.length} instruments`
+                  })
+                  setTimeout(() => setToastMessage(null), 3000)
+
+                  // Mark progress as displayed
+                  await fetch('/api/onboarding/progress', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ displayedInDashboard: true })
+                  })
+                }
+
+                // Show team invites toast if applicable
+                if (teamInvites && teamInvites.teamMembers && teamInvites.teamMembers.length > 0) {
+                  setTimeout(() => {
+                    setToastMessage({
+                      title: 'Team invitations sent',
+                      description: `${teamInvites.teamMembers!.length} invitations sent successfully`
+                    })
+                    setTimeout(() => setToastMessage(null), 3000)
+                  }, 500)
+                }
+                return
+              }
+            }
+          } catch (error) {
+            console.error('Demo mode check failed:', error)
+          }
+        }
+
+        if (onboardingComplete && storedInstruments.length > 0) {
+          try {
+            setSyncedInstruments(storedInstruments)
+
+            // Create proper Instrument objects with sync timestamp
+            const syncTime = new Date().toISOString()
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const instrumentsWithSync = storedInstruments.map((inst: any, index: number) => ({
+              id: inst.id || `synced-${index}`,
+              name: inst.name,
+              manufacturer: inst.model?.split(' ')[0] || 'Unknown',
+              model: inst.model || 'Model Unknown',
+              serialNumber: inst.serial || `SN-${Date.now()}-${index}`,
+              location: 'Lab A - Bench 1',
+              status: inst.status as InstrumentStatus,
+              lastRun: syncTime,
+              nextMaintenance: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString(),
+              syncedAt: syncTime,
+              isSynced: true
+            }))
+
+            // Merge with default mock instruments for demo
+            const allInstruments = [...instrumentsWithSync, ...mockInstruments.slice(instrumentsWithSync.length)]
+            setInstruments(allInstruments)
+
+            // Show toast notification
+            setToastMessage({
+              title: 'Instruments synced',
+              description: `Successfully connected ${storedInstruments.length} instruments`
+            })
+            setTimeout(() => setToastMessage(null), 3000)
+
+            // Mark progress as displayed
+            await fetch('/api/onboarding/progress', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ displayedInDashboard: true })
+            })
+          } catch (error) {
+            console.error('Failed to load onboarding instruments:', error)
+            setInstruments(mockInstruments)
+          }
+        } else {
+          // No onboarding data, use mock instruments
+          setInstruments(mockInstruments)
+        }
       } catch (error) {
-        console.error('Failed to parse team invites:', error)
-      }
-    }
-
-    // For demo admin, always show rich mock data
-    if (demoEmail === 'admin@antevus.com' && process.env.NODE_ENV === 'development') {
-      // Use full mock instruments for demo
-      setInstruments(mockInstruments)
-
-      // Show sync notification if just completed onboarding
-      if (onboardingComplete && storedInstruments) {
-        const parsedInstruments = JSON.parse(storedInstruments)
-        setSyncedInstruments(parsedInstruments)
-
-        // Show toast notification for synced instruments
-        setToastMessage({
-          title: 'Instruments synced',
-          description: `Successfully connected ${parsedInstruments.length} instruments`
-        })
-        setTimeout(() => setToastMessage(null), 3000)
-
-        localStorage.removeItem('onboarding_complete')
-      }
-
-      // Show team invites toast if applicable
-      if (teamInvites && teamInvites.teamMembers && teamInvites.teamMembers.length > 0) {
-        setTimeout(() => {
-          setToastMessage({
-            title: 'Team invitations sent',
-            description: `${teamInvites.teamMembers!.length} invitations sent successfully`
-          })
-          setTimeout(() => setToastMessage(null), 3000)
-        }, 500)
-      }
-      return
-    }
-
-    if (onboardingComplete && storedInstruments) {
-      try {
-        const parsedInstruments = JSON.parse(storedInstruments)
-        setSyncedInstruments(parsedInstruments)
-
-        // Create proper Instrument objects with sync timestamp
-        const syncTime = new Date().toISOString()
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const instrumentsWithSync = parsedInstruments.map((inst: any, index: number) => ({
-          id: inst.id || `synced-${index}`,
-          name: inst.name,
-          manufacturer: inst.model?.split(' ')[0] || 'Unknown',
-          model: inst.model || 'Model Unknown',
-          serialNumber: inst.serial || `SN-${Date.now()}-${index}`,
-          location: 'Lab A - Bench 1',
-          status: inst.status as InstrumentStatus,
-          lastRun: syncTime,
-          nextMaintenance: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString(),
-          syncedAt: syncTime,
-          isSynced: true
-        }))
-
-        // Merge with default mock instruments for demo
-        const allInstruments = [...instrumentsWithSync, ...mockInstruments.slice(instrumentsWithSync.length)]
-        setInstruments(allInstruments)
-
-        // Show toast notification
-        setToastMessage({
-          title: 'Instruments synced',
-          description: `Successfully connected ${parsedInstruments.length} instruments`
-        })
-        setTimeout(() => setToastMessage(null), 3000)
-
-        // Clear onboarding flag to prevent re-running
-        localStorage.removeItem('onboarding_complete')
-      } catch (error) {
-        console.error('Failed to load onboarding instruments:', error)
+        console.error('Failed to load dashboard data:', error)
+        // Default to mock instruments on error
         setInstruments(mockInstruments)
       }
-    } else {
-      // No onboarding data, use mock instruments
-      setInstruments(mockInstruments)
     }
+
+    loadDashboardData()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
