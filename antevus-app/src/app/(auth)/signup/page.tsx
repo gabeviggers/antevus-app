@@ -94,9 +94,13 @@ export default function SignupPage() {
         throw new Error(data.error || 'Signup failed')
       }
 
-      // Store token and redirect
-      localStorage.setItem('token', data.token)
-      router.push('/onboarding')
+      // TODO: Implement secure token storage (httpOnly cookies via API)
+      // NEVER store tokens in localStorage - HIPAA violation
+      // For now, just show success message since we're not creating real accounts yet
+      logger.info('Signup successful', { email })
+
+      // Temporary: Just redirect to login page
+      router.push('/login')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create account')
       setIsLoading(false)

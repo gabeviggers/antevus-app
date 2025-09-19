@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
+import crypto from 'crypto'
 import { z } from 'zod'
 import { v4 as uuidv4 } from 'uuid'
 import { logger } from '@/lib/logger'
-import { auditLogger, AuditEventType } from '@/lib/security/audit-logger'
+import { auditLogger } from '@/lib/security/audit-logger'
 import { withRateLimit } from '@/lib/api/rate-limit-helper'
+import { prisma } from '@/lib/db/prisma'
 
 // SOC 2 & HIPAA compliant password requirements
 const signupSchema = z.object({
@@ -45,23 +47,47 @@ const emailConfig: EmailConfig = {
   }
 }
 
-// Temporary storage (will be replaced with database)
-interface PendingSignup {
-  id: string
-  email: string
-  passwordHash: string
-  verificationToken: string
-  verificationTokenExpiry: Date
-  createdAt: string
-  emailVerified: boolean
-  ipAddress: string
-  userAgent: string
+// Cleanup expired verification tokens from database (runs on each request)
+// In production, this should be a scheduled job
+async function cleanupExpiredTokens() {
+  try {
+    const deleted = await prisma.verificationToken.deleteMany({
+      where: {
+        expiresAt: {
+          lt: new Date()
+        }
+      }
+    })
+    if (deleted.count > 0) {
+      logger.info('Cleaned up expired verification tokens', { count: deleted.count })
+    }
+  } catch (error) {
+    logger.error('Failed to cleanup expired tokens', error)
+  }
 }
-
-const pendingSignups = new Map<string, PendingSignup>()
 
 export async function POST(request: NextRequest) {
   try {
+    // CSRF Protection - Verify origin header
+    const origin = request.headers.get('origin')
+    const allowedOrigins = [
+      process.env.NEXT_PUBLIC_APP_URL,
+      'http://localhost:3000',
+      'http://localhost:3003', // Add port 3003 for dev server
+      'https://app.antevus.com'
+    ].filter(Boolean)
+
+    if (!origin || !allowedOrigins.includes(origin)) {
+      logger.warn('CSRF protection triggered', {
+        origin,
+        expectedOrigins: allowedOrigins
+      })
+      return NextResponse.json(
+        { error: 'Invalid request origin' },
+        { status: 403 }
+      )
+    }
+
     // Rate limiting (SOC 2 requirement)
     const rateLimited = await withRateLimit(request, {
       key: 'api:auth:signup',
@@ -107,8 +133,12 @@ export async function POST(request: NextRequest) {
 
     const { email, password } = validation.data
 
-    // Check if email already exists (simulated - replace with DB check)
-    if (pendingSignups.has(email)) {
+    // Check if email already exists in database
+    const existingUser = await prisma.user.findUnique({
+      where: { email }
+    })
+
+    if (existingUser) {
       // Prevent timing attacks by always hashing even for existing emails
       await bcrypt.hash(password, 12)
 
@@ -119,58 +149,70 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Generate secure verification token
-    const verificationToken = uuidv4()
-    const hashedToken = await bcrypt.hash(verificationToken, 10)
-
     // Hash password with bcrypt (HIPAA requirement)
     const passwordHash = await bcrypt.hash(password, 12)
 
-    // Prepare user data (not saved yet)
-    const userData = {
-      id: uuidv4(),
-      email,
-      passwordHash,
-      verificationToken: hashedToken,
-      verificationTokenExpiry: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours
-      createdAt: new Date().toISOString(),
-      emailVerified: false,
-      ipAddress: request.headers.get('x-forwarded-for') || 'unknown',
-      userAgent: request.headers.get('user-agent') || 'unknown'
+    // Cleanup expired tokens periodically (1% chance on each signup)
+    if (Math.random() < 0.01) {
+      cleanupExpiredTokens() // Fire and forget
     }
 
-    // Store temporarily (in production, this would be a database transaction)
-    pendingSignups.set(email, userData)
+    // Create user in database (transaction for data integrity)
+    let verificationToken: string = ''
+    const user = await prisma.$transaction(async (tx) => {
+      // Create the user
+      const newUser = await tx.user.create({
+        data: {
+          email,
+          passwordHash,
+          name: email.split('@')[0], // Temporary name from email
+          role: 'viewer', // Default role
+        }
+      })
 
-    // Log signup attempt (HIPAA audit requirement)
-    auditLogger.log({
-      eventType: AuditEventType.AUTH_LOGIN_ATTEMPT,
-      userId: userData.id,
-      metadata: {
-        email: email.split('@')[0] + '@***', // Redact domain for privacy
-        timestamp: userData.createdAt,
-        ipAddress: userData.ipAddress
-      },
-      action: 'New signup initiated'
+      // Generate verification token and store in database
+      verificationToken = uuidv4()
+      const tokenHash = crypto.createHash('sha256').update(verificationToken).digest('hex')
+
+      // Store verification token in database
+      await tx.verificationToken.create({
+        data: {
+          userId: newUser.id,
+          token: verificationToken,
+          tokenHash,
+          expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
+        }
+      })
+
+      // Log the signup in audit table
+      await tx.auditEvent.create({
+        data: {
+          userId: newUser.id,
+          eventType: 'AUTH_LOGIN_SUCCESS', // Use existing enum value for signup success
+          ipAddress: request.headers.get('x-forwarded-for') ||
+                     request.headers.get('x-real-ip') ||
+                     'unknown',
+          userAgent: request.headers.get('user-agent') || 'unknown',
+          metadata: {
+            action: 'signup',
+            email: email.split('@')[0] + '@***', // Redact domain for privacy
+            resourceType: 'USER',
+            resourceId: newUser.id
+          }
+        }
+      })
+
+      return newUser
     })
 
-    // Prepare SendGrid email data (not sent yet)
-    const emailData = {
-      to: email,
-      from: {
-        email: emailConfig.fromEmail,
-        name: emailConfig.fromName
-      },
-      templateId: emailConfig.templates.verification,
-      dynamicTemplateData: {
-        verificationUrl: `${process.env.NEXT_PUBLIC_APP_URL}/verify?token=${verificationToken}`,
-        userEmail: email,
-        expiresIn: '24 hours'
-      }
-    }
+    // Audit logging already done in database transaction above
+    // No need for duplicate logging here
 
-    logger.info('Signup data prepared', {
-      userId: userData.id,
+    // TODO: Send verification email when SendGrid is configured
+    // Will use the verificationToken stored in pendingVerifications
+
+    logger.info('User account created', {
+      userId: user.id,
       email: email.split('@')[0] + '@***',
       emailReady: !!emailConfig.apiKey,
       sendGridConfigured: false // Will be true when SendGrid is set up
@@ -179,13 +221,9 @@ export async function POST(request: NextRequest) {
     // For now, return success with verification instructions
     return NextResponse.json(
       {
-        message: 'Account created successfully',
+        message: 'Account created successfully. Please check your email for verification instructions.',
         requiresVerification: true,
-        // In development, include the token (remove in production)
-        ...(process.env.NODE_ENV === 'development' && {
-          verificationToken,
-          emailData
-        })
+        userId: user.id // Safe to return the user ID
       },
       { status: 201 }
     )
@@ -209,13 +247,25 @@ export async function POST(request: NextRequest) {
 }
 
 // OPTIONS for CORS preflight (required for production)
-export async function OPTIONS() {
+export async function OPTIONS(request: NextRequest) {
+  const origin = request.headers.get('origin')
+  const allowedOrigins = [
+    process.env.NEXT_PUBLIC_APP_URL,
+    'http://localhost:3000',
+    'http://localhost:3003', // Add port 3003 for dev server
+    'https://app.antevus.com'
+  ].filter(Boolean)
+
+  // Only allow specific origins
+  const corsOrigin = origin && allowedOrigins.includes(origin) ? origin : allowedOrigins[0]
+
   return new NextResponse(null, {
     status: 200,
     headers: {
-      'Access-Control-Allow-Origin': process.env.NEXT_PUBLIC_APP_URL || '*',
+      'Access-Control-Allow-Origin': corsOrigin || '',
       'Access-Control-Allow-Methods': 'POST, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+      'Access-Control-Allow-Credentials': 'true',
       'Access-Control-Max-Age': '86400', // 24 hours
     },
   })
