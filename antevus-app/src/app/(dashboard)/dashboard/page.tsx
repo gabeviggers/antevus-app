@@ -18,7 +18,7 @@ export default function InstrumentsDashboard() {
   const [selectedInstrument, setSelectedInstrument] = useState<Instrument | null>(null)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [syncedInstruments, setSyncedInstruments] = useState<any[]>([])
-  const [teamInvites, setTeamInvites] = useState<any>(null)
+  const [teamInvites, setTeamInvites] = useState<{teamMembers?: any[]}>(null)
   const [toastMessage, setToastMessage] = useState<{ title: string; description: string } | null>(null)
 
   // Load instruments from onboarding on mount

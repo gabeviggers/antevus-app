@@ -361,7 +361,7 @@ export default function TeamInvitePage() {
                 <div>
                   <p className="text-xs text-muted-foreground">
                     Invited users will receive an email with a secure link to join your workspace.
-                    They'll create their own account and go through a simplified onboarding.
+                    They&apos;ll create their own account and go through a simplified onboarding.
                   </p>
                 </div>
               </div>
