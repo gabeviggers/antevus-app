@@ -26,6 +26,7 @@ export default function SignupPage() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
+  const [passwordFocused, setPasswordFocused] = useState(false)
   const router = useRouter()
 
   // Calculate password strength
@@ -96,8 +97,8 @@ export default function SignupPage() {
       // Store token and redirect
       localStorage.setItem('token', data.token)
       router.push('/onboarding')
-    } catch (err: any) {
-      setError(err.message || 'Failed to create account')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to create account')
       setIsLoading(false)
     }
   }
@@ -180,6 +181,8 @@ export default function SignupPage() {
                     required
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
+                    onFocus={() => setPasswordFocused(true)}
+                    onBlur={() => setPasswordFocused(false)}
                     className="w-full px-3 py-2 pr-10 border border-input bg-background rounded-md focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-colors"
                     placeholder="••••••••"
                   />
@@ -225,28 +228,30 @@ export default function SignupPage() {
                   </div>
                 )}
 
-                {/* Requirements Checklist */}
-                <div className="mt-3 space-y-1">
-                  {Object.entries(PASSWORD_REQUIREMENTS).map(([key, req]) => {
-                    const isMet = password ? req.check(password) : false
-                    return (
-                      <div
-                        key={key}
-                        className={cn(
-                          "flex items-center gap-2 text-xs transition-colors",
-                          isMet ? "text-green-600 dark:text-green-500" : "text-muted-foreground"
-                        )}
-                      >
-                        {isMet ? (
-                          <Check className="h-3 w-3" />
-                        ) : (
-                          <X className="h-3 w-3" />
-                        )}
-                        <span>{req.label}</span>
-                      </div>
-                    )
-                  })}
-                </div>
+                {/* Requirements Checklist - Only show when focused or requirements not met */}
+                {(passwordFocused || (password && passwordStrength.percentage < 100)) && (
+                  <div className="mt-3 space-y-1">
+                    {Object.entries(PASSWORD_REQUIREMENTS).map(([key, req]) => {
+                      const isMet = password ? req.check(password) : false
+                      return (
+                        <div
+                          key={key}
+                          className={cn(
+                            "flex items-center gap-2 text-xs transition-colors",
+                            isMet ? "text-green-600 dark:text-green-500" : "text-muted-foreground"
+                          )}
+                        >
+                          {isMet ? (
+                            <Check className="h-3 w-3" />
+                          ) : (
+                            <X className="h-3 w-3" />
+                          )}
+                          <span>{req.label}</span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
               </div>
 
               <div>

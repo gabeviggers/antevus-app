@@ -4,7 +4,7 @@ import { z } from 'zod'
 import { v4 as uuidv4 } from 'uuid'
 import { logger } from '@/lib/logger'
 import { auditLogger } from '@/lib/security/audit-logger'
-import { withRateLimit, RateLimitConfigs } from '@/lib/api/rate-limit-helper'
+import { withRateLimit } from '@/lib/api/rate-limit-helper'
 
 // SOC 2 & HIPAA compliant password requirements
 const signupSchema = z.object({
@@ -46,7 +46,19 @@ const emailConfig: EmailConfig = {
 }
 
 // Temporary storage (will be replaced with database)
-const pendingSignups = new Map<string, any>()
+interface PendingSignup {
+  id: string
+  email: string
+  passwordHash: string
+  verificationToken: string
+  verificationTokenExpiry: Date
+  createdAt: string
+  emailVerified: boolean
+  ipAddress: string
+  userAgent: string
+}
+
+const pendingSignups = new Map<string, PendingSignup>()
 
 export async function POST(request: NextRequest) {
   try {
@@ -60,12 +72,13 @@ export async function POST(request: NextRequest) {
 
     if (rateLimited) {
       // Log rate limit violation for security monitoring
-      await auditLogger.logSecurityEvent('signup_rate_limited', {
+      auditLogger.logSecurityEvent('rateLimit', {
         ip: request.headers.get('x-forwarded-for') ||
             request.headers.get('x-real-ip') ||
             'unknown',
         timestamp: new Date().toISOString(),
-        userAgent: request.headers.get('user-agent') || 'unknown'
+        userAgent: request.headers.get('user-agent') || 'unknown',
+        endpoint: '/api/auth/signup'
       })
       return rateLimited
     }
@@ -76,14 +89,14 @@ export async function POST(request: NextRequest) {
 
     if (!validation.success) {
       logger.warn('Invalid signup data', {
-        errors: validation.error.errors,
+        errors: validation.error.issues,
         email: body.email?.split('@')[0] + '@***' // Redact domain
       })
 
       return NextResponse.json(
         {
           error: 'Validation failed',
-          details: validation.error.errors.map(err => ({
+          details: validation.error.issues.map((err) => ({
             field: err.path.join('.'),
             message: err.message
           }))
@@ -130,11 +143,15 @@ export async function POST(request: NextRequest) {
     pendingSignups.set(email, userData)
 
     // Log signup attempt (HIPAA audit requirement)
-    await auditLogger.logSecurityEvent('signup_initiated', {
+    auditLogger.log({
+      eventType: 'AUTH_SIGNUP_ATTEMPT' as any,
       userId: userData.id,
-      email: email.split('@')[0] + '@***', // Redact domain for privacy
-      timestamp: userData.createdAt,
-      ipAddress: userData.ipAddress
+      metadata: {
+        email: email.split('@')[0] + '@***', // Redact domain for privacy
+        timestamp: userData.createdAt,
+        ipAddress: userData.ipAddress
+      },
+      action: 'New signup initiated'
     })
 
     // Prepare SendGrid email data (not sent yet)
@@ -177,9 +194,10 @@ export async function POST(request: NextRequest) {
     logger.error('Signup error', error)
 
     // Log error for security monitoring
-    await auditLogger.logSecurityEvent('signup_error', {
+    auditLogger.logSecurityEvent('suspicious', {
       error: error instanceof Error ? error.message : 'Unknown error',
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      endpoint: '/api/auth/signup'
     })
 
     // Generic error to prevent information leakage
@@ -191,7 +209,7 @@ export async function POST(request: NextRequest) {
 }
 
 // OPTIONS for CORS preflight (required for production)
-export async function OPTIONS(request: NextRequest) {
+export async function OPTIONS() {
   return new NextResponse(null, {
     status: 200,
     headers: {

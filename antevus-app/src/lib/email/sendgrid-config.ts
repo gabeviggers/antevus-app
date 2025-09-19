@@ -21,7 +21,7 @@ export interface EmailOptions {
   to: EmailRecipient | EmailRecipient[]
   from?: EmailRecipient
   templateId: string
-  dynamicTemplateData?: Record<string, any>
+  dynamicTemplateData?: Record<string, unknown>
   attachments?: Array<{
     content: string
     filename: string
