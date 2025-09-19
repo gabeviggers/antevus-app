@@ -67,6 +67,17 @@ function AssistantPageContent() {
   // Check authorization when user changes
   useEffect(() => {
     const checkAuthorization = async () => {
+      // Check for demo mode admin first
+      if (process.env.NODE_ENV === 'development') {
+        const demoEmail = localStorage.getItem('demo_email')
+        if (demoEmail === 'admin@antevus.com') {
+          // Demo admin has full access
+          setHasPermission(true)
+          setAuthError(null)
+          return
+        }
+      }
+
       if (!user) {
         setHasPermission(false)
         setAuthError({ message: 'You must be logged in to use the Lab Assistant' })

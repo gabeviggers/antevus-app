@@ -104,6 +104,11 @@ export default function SignupPage() {
       // Check if demo mode response
       const isDemo = data.isDemo || email === 'admin@antevus.com'
 
+      // Store demo email for protected route check
+      if (isDemo && process.env.NODE_ENV === 'development') {
+        localStorage.setItem('demo_email', email)
+      }
+
       // Redirect to email verification page with demo flag if applicable
       const queryParams = new URLSearchParams({ email })
       if (isDemo) queryParams.append('demo', 'true')

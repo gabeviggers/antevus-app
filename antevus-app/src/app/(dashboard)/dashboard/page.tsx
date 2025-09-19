@@ -11,12 +11,110 @@ import { MetricCard } from '@/components/ui/metric-card'
 import { NotificationsDropdown } from '@/components/notifications/notifications-dropdown'
 
 export default function InstrumentsDashboard() {
-  const [instruments, setInstruments] = useState<Instrument[]>(mockInstruments)
+  const [instruments, setInstruments] = useState<Instrument[]>([])
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<InstrumentStatus | 'all'>('all')
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
   const [selectedInstrument, setSelectedInstrument] = useState<Instrument | null>(null)
   const [isRefreshing, setIsRefreshing] = useState(false)
+  const [syncedInstruments, setSyncedInstruments] = useState<any[]>([])
+  const [teamInvites, setTeamInvites] = useState<any>(null)
+  const [toastMessage, setToastMessage] = useState<{ title: string; description: string } | null>(null)
+
+  // Load instruments from onboarding on mount
+  useEffect(() => {
+    // Check if user just completed onboarding
+    const onboardingComplete = localStorage.getItem('onboarding_complete')
+    const storedInstruments = localStorage.getItem('onboarding_instruments')
+    const storedInvites = localStorage.getItem('onboarding_invites_sent')
+    const demoEmail = localStorage.getItem('demo_email')
+
+    // Load team invites if available
+    if (storedInvites) {
+      try {
+        const parsedInvites = JSON.parse(storedInvites)
+        setTeamInvites(parsedInvites)
+      } catch (error) {
+        console.error('Failed to parse team invites:', error)
+      }
+    }
+
+    // For demo admin, always show rich mock data
+    if (demoEmail === 'admin@antevus.com' && process.env.NODE_ENV === 'development') {
+      // Use full mock instruments for demo
+      setInstruments(mockInstruments)
+
+      // Show sync notification if just completed onboarding
+      if (onboardingComplete && storedInstruments) {
+        const parsedInstruments = JSON.parse(storedInstruments)
+        setSyncedInstruments(parsedInstruments)
+
+        // Show toast notification for synced instruments
+        setToastMessage({
+          title: 'Instruments synced',
+          description: `Successfully connected ${parsedInstruments.length} instruments`
+        })
+        setTimeout(() => setToastMessage(null), 3000)
+
+        localStorage.removeItem('onboarding_complete')
+      }
+
+      // Show team invites toast if applicable
+      if (teamInvites && teamInvites.teamMembers) {
+        setTimeout(() => {
+          setToastMessage({
+            title: 'Team invitations sent',
+            description: `${teamInvites.teamMembers.length} invitations sent successfully`
+          })
+          setTimeout(() => setToastMessage(null), 3000)
+        }, 500)
+      }
+      return
+    }
+
+    if (onboardingComplete && storedInstruments) {
+      try {
+        const parsedInstruments = JSON.parse(storedInstruments)
+        setSyncedInstruments(parsedInstruments)
+
+        // Create proper Instrument objects with sync timestamp
+        const syncTime = new Date().toISOString()
+        const instrumentsWithSync = parsedInstruments.map((inst: any, index: number) => ({
+          id: inst.id || `synced-${index}`,
+          name: inst.name,
+          manufacturer: inst.model?.split(' ')[0] || 'Unknown',
+          model: inst.model || 'Model Unknown',
+          serialNumber: inst.serial || `SN-${Date.now()}-${index}`,
+          location: 'Lab A - Bench 1',
+          status: inst.status as InstrumentStatus,
+          lastRun: syncTime,
+          nextMaintenance: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString(),
+          syncedAt: syncTime,
+          isSynced: true
+        }))
+
+        // Merge with default mock instruments for demo
+        const allInstruments = [...instrumentsWithSync, ...mockInstruments.slice(instrumentsWithSync.length)]
+        setInstruments(allInstruments)
+
+        // Show toast notification
+        setToastMessage({
+          title: 'Instruments synced',
+          description: `Successfully connected ${parsedInstruments.length} instruments`
+        })
+        setTimeout(() => setToastMessage(null), 3000)
+
+        // Clear onboarding flag to prevent re-running
+        localStorage.removeItem('onboarding_complete')
+      } catch (error) {
+        console.error('Failed to load onboarding instruments:', error)
+        setInstruments(mockInstruments)
+      }
+    } else {
+      // No onboarding data, use mock instruments
+      setInstruments(mockInstruments)
+    }
+  }, [])
 
   // Simulate real-time updates
   useEffect(() => {
@@ -78,6 +176,16 @@ export default function InstrumentsDashboard() {
 
   return (
     <div className="p-6">
+      {/* Toast Notification */}
+      {toastMessage && (
+        <div className="fixed bottom-4 right-4 z-50 animate-in slide-in-from-bottom-2 fade-in-0">
+          <div className="bg-background border border-border rounded-lg shadow-lg p-4 max-w-sm">
+            <p className="font-medium text-sm">{toastMessage.title}</p>
+            <p className="text-xs text-muted-foreground mt-1">{toastMessage.description}</p>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="mb-6">
         <div className="flex items-start justify-between">
@@ -195,11 +303,17 @@ export default function InstrumentsDashboard() {
       {viewMode === 'grid' ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {filteredInstruments.map((instrument) => (
-            <InstrumentCard
-              key={instrument.id}
-              instrument={instrument}
-              onClick={() => setSelectedInstrument(instrument)}
-            />
+            <div key={instrument.id} className="relative">
+              {(instrument as any).isSynced && (
+                <div className="absolute -top-2 -right-2 z-10 bg-green-500 text-white text-xs px-2 py-1 rounded-full">
+                  ✓ Synced
+                </div>
+              )}
+              <InstrumentCard
+                instrument={instrument}
+                onClick={() => setSelectedInstrument(instrument)}
+              />
+            </div>
           ))}
         </div>
       ) : (

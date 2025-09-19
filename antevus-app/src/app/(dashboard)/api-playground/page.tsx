@@ -660,9 +660,9 @@ export default function APIPlayground() {
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => router.back()}
+            onClick={() => router.push('/dashboard')}
             className="mr-2"
-            aria-label="Go back"
+            aria-label="Go to dashboard"
           >
             <ArrowLeft className="h-5 w-5" />
           </Button>
