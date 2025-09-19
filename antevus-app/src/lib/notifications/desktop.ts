@@ -1,5 +1,6 @@
 import { NotificationOptions } from './types'
 import { redactSensitive } from './security'
+import { logger } from '@/lib/logger'
 
 // Check if desktop notifications are supported
 export function isDesktopSupported(): boolean {
@@ -19,7 +20,7 @@ export async function requestDesktopPermission(): Promise<NotificationPermission
     return permission
   } catch (error) {
     if (process.env.NODE_ENV !== 'production') {
-      console.error('Failed to request notification permission:', error)
+      logger.error('Failed to request notification permission', error)
     }
     return 'denied'
   }
@@ -89,7 +90,7 @@ export function sendDesktopNotification(
     return notification
   } catch (error) {
     if (process.env.NODE_ENV !== 'production') {
-      console.error('Failed to send desktop notification:', error)
+      logger.error('Failed to send desktop notification', error)
     }
     return null
   }

@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { MetricCard } from '@/components/ui/metric-card'
 import { NotificationsDropdown } from '@/components/notifications/notifications-dropdown'
+import { logger } from '@/lib/logger'
 
 export default function InstrumentsDashboard() {
   const [instruments, setInstruments] = useState<Instrument[]>([])
@@ -96,7 +97,7 @@ export default function InstrumentsDashboard() {
               }
             }
           } catch (error) {
-            console.error('Demo mode check failed:', error)
+            logger.error('Demo mode check failed', error)
           }
         }
 
@@ -139,7 +140,7 @@ export default function InstrumentsDashboard() {
               body: JSON.stringify({ displayedInDashboard: true })
             })
           } catch (error) {
-            console.error('Failed to load onboarding instruments:', error)
+            logger.error('Failed to load onboarding instruments', error)
             setInstruments(mockInstruments)
           }
         } else {
@@ -147,7 +148,7 @@ export default function InstrumentsDashboard() {
           setInstruments(mockInstruments)
         }
       } catch (error) {
-        console.error('Failed to load dashboard data:', error)
+        logger.error('Failed to load dashboard data', error)
         // Default to mock instruments on error
         setInstruments(mockInstruments)
       }

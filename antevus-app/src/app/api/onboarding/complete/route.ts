@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { withRateLimit } from '@/lib/api/rate-limit-helper'
 import { authManager } from '@/lib/security/auth-manager'
 import { auditLogger, AuditEventType, AuditSeverity } from '@/lib/security/audit-logger'
+import { validateCSRFToken } from '@/lib/security/csrf'
 // import { encryptionService } from '@/lib/security/encryption-service' // TODO: Re-enable when needed
 import { prisma } from '@/lib/database'
 import { logger } from '@/lib/logger'
@@ -29,6 +30,39 @@ export async function POST(request: NextRequest) {
     })
     if (rateLimited) return rateLimited
 
+    // CSRF Protection for state-changing operation
+    // Skip CSRF validation in development/demo mode
+    if (process.env.NODE_ENV === 'production' || process.env.NEXT_PUBLIC_DEMO_MODE !== 'true') {
+      // Extract user ID from token for CSRF validation
+      const token = authManager.getTokenFromRequest(request)
+      const tempSession = await authManager.validateToken(token)
+      const userId = tempSession?.userId || 'anonymous'
+
+      // Validate CSRF token
+      const csrfValidation = validateCSRFToken(request, userId)
+      if (!csrfValidation.valid) {
+        await auditLogger.log({
+          eventType: AuditEventType.AUTH_LOGIN_FAILURE,
+          action: 'CSRF validation failed',
+          userId,
+          metadata: {
+            endpoint: `${request.method} ${request.url}`,
+            error: csrfValidation.error,
+            ip: request.headers.get('x-forwarded-for') || 'unknown'
+          },
+          severity: AuditSeverity.WARNING
+        })
+
+        return NextResponse.json(
+          {
+            error: 'CSRF validation failed',
+            message: csrfValidation.error || 'Invalid or missing CSRF token'
+          },
+          { status: 403 }
+        )
+      }
+    }
+
     // Authentication
     const token = authManager.getTokenFromRequest(request)
     const session = await authManager.validateToken(token)
@@ -42,6 +76,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
     const userId = session.userId
+    const userRoles = session.roles || []
 
     // Parse and validate input
     const body = await request.json()
@@ -78,22 +113,45 @@ export async function POST(request: NextRequest) {
     }
 
     // Ensure all required steps are completed
-    const requiredSteps = ['profile', 'instruments']
+    // Determine the final step based on user role
+    const isAdmin = userRoles.includes('admin') || userRoles.includes('lab_manager')
+
+    // The canonical 5-step onboarding flow:
+    // - Core steps: profile -> instruments -> agent -> endpoints
+    // - Final step: team (for admin/lab_manager) OR hello (for regular users)
+    const coreSteps = ['profile', 'instruments', 'agent', 'endpoints']
+    const requiredSteps = isAdmin
+      ? [...coreSteps, 'team']
+      : coreSteps
+
     const missingSteps = requiredSteps.filter(
       step => !existingProgress.completedSteps.includes(step)
     )
 
     if (missingSteps.length > 0) {
+      logger.warn('Attempted to complete onboarding with missing steps', {
+        userId,
+        missingSteps,
+        completedSteps: existingProgress.completedSteps
+      })
+
       return NextResponse.json({
         error: 'Incomplete onboarding',
         missingSteps,
-        message: 'Please complete all required steps before finishing onboarding'
+        message: 'Please complete all required steps before finishing onboarding',
+        requiredSteps,
+        completedSteps: existingProgress.completedSteps
       }, { status: 400 })
     }
 
     // Mark onboarding as complete
     const completedAt = new Date()
-    const updatedSteps = Array.from(new Set([...existingProgress.completedSteps, 'hello']))
+
+    // Use the previously determined final step based on user role
+    const finalStep = isAdmin ? 'team' : 'hello'
+
+    // Add the appropriate final step to completed steps
+    const updatedSteps = Array.from(new Set([...existingProgress.completedSteps, finalStep]))
 
     await prisma.onboardingProgress.update({
       where: { userId },

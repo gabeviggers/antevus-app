@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ThemeToggle } from '@/components/theme-toggle'
+import { logger } from '@/lib/logger'
 
 type UserRole = 'admin' | 'developer' | 'scientist'
 
@@ -56,11 +57,11 @@ export default function RoleSelectionPage() {
         // Navigate to profile setup
         router.push('/onboarding/profile')
       } else {
-        console.error('Failed to save role')
+        logger.error('Failed to save role')
         setIsLoading(false)
       }
     } catch (error) {
-      console.error('Failed to save role:', error)
+      logger.error('Failed to save role', error)
       setIsLoading(false)
     }
   }

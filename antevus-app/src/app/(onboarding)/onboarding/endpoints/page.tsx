@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { ArrowLeft, Eye, EyeOff, RefreshCw, Copy, Check, Info } from 'lucide-react'
+import { logger } from '@/lib/logger'
 
 interface Endpoint {
   name: string
@@ -99,7 +100,7 @@ export default function EndpointsConfigPage() {
         router.push('/onboarding/hello')
       }
     } catch (error) {
-      console.error('Failed to update progress:', error)
+      logger.error('Failed to update progress', error)
       setIsLoading(false)
     }
   }

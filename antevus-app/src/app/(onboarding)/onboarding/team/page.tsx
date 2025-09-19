@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { ArrowLeft, UserPlus, Mail, Check, X, Upload, HelpCircle } from 'lucide-react'
+import { logger } from '@/lib/logger'
 
 interface TeamMember {
   email: string
@@ -30,7 +31,7 @@ export default function TeamInvitePage() {
           router.push('/onboarding/hello')
         }
       })
-      .catch(console.error)
+      .catch((error) => logger.error('Failed to fetch role data', error))
   }, [router])
 
   const handleAddEmail = (e?: React.KeyboardEvent<HTMLInputElement>) => {
@@ -153,7 +154,7 @@ export default function TeamInvitePage() {
           router.push('/dashboard')
         }, 2000)
       } catch (error) {
-        console.error('Failed to send invites:', error)
+        logger.error('Failed to send invites', error)
         setIsLoading(false)
       }
     }, 1500)
@@ -175,7 +176,7 @@ export default function TeamInvitePage() {
       })
       router.push('/dashboard')
     } catch (error) {
-      console.error('Failed to update progress:', error)
+      logger.error('Failed to update progress', error)
       setIsLoading(false)
     }
   }

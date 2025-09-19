@@ -1,8 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { logger } from '@/lib/logger'
+import { authManager } from '@/lib/security/auth-manager'
+import { auditLogger, AuditEventType, AuditSeverity } from '@/lib/security/audit-logger'
 
 export async function GET(request: NextRequest) {
   try {
+    // Authentication
+    const token = authManager.getTokenFromRequest(request)
+    const session = await authManager.validateToken(token)
+    if (!session?.userId) {
+      auditLogger.log({
+        eventType: AuditEventType.AUTH_LOGIN_FAILURE,
+        action: 'Unauthorized access attempt',
+        metadata: { endpoint: `${request.method} ${request.url}` },
+        severity: AuditSeverity.WARNING
+      })
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    // userId available via session.userId if needed
+
     // For demo mode
     if (process.env.NODE_ENV === 'development' && process.env.DEMO_MODE === 'true') {
       const teamCookie = request.cookies.get('demo-team')
@@ -37,6 +53,20 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    // Authentication
+    const token = authManager.getTokenFromRequest(request)
+    const session = await authManager.validateToken(token)
+    if (!session?.userId) {
+      auditLogger.log({
+        eventType: AuditEventType.AUTH_LOGIN_FAILURE,
+        action: 'Unauthorized access attempt',
+        metadata: { endpoint: `${request.method} ${request.url}` },
+        severity: AuditSeverity.WARNING
+      })
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    // userId available via session.userId if needed
+
     const body = await request.json()
 
     // For demo mode

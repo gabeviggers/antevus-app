@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { logger } from '@/lib/logger'
+import { authManager } from '@/lib/security/auth-manager'
+import { auditLogger, AuditEventType, AuditSeverity } from '@/lib/security/audit-logger'
 
 const roleSchema = z.object({
   role: z.enum(['admin', 'developer', 'scientist'])
@@ -8,6 +10,20 @@ const roleSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
+    // Authentication
+    const token = authManager.getTokenFromRequest(request)
+    const session = await authManager.validateToken(token)
+    if (!session?.userId) {
+      auditLogger.log({
+        eventType: AuditEventType.AUTH_LOGIN_FAILURE,
+        action: 'Unauthorized access attempt',
+        metadata: { endpoint: `${request.method} ${request.url}` },
+        severity: AuditSeverity.WARNING
+      })
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    // userId available via session.userId if needed
+
     // Parse and validate input
     const body = await request.json()
     const validation = roleSchema.safeParse(body)
@@ -64,6 +80,20 @@ export async function POST(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   try {
+    // Authentication
+    const token = authManager.getTokenFromRequest(request)
+    const session = await authManager.validateToken(token)
+    if (!session?.userId) {
+      auditLogger.log({
+        eventType: AuditEventType.AUTH_LOGIN_FAILURE,
+        action: 'Unauthorized access attempt',
+        metadata: { endpoint: `${request.method} ${request.url}` },
+        severity: AuditSeverity.WARNING
+      })
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    // userId available via session.userId if needed
+
     // For demo mode, retrieve from cookie
     if (process.env.NODE_ENV === 'development' && process.env.DEMO_MODE === 'true') {
       const roleCookie = request.cookies.get('demo-role')

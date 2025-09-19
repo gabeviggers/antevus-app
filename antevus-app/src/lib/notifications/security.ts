@@ -1,3 +1,5 @@
+import { logger } from '@/lib/logger'
+
 // HTML escaping to prevent XSS
 export function escapeHtml(text: string): string {
   const map: Record<string, string> = {
@@ -48,7 +50,7 @@ export function sanitizeLinkProps(href?: string): Record<string, string> {
 
   if (!isSafeUrl(href)) {
     if (process.env.NODE_ENV !== 'production') {
-      console.warn('Unsafe URL blocked:', href)
+      logger.warn('Unsafe URL blocked', { href })
     }
     return {}
   }

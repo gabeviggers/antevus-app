@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { ArrowLeft, Play, Download, BarChart3, ChevronDown, ChevronUp } from 'lucide-react'
+import { logger } from '@/lib/logger'
 
 interface TimelineStep {
   id: string
@@ -37,7 +38,7 @@ export default function HelloWorkflowPage() {
           router.push('/onboarding/team')
         }
       })
-      .catch(console.error)
+      .catch((error) => logger.error('Failed to fetch role data', error))
   }, [router])
 
   const [timeline, setTimeline] = useState<TimelineStep[]>([
@@ -129,7 +130,7 @@ export default function HelloWorkflowPage() {
       // Navigate to dashboard
       router.push('/dashboard')
     } catch (error) {
-      console.error('Failed to complete onboarding:', error)
+      logger.error('Failed to complete onboarding', error)
       setIsLoading(false)
     }
   }

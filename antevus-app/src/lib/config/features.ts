@@ -11,6 +11,8 @@
  * - All feature access is logged for audit purposes
  */
 
+import { logger } from '@/lib/logger'
+
 /**
  * Feature flag definitions
  */
@@ -96,6 +98,41 @@ export function getClientFeatures() {
 }
 
 /**
+ * Mapping of feature keys to their environment variable names
+ */
+const FEATURE_ENV_VAR_MAP: Record<FeatureFlag, string> = {
+  // Core Features
+  onboarding: 'ENABLE_ONBOARDING',
+  assistant: 'ENABLE_ASSISTANT',
+  apiPlayground: 'ENABLE_API_PLAYGROUND',
+  integrations: 'ENABLE_INTEGRATIONS',
+
+  // Security Features
+  demoMode: 'NEXT_PUBLIC_DEMO_MODE',
+  csrfProtection: 'ENABLE_CSRF_PROTECTION',
+  rateLimit: 'ENABLE_RATE_LIMIT',
+
+  // Advanced Features
+  aiAssistant: 'ENABLE_AI_ASSISTANT',
+  automations: 'ENABLE_AUTOMATIONS',
+  webhooks: 'ENABLE_WEBHOOKS',
+
+  // Compliance Features
+  auditLogging: 'ENABLE_AUDIT_LOGGING',
+  dataEncryption: 'ENABLE_DATA_ENCRYPTION',
+  gdprCompliance: 'ENABLE_GDPR_COMPLIANCE',
+  hipaaCompliance: 'ENABLE_HIPAA_COMPLIANCE',
+
+  // Development Features
+  debugMode: 'DEBUG_MODE',
+  mockData: 'USE_MOCK_DATA',
+
+  // Experimental Features
+  betaFeatures: 'ENABLE_BETA_FEATURES',
+  alphaFeatures: 'ENABLE_ALPHA_FEATURES'
+}
+
+/**
  * Feature availability check with proper error response
  */
 export function checkFeatureAvailability(feature: FeatureFlag): {
@@ -112,9 +149,11 @@ export function checkFeatureAvailability(feature: FeatureFlag): {
         statusCode: 503 // Service Unavailable
       }
     } else {
+      // Use the explicit mapping to get the correct env var name
+      const envVar = FEATURE_ENV_VAR_MAP[feature] || `ENABLE_${feature.toUpperCase()}`
       return {
         available: false,
-        message: `Feature "${feature}" is disabled. Enable it by setting ENABLE_${feature.toUpperCase()}=true`,
+        message: `Feature "${feature}" is disabled. Enable it by setting ${envVar}=true`,
         statusCode: 501 // Not Implemented
       }
     }
@@ -174,9 +213,10 @@ export const DEPRECATED_FEATURES: Record<string, { deprecatedIn: string; removeI
 export function checkDeprecatedFeatures(feature: string): void {
   const deprecation = DEPRECATED_FEATURES[feature]
   if (deprecation) {
-    console.warn(
-      `⚠️ Feature "${feature}" is deprecated as of version ${deprecation.deprecatedIn} and will be removed in ${deprecation.removeIn}.` +
-      (deprecation.alternative ? ` Use "${deprecation.alternative}" instead.` : '')
+    logger.warn(
+      `Feature "${feature}" is deprecated as of version ${deprecation.deprecatedIn} and will be removed in ${deprecation.removeIn}.` +
+      (deprecation.alternative ? ` Use "${deprecation.alternative}" instead.` : ''),
+      { feature, deprecatedIn: deprecation.deprecatedIn, removeIn: deprecation.removeIn, alternative: deprecation.alternative }
     )
   }
 }
