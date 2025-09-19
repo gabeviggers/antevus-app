@@ -148,8 +148,8 @@ export async function POST(request: NextRequest) {
             email: demoAllowedEmail,
             passwordHash: hashedPassword,
             name: 'Demo Admin',
-            role: 'admin',
-            emailVerified: true // Auto-verify demo account
+            role: 'admin'
+            // Note: Demo account doesn't need email verification
           }
         })
 

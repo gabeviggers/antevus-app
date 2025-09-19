@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 // import { authManager } from '@/lib/security/auth-manager' // TODO: Re-enable when needed
 import { encryptionService } from '@/lib/security/encryption-service'
 import { prisma } from '@/lib/database'
