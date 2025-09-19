@@ -10,7 +10,7 @@ function VerifyEmailContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const email = searchParams.get('email') || 'your email'
-  const isDemo = searchParams.get('demo') === 'true' || email === 'admin@antevus.com'
+  const isDemo = process.env.NODE_ENV === 'development' && (searchParams.get('demo') === 'true' || email === 'admin@antevus.com')
 
   return (
     <div className="min-h-screen flex flex-col">

@@ -68,8 +68,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const login = async (email: string, password: string) => {
     setIsLoading(true)
     try {
-      // Demo mode bypass for admin@antevus.com
-      if (email === 'admin@antevus.com') {
+      // Demo mode ONLY in development environment - NEVER in production
+      if (process.env.NODE_ENV === 'development' && email === 'admin@antevus.com') {
         const demoUser: UserContext = {
           id: 'demo-user-id',
           email: 'admin@antevus.com',
@@ -87,16 +87,17 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
         auditLogger.log({
           eventType: AuditEventType.AUTH_LOGIN_SUCCESS,
-          action: 'Demo user logged in',
+          action: 'Demo user logged in (dev only)',
           userId: demoUser.id,
           metadata: {
             email: demoUser.email,
             roles: demoUser.roles,
-            isDemo: true
+            isDemo: true,
+            environment: 'development'
           }
         })
 
-        logger.info('Demo login successful', { email })
+        logger.info('Demo login successful (dev only)', { email })
         return
       }
 

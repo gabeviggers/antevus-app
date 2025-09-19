@@ -114,9 +114,9 @@ export async function POST(request: NextRequest) {
 
     const { email, password } = validation.data
 
-    // Demo mode for admin@antevus.com - skip real signup
-    if (email === 'admin@antevus.com') {
-      logger.info('Demo signup initiated', { email })
+    // Demo mode ONLY in development environment
+    if (process.env.NODE_ENV === 'development' && email === 'admin@antevus.com') {
+      logger.info('Demo signup initiated (dev only)', { email })
 
       // Return success response for demo mode
       return NextResponse.json(

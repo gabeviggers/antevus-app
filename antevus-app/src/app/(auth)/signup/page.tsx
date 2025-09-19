@@ -66,10 +66,10 @@ export default function SignupPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    // Demo mode bypass for admin@antevus.com
-    const isDemo = email === 'admin@antevus.com'
+    // Demo mode bypass ONLY in development
+    const isDemo = process.env.NODE_ENV === 'development' && email === 'admin@antevus.com'
 
-    // Basic validation (skip for demo)
+    // Basic validation (skip for demo in dev only)
     if (!isDemo && password !== confirmPassword) {
       setError('Passwords do not match')
       return
@@ -299,7 +299,7 @@ export default function SignupPage() {
             <Button
               type="submit"
               className="w-full"
-              disabled={isLoading || !email || (email !== 'admin@antevus.com' && (passwordStrength.percentage < 100 || password !== confirmPassword))}
+              disabled={isLoading || !email || (!(process.env.NODE_ENV === 'development' && email === 'admin@antevus.com') && (passwordStrength.percentage < 100 || password !== confirmPassword))}
             >
               {isLoading ? 'Creating account...' : 'Create account'}
             </Button>
