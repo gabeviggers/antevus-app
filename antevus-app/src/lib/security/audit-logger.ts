@@ -517,7 +517,7 @@ class AuditLogger {
             // Re-add logs to buffer for retry
             this.buffer.unshift(...logsToSend)
           }
-        } catch (error) {
+        } catch {
           // SECURITY: Don't log error details in production
           if (process.env.NODE_ENV === 'development') {
             logger.warn('Error sending audit logs')

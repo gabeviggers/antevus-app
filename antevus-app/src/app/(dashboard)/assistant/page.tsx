@@ -91,7 +91,7 @@ function AssistantPageContent() {
               }
             }
           }
-        } catch (error) {
+        } catch {
           logger.debug('Demo check failed, continuing with regular auth')
         }
       }
@@ -436,7 +436,7 @@ How can I assist you with your lab operations today?`
             })
         }, 100) // Small delay for state update
       }, 500) // Show thinking for 500ms
-    } catch (error) {
+    } catch {
       // Error handled internally
       setIsLoading(false)
     }

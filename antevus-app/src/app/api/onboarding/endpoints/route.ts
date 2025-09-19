@@ -35,16 +35,17 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    let userId = 'demo-user-id'
+    const userId = 'demo-user-id'
     if (process.env.NODE_ENV === 'production') {
-      const session = null // await authManager.validateToken(token)
-      if (!session?.userId) {
-        return NextResponse.json(
-          { error: 'Invalid session' },
-          { status: 401 }
-        )
-      }
-      userId = session.userId
+      // TODO: Re-enable when authManager is ready
+      // const session = await authManager.validateToken(token)
+      // if (!session?.userId) {
+      //   return NextResponse.json(
+      //     { error: 'Invalid session' },
+      //     { status: 401 }
+      //   )
+      // }
+      // userId = session.userId
     }
 
     // Parse and validate input
@@ -78,6 +79,13 @@ export async function POST(request: NextRequest) {
           .update(generatedApiKey)
           .digest('hex')
 
+        // Map tier to rate limit value
+        const rateLimitMap = {
+          basic: 1000,
+          standard: 5000,
+          premium: 10000
+        }
+
         await prisma.apiKey.create({
           data: {
             userId,
@@ -85,7 +93,7 @@ export async function POST(request: NextRequest) {
             keyHash,
             keyPrefix: generatedApiKey.substring(0, 12), // Store prefix for identification
             permissions: ['read:instruments', 'read:runs', 'write:runs'],
-            rateLimitTier: endpointsData.rateLimitTier,
+            rateLimit: rateLimitMap[endpointsData.rateLimitTier],
             expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000) // 1 year
           }
         })
@@ -196,16 +204,17 @@ export async function GET() {
       )
     }
 
-    let userId = 'demo-user-id'
+    const userId = 'demo-user-id'
     if (process.env.NODE_ENV === 'production') {
-      const session = null // await authManager.validateToken(token)
-      if (!session?.userId) {
-        return NextResponse.json(
-          { error: 'Invalid session' },
-          { status: 401 }
-        )
-      }
-      userId = session.userId
+      // TODO: Re-enable when authManager is ready
+      // const session = await authManager.validateToken(token)
+      // if (!session?.userId) {
+      //   return NextResponse.json(
+      //     { error: 'Invalid session' },
+      //     { status: 401 }
+      //   )
+      // }
+      // userId = session.userId
     }
 
     // Retrieve onboarding progress

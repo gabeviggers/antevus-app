@@ -447,6 +447,7 @@ export class DataIntegrityService {
   /**
    * Store backup data (placeholder - would use S3/GCS in production)
    */
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   private async storeBackup(backupId: string, _data: string): Promise<string> {
     // In production, store to S3/GCS
     // For now, return a mock location
@@ -456,6 +457,7 @@ export class DataIntegrityService {
   /**
    * Retrieve backup data
    */
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   private async retrieveBackup(_location: string): Promise<string> {
     // In production, retrieve from S3/GCS
     // For now, return mock data
@@ -473,6 +475,7 @@ export class DataIntegrityService {
   /**
    * Get backup metadata
    */
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   private async getBackupMetadata(_backupId: string): Promise<BackupMetadata | null> {
     // In production, retrieve from database
     return null

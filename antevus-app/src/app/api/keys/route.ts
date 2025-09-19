@@ -71,7 +71,7 @@ export async function GET() {
         }
       }
     )
-  } catch (error) {
+  } catch {
     return NextResponse.json(
       { error: 'Failed to fetch API keys' },
       {
@@ -159,7 +159,7 @@ export async function POST(request: NextRequest) {
         }
       }
     )
-  } catch (error) {
+  } catch {
     return NextResponse.json(
       { error: 'Failed to create API key' },
       {
@@ -233,7 +233,7 @@ export async function DELETE(request: NextRequest) {
         }
       }
     )
-  } catch (error) {
+  } catch {
     return NextResponse.json(
       { error: 'Failed to delete API key' },
       {
@@ -296,7 +296,7 @@ export async function PUT(request: NextRequest) {
         }
       }
     )
-  } catch (error) {
+  } catch {
     return NextResponse.json(
       { error: 'Failed to reveal API key' },
       {

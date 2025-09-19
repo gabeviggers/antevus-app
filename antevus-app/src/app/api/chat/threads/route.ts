@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { authManager } from '@/lib/security/auth-manager'
+// TODO: Re-enable when needed
+// import { authManager } from '@/lib/security/auth-manager'
 import { auditLogger, AuditEventType } from '@/lib/security/audit-logger'
 import { dataClassifier } from '@/lib/security/data-classification'
 import { withRateLimit, RateLimitConfigs, addRateLimitHeaders, checkRateLimit } from '@/lib/api/rate-limit-helper'
@@ -48,7 +49,7 @@ function encrypt(text: string): string {
     const authTag = cipher.getAuthTag()
 
     return Buffer.concat([salt, iv, authTag, encrypted]).toString('base64')
-  } catch (error) {
+  } catch {
     throw new Error('Encryption failed')
   }
 }
@@ -70,7 +71,7 @@ function decrypt(encryptedData: string): string {
     decipher.setAuthTag(authTag)
 
     return decipher.update(encrypted) + decipher.final('utf8')
-  } catch (error) {
+  } catch {
     throw new Error('Decryption failed')
   }
 }

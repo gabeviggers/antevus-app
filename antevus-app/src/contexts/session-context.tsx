@@ -78,7 +78,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
             return
           }
         }
-      } catch (error) {
+      } catch {
         logger.debug('Demo session check failed')
       }
 

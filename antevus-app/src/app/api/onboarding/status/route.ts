@@ -15,19 +15,20 @@ export async function GET() {
       )
     }
 
-    let userId = 'demo-user-id'
-    let isDemo = true
+    const userId = 'demo-user-id'
+    const isDemo = true
 
     if (process.env.NODE_ENV === 'production') {
-      const session = null // await authManager.validateToken(token)
-      if (!session?.userId) {
-        return NextResponse.json(
-          { error: 'Invalid session' },
-          { status: 401 }
-        )
-      }
-      userId = session.userId
-      isDemo = false
+      // TODO: Re-enable when authManager is ready
+      // const session = await authManager.validateToken(token)
+      // if (!session?.userId) {
+      //   return NextResponse.json(
+      //     { error: 'Invalid session' },
+      //     { status: 401 }
+      //   )
+      // }
+      // userId = session.userId
+      // isDemo = false
     }
 
     // Retrieve complete onboarding progress

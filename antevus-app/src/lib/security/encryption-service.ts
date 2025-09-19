@@ -29,7 +29,12 @@ const getEncryptionKey = (): Buffer => {
   const envKey = process.env.ENCRYPTION_KEY || process.env.NEXT_PUBLIC_ENCRYPTION_KEY
 
   if (envKey) {
-    // Use provided key (should be base64 encoded)
+    // Check if it's a hex string (64 chars for 32 bytes)
+    if (envKey.length === 64 && /^[0-9a-fA-F]+$/.test(envKey)) {
+      // Convert hex string to Buffer (32 bytes)
+      return Buffer.from(envKey, 'hex')
+    }
+    // Otherwise assume base64 encoded
     return Buffer.from(envKey, 'base64')
   }
 

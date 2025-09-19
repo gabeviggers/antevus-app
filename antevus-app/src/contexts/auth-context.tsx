@@ -18,7 +18,8 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<AuthSession | null>(null)
-  const [isLoading, setIsLoading] = useState(false) // Changed to false - no loading from storage
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [isLoading, _setIsLoading] = useState(false) // Changed to false - no loading from storage
   const router = useRouter()
 
   // SECURITY: Session stored in memory only - never in localStorage

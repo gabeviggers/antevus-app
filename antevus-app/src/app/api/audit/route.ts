@@ -167,7 +167,7 @@ export async function POST(request: NextRequest) {
       return createErrorResponse('Invalid audit log format', 400)
     }
 
-    const { logs, clientTime } = validation.data
+    const { logs, clientTime: _clientTime } = validation.data // eslint-disable-line @typescript-eslint/no-unused-vars
 
     // SECURITY: Limit number of logs per request
     if (logs.length > MAX_LOGS_PER_REQUEST) {

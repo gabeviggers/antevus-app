@@ -29,7 +29,7 @@ export default function LoginPage() {
     try {
       await login(email, password)
       router.push('/assistant')
-    } catch (err) {
+    } catch {
       setError(isDemoMode ? 'Invalid credentials. Please try again.' : 'Authentication failed. Please contact your administrator.')
       setIsLoading(false)
     }
