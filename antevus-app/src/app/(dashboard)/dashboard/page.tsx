@@ -18,7 +18,7 @@ export default function InstrumentsDashboard() {
   const [selectedInstrument, setSelectedInstrument] = useState<Instrument | null>(null)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [syncedInstruments, setSyncedInstruments] = useState<any[]>([])
-  const [teamInvites, setTeamInvites] = useState<{teamMembers?: any[]}>(null)
+  const [teamInvites, setTeamInvites] = useState<{teamMembers?: any[]} | null>(null)
   const [toastMessage, setToastMessage] = useState<{ title: string; description: string } | null>(null)
 
   // Load instruments from onboarding on mount
@@ -60,7 +60,7 @@ export default function InstrumentsDashboard() {
       }
 
       // Show team invites toast if applicable
-      if (teamInvites && teamInvites.teamMembers) {
+      if (teamInvites && teamInvites.teamMembers && teamInvites.teamMembers.length > 0) {
         setTimeout(() => {
           setToastMessage({
             title: 'Team invitations sent',
