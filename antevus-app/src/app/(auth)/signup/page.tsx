@@ -1,12 +1,22 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Eye, EyeOff } from 'lucide-react'
+import { Eye, EyeOff, Check, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { logger } from '@/lib/logger'
+import { cn } from '@/lib/utils'
+
+// Password strength requirements
+const PASSWORD_REQUIREMENTS = {
+  minLength: { check: (p: string) => p.length >= 12, label: '12+ characters' },
+  uppercase: { check: (p: string) => /[A-Z]/.test(p), label: 'Uppercase letter' },
+  lowercase: { check: (p: string) => /[a-z]/.test(p), label: 'Lowercase letter' },
+  number: { check: (p: string) => /\d/.test(p), label: 'Number' },
+  special: { check: (p: string) => /[!@#$%^&*(),.?":{}|<>]/.test(p), label: 'Special character' }
+}
 
 export default function SignupPage() {
   const [email, setEmail] = useState('')
@@ -18,6 +28,40 @@ export default function SignupPage() {
   const [error, setError] = useState('')
   const router = useRouter()
 
+  // Calculate password strength
+  const passwordStrength = useMemo(() => {
+    if (!password) return { score: 0, percentage: 0, color: '', label: '' }
+
+    let score = 0
+    Object.values(PASSWORD_REQUIREMENTS).forEach(req => {
+      if (req.check(password)) score++
+    })
+
+    const percentage = (score / Object.keys(PASSWORD_REQUIREMENTS).length) * 100
+
+    let color = ''
+    let label = ''
+
+    if (percentage === 0) {
+      color = ''
+      label = ''
+    } else if (percentage <= 40) {
+      color = 'bg-red-500'
+      label = 'Weak'
+    } else if (percentage <= 60) {
+      color = 'bg-orange-500'
+      label = 'Fair'
+    } else if (percentage <= 80) {
+      color = 'bg-yellow-500'
+      label = 'Good'
+    } else {
+      color = 'bg-green-500'
+      label = 'Strong'
+    }
+
+    return { score, percentage, color, label }
+  }, [password])
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
@@ -27,8 +71,9 @@ export default function SignupPage() {
       return
     }
 
-    if (password.length < 12) {
-      setError('Password must be at least 12 characters')
+    // Check if all password requirements are met
+    if (passwordStrength.percentage < 100) {
+      setError('Password must meet all security requirements')
       return
     }
 
@@ -150,9 +195,58 @@ export default function SignupPage() {
                     )}
                   </button>
                 </div>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Use at least 12 characters with numbers or symbols
-                </p>
+
+                {/* Password Strength Progress Bar */}
+                {password && (
+                  <div className="mt-3 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-muted-foreground">Password strength</span>
+                      {passwordStrength.label && (
+                        <span className={cn(
+                          "text-xs font-medium",
+                          passwordStrength.percentage === 100 ? "text-green-600 dark:text-green-500" :
+                          passwordStrength.percentage >= 80 ? "text-yellow-600 dark:text-yellow-500" :
+                          passwordStrength.percentage >= 60 ? "text-orange-600 dark:text-orange-500" :
+                          "text-red-600 dark:text-red-500"
+                        )}>
+                          {passwordStrength.label}
+                        </span>
+                      )}
+                    </div>
+                    <div className="h-2 bg-secondary rounded-full overflow-hidden">
+                      <div
+                        className={cn(
+                          "h-full transition-all duration-300 ease-out",
+                          passwordStrength.color
+                        )}
+                        style={{ width: `${passwordStrength.percentage}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Requirements Checklist */}
+                <div className="mt-3 space-y-1">
+                  {Object.entries(PASSWORD_REQUIREMENTS).map(([key, req]) => {
+                    const isMet = password ? req.check(password) : false
+                    return (
+                      <div
+                        key={key}
+                        className={cn(
+                          "flex items-center gap-2 text-xs transition-colors",
+                          isMet ? "text-green-600 dark:text-green-500" : "text-muted-foreground"
+                        )}
+                      >
+                        {isMet ? (
+                          <Check className="h-3 w-3" />
+                        ) : (
+                          <X className="h-3 w-3" />
+                        )}
+                        <span>{req.label}</span>
+                      </div>
+                    )
+                  })}
+                </div>
               </div>
 
               <div>
@@ -189,7 +283,7 @@ export default function SignupPage() {
             <Button
               type="submit"
               className="w-full"
-              disabled={isLoading}
+              disabled={isLoading || !email || passwordStrength.percentage < 100 || password !== confirmPassword}
             >
               {isLoading ? 'Creating account...' : 'Create account'}
             </Button>
