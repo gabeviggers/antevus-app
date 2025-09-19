@@ -12,19 +12,35 @@ const roleSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
-    // Authentication
-    const token = authManager.getTokenFromRequest(request)
-    const session = await authManager.validateToken(token)
-    if (!session?.userId) {
-      auditLogger.log({
-        eventType: AuditEventType.AUTH_LOGIN_FAILURE,
-        action: 'Unauthorized access attempt',
-        metadata: { endpoint: `${request.method} ${request.url}` },
-        severity: AuditSeverity.WARNING
-      })
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    // In demo mode during onboarding, use a temporary user ID
+    let userId = 'onboarding-user'
+
+    // Check for authentication (but allow bypass in demo mode for onboarding)
+    if (!isDemoMode()) {
+      const token = authManager.getTokenFromRequest(request)
+      const session = await authManager.validateToken(token)
+      if (!session?.userId) {
+        auditLogger.log({
+          eventType: AuditEventType.AUTH_LOGIN_FAILURE,
+          action: 'Unauthorized access attempt',
+          metadata: { endpoint: `${request.method} ${request.url}` },
+          severity: AuditSeverity.WARNING
+        })
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      }
+      userId = session.userId
+    } else {
+      // In demo mode, check if there's an existing session
+      const token = authManager.getTokenFromRequest(request)
+      if (token) {
+        const session = await authManager.validateToken(token)
+        if (session?.userId) {
+          userId = session.userId
+        }
+      }
+      // If no session in demo mode, continue with onboarding-user ID
+      logger.debug('Demo mode: Using temporary onboarding user', { userId })
     }
-    const userId = session.userId
 
     // CSRF validation for state-changing operations
     if (shouldEnforceCSRF()) {
