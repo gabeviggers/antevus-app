@@ -239,12 +239,12 @@ export default function LoginPage() {
         </div>
       </div>
 
-      {/* Desktop only: Footer Section */}
-      <div className="hidden sm:block w-full px-4 pb-8 pt-4 text-center">
+      {/* Desktop only: Footer in bottom left */}
+      <footer className="hidden sm:block absolute bottom-0 left-0 p-6">
         <p className="text-xs text-muted-foreground">
           &copy; 2025 Antevus. All rights reserved.
         </p>
-      </div>
+      </footer>
     </div>
   )
 }
