@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-// TODO: Re-enable when needed
-// import { authManager } from '@/lib/security/auth-manager'
+import { authManager } from '@/lib/security/auth-manager'
 import { auditLogger, AuditEventType } from '@/lib/security/audit-logger'
 import { dataClassifier } from '@/lib/security/data-classification'
 import { withRateLimit, RateLimitConfigs, addRateLimitHeaders, checkRateLimit } from '@/lib/api/rate-limit-helper'
@@ -70,9 +69,15 @@ function decrypt(encryptedData: string): string {
     const decipher = crypto.createDecipheriv(algorithm, key, iv)
     decipher.setAuthTag(authTag)
 
-    return decipher.update(encrypted) + decipher.final('utf8')
-  } catch {
-    throw new Error('Decryption failed')
+    // Properly handle Buffer outputs from decipher
+    const decryptedBuffer = Buffer.concat([
+      decipher.update(encrypted),
+      decipher.final()
+    ])
+
+    return decryptedBuffer.toString('utf8')
+  } catch (error) {
+    throw new Error(`Decryption failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
   }
 }
 
@@ -85,15 +90,24 @@ export async function GET(request: NextRequest) {
   let userId: string | undefined
 
   try {
-    // Extract user from auth token
-    const authHeader = request.headers.get('authorization')
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    // Extract and validate authentication token
+    const token = authManager.getTokenFromRequest(request)
+    if (!token) {
+      return NextResponse.json({ error: 'Unauthorized - No token provided' }, { status: 401 })
     }
 
-    // In production, validate JWT and extract user ID
-    // For demo, simulate user extraction
-    userId = 'demo-user-' + authHeader.slice(7, 15)
+    // Validate token and extract user information
+    const session = await authManager.validateToken(token)
+    if (!session?.userId) {
+      auditLogger.log({
+        eventType: AuditEventType.AUTH_LOGIN_FAILURE,
+        action: 'Invalid token for chat threads access',
+        metadata: { endpoint: 'GET /api/chat/threads' }
+      })
+      return NextResponse.json({ error: 'Invalid or expired token' }, { status: 401 })
+    }
+
+    userId = session.userId
 
     // Retrieve encrypted threads
     const storedData = chatStorage.get(userId)
@@ -161,14 +175,24 @@ export async function POST(request: NextRequest) {
   let threads: unknown[] = []
 
   try {
-    // Extract user from auth token
-    const authHeader = request.headers.get('authorization')
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    // Extract and validate authentication token
+    const token = authManager.getTokenFromRequest(request)
+    if (!token) {
+      return NextResponse.json({ error: 'Unauthorized - No token provided' }, { status: 401 })
     }
 
-    // In production, validate JWT and extract user ID
-    userId = 'demo-user-' + authHeader.slice(7, 15)
+    // Validate token and extract user information
+    const session = await authManager.validateToken(token)
+    if (!session?.userId) {
+      auditLogger.log({
+        eventType: AuditEventType.AUTH_LOGIN_FAILURE,
+        action: 'Invalid token for chat threads save',
+        metadata: { endpoint: 'POST /api/chat/threads' }
+      })
+      return NextResponse.json({ error: 'Invalid or expired token' }, { status: 401 })
+    }
+
+    userId = session.userId
 
     const body = await request.json()
     threads = body.threads
@@ -255,13 +279,24 @@ export async function DELETE(request: NextRequest) {
   let userId: string | undefined
 
   try {
-    // Extract user from auth token
-    const authHeader = request.headers.get('authorization')
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    // Extract and validate authentication token
+    const token = authManager.getTokenFromRequest(request)
+    if (!token) {
+      return NextResponse.json({ error: 'Unauthorized - No token provided' }, { status: 401 })
     }
 
-    userId = 'demo-user-' + authHeader.slice(7, 15)
+    // Validate token and extract user information
+    const session = await authManager.validateToken(token)
+    if (!session?.userId) {
+      auditLogger.log({
+        eventType: AuditEventType.AUTH_LOGIN_FAILURE,
+        action: 'Invalid token for chat threads delete',
+        metadata: { endpoint: 'DELETE /api/chat/threads' }
+      })
+      return NextResponse.json({ error: 'Invalid or expired token' }, { status: 401 })
+    }
+
+    userId = session.userId
 
     // Delete user's data
     const deleted = chatStorage.delete(userId)

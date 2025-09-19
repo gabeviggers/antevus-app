@@ -1,35 +1,26 @@
 import { NextResponse } from 'next/server'
-// import { authManager } from '@/lib/security/auth-manager' // TODO: Re-enable when needed
+import { authManager } from '@/lib/security/auth-manager'
+import { auditLogger, AuditEventType, AuditSeverity } from '@/lib/security/audit-logger'
 import { encryptionService } from '@/lib/security/encryption-service'
 import { prisma } from '@/lib/database'
 import { logger } from '@/lib/logger'
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     // Authentication
-    const token = process.env.NODE_ENV === "development" ? "demo-token" : null // authManager.getTokenFromRequest(request)
-    if (!token) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
+    const token = authManager.getTokenFromRequest(request)
+    const session = await authManager.validateToken(token)
+    if (!session?.userId) {
+      auditLogger.log({
+        eventType: AuditEventType.AUTH_LOGIN_FAILURE,
+        action: 'Unauthorized access attempt',
+        metadata: { endpoint: `${request.method} ${request.url}` },
+        severity: AuditSeverity.WARNING
+      })
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
-
-    const userId = 'demo-user-id'
-    const isDemo = true
-
-    if (process.env.NODE_ENV === 'production') {
-      // TODO: Re-enable when authManager is ready
-      // const session = await authManager.validateToken(token)
-      // if (!session?.userId) {
-      //   return NextResponse.json(
-      //     { error: 'Invalid session' },
-      //     { status: 401 }
-      //   )
-      // }
-      // userId = session.userId
-      // isDemo = false
-    }
+    const userId = session.userId
+    const isDemo = process.env.NEXT_PUBLIC_DEMO_MODE === 'true'
 
     // Retrieve complete onboarding progress
     const onboardingProgress = await prisma.onboardingProgress.findUnique({
@@ -61,25 +52,60 @@ export async function GET() {
       })
     }
 
+    // Ensure completedSteps is always an array
+    const completedSteps = Array.isArray(onboardingProgress.completedSteps)
+      ? onboardingProgress.completedSteps
+      : []
+
+    // Normalize completed steps - team and hello are mutually exclusive final steps
+    // If both are present, keep only the one that was completed last (team typically)
+    const normalizedSteps = completedSteps.filter(step => {
+      // If both team and hello are present, keep only team
+      if (step === 'hello' && completedSteps.includes('team')) {
+        return false
+      }
+      return true
+    })
+
+    // Calculate progress based on 5-step flow (profile, instruments, agent, endpoints, and either team OR hello)
+    const totalSteps = 5
+    const progressPercentage = Math.min(100, Math.round((normalizedSteps.length / totalSteps) * 100))
+
     // Decrypt and sanitize data for response
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const responseData: any = {
       hasStarted: true,
       currentStep: onboardingProgress.currentStep,
-      completedSteps: onboardingProgress.completedSteps,
+      completedSteps: normalizedSteps,
       isCompleted: onboardingProgress.isCompleted,
       completedAt: onboardingProgress.completedAt,
       startedAt: onboardingProgress.startedAt,
-      progress: Math.round((onboardingProgress.completedSteps.length / 5) * 100),
+      progress: progressPercentage,
       isDemo
     }
 
-    // Determine next step
-    const stepOrder = ['profile', 'instruments', 'agent', 'endpoints', 'team', 'hello']
-    const currentIndex = stepOrder.indexOf(onboardingProgress.currentStep)
-    responseData.nextStep = currentIndex < stepOrder.length - 1
-      ? stepOrder[currentIndex + 1]
-      : 'completed'
+    // Determine next step based on normalized flow
+    // The 5-step sequence: profile -> instruments -> agent -> endpoints -> (team OR hello)
+    const coreStepOrder = ['profile', 'instruments', 'agent', 'endpoints']
+    const finalStep = 'team' // Default final step
+
+    // Find the first uncompleted step
+    let nextStep = 'completed'
+    for (const step of coreStepOrder) {
+      if (!normalizedSteps.includes(step)) {
+        nextStep = step
+        break
+      }
+    }
+
+    // If all core steps are done, check final step
+    if (nextStep === 'completed' && coreStepOrder.every(step => normalizedSteps.includes(step))) {
+      if (!normalizedSteps.includes('team') && !normalizedSteps.includes('hello')) {
+        nextStep = finalStep
+      }
+    }
+
+    responseData.nextStep = nextStep
 
     // Include summary data (non-sensitive)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

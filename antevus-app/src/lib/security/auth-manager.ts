@@ -342,6 +342,109 @@ class SecureAuthManager {
       demoMode: config.isDemoMode
     }
   }
+
+  /**
+   * Extract token from incoming request (server-side)
+   * Checks Authorization header and cookies
+   */
+  getTokenFromRequest(request: Request): string | null {
+    // First check Authorization header
+    const authHeader = request.headers.get('authorization')
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      return authHeader.slice(7)
+    }
+
+    // Then check cookies (for httpOnly cookie support)
+    const cookieHeader = request.headers.get('cookie')
+    if (cookieHeader) {
+      const cookies = Object.fromEntries(
+        cookieHeader.split('; ').map(c => c.split('=').map(v => decodeURIComponent(v)))
+      )
+      if (cookies['auth-token']) {
+        return cookies['auth-token']
+      }
+    }
+
+    return null
+  }
+
+  /**
+   * Validate token and return session info with expiration checking
+   * This combines token extraction and verification
+   */
+  async validateToken(token: string | null): Promise<{
+    userId: string
+    email?: string
+    roles?: string[]
+    expiresAt?: Date
+    isExpired?: boolean
+  } | null> {
+    if (!token) {
+      logger.debug('No token provided for validation')
+      return null
+    }
+
+    const claims = await this.verifyToken(token)
+    if (!claims) {
+      logger.debug('Token verification failed')
+      return null
+    }
+
+    // Check token expiration
+    const now = Math.floor(Date.now() / 1000) // Current time in seconds
+    const isExpired = claims.exp ? claims.exp < now : false
+
+    if (isExpired) {
+      logger.warn('Token has expired', {
+        exp: claims.exp,
+        now,
+        userId: claims.sub
+      })
+
+      // Still return the session info but mark as expired
+      // This allows the caller to decide how to handle expired sessions
+      return {
+        userId: claims.sub,
+        email: claims.email,
+        roles: claims.roles,
+        expiresAt: claims.exp ? new Date(claims.exp * 1000) : undefined,
+        isExpired: true
+      }
+    }
+
+    // Calculate time until expiration for monitoring
+    if (claims.exp) {
+      const expiresInSeconds = claims.exp - now
+      if (expiresInSeconds < 300) { // Less than 5 minutes
+        logger.info('Token expiring soon', {
+          expiresInSeconds,
+          userId: claims.sub
+        })
+      }
+    }
+
+    return {
+      userId: claims.sub,
+      email: claims.email,
+      roles: claims.roles,
+      expiresAt: claims.exp ? new Date(claims.exp * 1000) : undefined,
+      isExpired: false
+    }
+  }
+
+  /**
+   * Check if a session needs refresh based on expiration time
+   */
+  shouldRefreshToken(expiresAt: Date | undefined): boolean {
+    if (!expiresAt) return false
+
+    const now = Date.now()
+    const expiryTime = expiresAt.getTime()
+    const timeUntilExpiry = expiryTime - now
+    const refreshThreshold = 5 * 60 * 1000 // 5 minutes
+
+    return timeUntilExpiry <= refreshThreshold
+  }
 }
 
 // Export singleton instance

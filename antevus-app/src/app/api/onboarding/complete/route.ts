@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { withRateLimit } from '@/lib/api/rate-limit-helper'
-// import { authManager } from '@/lib/security/auth-manager' // TODO: Re-enable when needed
+import { authManager } from '@/lib/security/auth-manager'
 import { auditLogger, AuditEventType, AuditSeverity } from '@/lib/security/audit-logger'
 // import { encryptionService } from '@/lib/security/encryption-service' // TODO: Re-enable when needed
 import { prisma } from '@/lib/database'
@@ -30,30 +30,18 @@ export async function POST(request: NextRequest) {
     if (rateLimited) return rateLimited
 
     // Authentication
-    const token = process.env.NODE_ENV === "development" ? "demo-token" : null // authManager.getTokenFromRequest(request)
-    if (!token) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
+    const token = authManager.getTokenFromRequest(request)
+    const session = await authManager.validateToken(token)
+    if (!session?.userId) {
+      auditLogger.log({
+        eventType: AuditEventType.AUTH_LOGIN_FAILURE,
+        action: 'Unauthorized access attempt',
+        metadata: { endpoint: `${request.method} ${request.url}` },
+        severity: AuditSeverity.WARNING
+      })
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
-
-    const userId = 'demo-user-id'
-    if (process.env.NODE_ENV !== 'development') {
-      // TODO: Implement proper authentication
-      // const session = await authManager.validateToken(token)
-      // if (!session?.userId) {
-      //   return NextResponse.json(
-      //     { error: 'Invalid session' },
-      //     { status: 401 }
-      //   )
-      // }
-      // userId = session.userId
-      return NextResponse.json(
-        { error: 'Authentication not yet implemented' },
-        { status: 501 }
-      )
-    }
+    const userId = session.userId
 
     // Parse and validate input
     const body = await request.json()
@@ -118,15 +106,20 @@ export async function POST(request: NextRequest) {
       }
     })
 
-    // Update user record to mark onboarding as complete
-    if (process.env.NODE_ENV !== 'development') {
-      await prisma.user.update({
-        where: { id: userId },
-        data: {
-          onboardingCompletedAt: completedAt,
-          updatedAt: completedAt
-        }
-      })
+    // Update user record to mark onboarding as complete (skip in demo mode)
+    if (process.env.NEXT_PUBLIC_DEMO_MODE !== 'true') {
+      try {
+        await prisma.user.update({
+          where: { id: userId },
+          data: {
+            onboardingCompletedAt: completedAt,
+            updatedAt: completedAt
+          }
+        })
+      } catch (error) {
+        // User record may not exist in demo mode - continue silently
+        logger.warn('Could not update user record', { userId, error })
+      }
     }
 
     // Calculate onboarding duration for analytics
@@ -212,33 +205,21 @@ export async function POST(request: NextRequest) {
 }
 
 // GET endpoint to check if onboarding is complete
-export async function GET() {
+export async function GET(request: Request) {
   try {
     // Authentication
-    const token = process.env.NODE_ENV === "development" ? "demo-token" : null // authManager.getTokenFromRequest(request)
-    if (!token) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
+    const token = authManager.getTokenFromRequest(request)
+    const session = await authManager.validateToken(token)
+    if (!session?.userId) {
+      auditLogger.log({
+        eventType: AuditEventType.AUTH_LOGIN_FAILURE,
+        action: 'Unauthorized access attempt',
+        metadata: { endpoint: `${request.method} ${request.url}` },
+        severity: AuditSeverity.WARNING
+      })
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
-
-    const userId = 'demo-user-id'
-    if (process.env.NODE_ENV !== 'development') {
-      // TODO: Implement proper authentication
-      // const session = await authManager.validateToken(token)
-      // if (!session?.userId) {
-      //   return NextResponse.json(
-      //     { error: 'Invalid session' },
-      //     { status: 401 }
-      //   )
-      // }
-      // userId = session.userId
-      return NextResponse.json(
-        { error: 'Authentication not yet implemented' },
-        { status: 501 }
-      )
-    }
+    const userId = session.userId
 
     // Check onboarding status
     const progress = await prisma.onboardingProgress.findUnique({
