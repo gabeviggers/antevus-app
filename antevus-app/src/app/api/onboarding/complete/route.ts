@@ -38,16 +38,21 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    let userId = 'demo-user-id'
+    const userId = 'demo-user-id'
     if (process.env.NODE_ENV === 'production') {
-      const session = null // await authManager.validateToken(token)
-      if (!session?.userId) {
-        return NextResponse.json(
-          { error: 'Invalid session' },
-          { status: 401 }
-        )
-      }
-      userId = session.userId
+      // TODO: Implement proper authentication
+      // const session = await authManager.validateToken(token)
+      // if (!session?.userId) {
+      //   return NextResponse.json(
+      //     { error: 'Invalid session' },
+      //     { status: 401 }
+      //   )
+      // }
+      // userId = session.userId
+      return NextResponse.json(
+        { error: 'Authentication not yet implemented' },
+        { status: 501 }
+      )
     }
 
     // Parse and validate input
@@ -218,16 +223,21 @@ export async function GET() {
       )
     }
 
-    let userId = 'demo-user-id'
+    const userId = 'demo-user-id'
     if (process.env.NODE_ENV === 'production') {
-      const session = null // await authManager.validateToken(token)
-      if (!session?.userId) {
-        return NextResponse.json(
-          { error: 'Invalid session' },
-          { status: 401 }
-        )
-      }
-      userId = session.userId
+      // TODO: Implement proper authentication
+      // const session = await authManager.validateToken(token)
+      // if (!session?.userId) {
+      //   return NextResponse.json(
+      //     { error: 'Invalid session' },
+      //     { status: 401 }
+      //   )
+      // }
+      // userId = session.userId
+      return NextResponse.json(
+        { error: 'Authentication not yet implemented' },
+        { status: 501 }
+      )
     }
 
     // Check onboarding status
