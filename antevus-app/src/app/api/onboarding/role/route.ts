@@ -119,7 +119,25 @@ export async function POST(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   try {
-    // Authentication
+    // For demo mode, retrieve from cookie without auth
+    if (isDemoMode()) {
+      const roleCookie = request.cookies.get('demo-role')
+
+      if (roleCookie) {
+        return NextResponse.json({
+          role: roleCookie.value,
+          success: true
+        })
+      }
+
+      // Return null if no role cookie found
+      return NextResponse.json({
+        role: null,
+        success: false
+      })
+    }
+
+    // In production, require authentication
     const token = authManager.getTokenFromRequest(request)
     const session = await authManager.validateToken(token)
     if (!session?.userId) {
@@ -131,21 +149,9 @@ export async function GET(request: NextRequest) {
       })
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
-    // userId available via session.userId if needed
 
-    // For demo mode, retrieve from cookie
-    if (isDemoMode()) {
-      const roleCookie = request.cookies.get('demo-role')
-
-      if (roleCookie) {
-        return NextResponse.json({
-          role: roleCookie.value,
-          success: true
-        })
-      }
-    }
-
-    // Return empty if not found
+    // In production, would fetch from database
+    // For now, return empty
     return NextResponse.json({
       role: null,
       success: false

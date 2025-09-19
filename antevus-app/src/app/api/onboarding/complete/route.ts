@@ -64,20 +64,43 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Authentication
-    const token = authManager.getTokenFromRequest(request)
-    const session = await authManager.validateToken(token)
-    if (!session?.userId) {
-      auditLogger.log({
-        eventType: AuditEventType.AUTH_LOGIN_FAILURE,
-        action: 'Unauthorized access attempt',
-        metadata: { endpoint: `${request.method} ${request.url}` },
-        severity: AuditSeverity.WARNING
-      })
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    // In demo mode during onboarding, use a temporary user ID
+    let userId = 'onboarding-user'
+    let userRoles: string[] = []
+
+    // Check for authentication (but allow bypass in demo mode for onboarding)
+    if (!isDemoMode()) {
+      const token = authManager.getTokenFromRequest(request)
+      const session = await authManager.validateToken(token)
+      if (!session?.userId) {
+        auditLogger.log({
+          eventType: AuditEventType.AUTH_LOGIN_FAILURE,
+          action: 'Unauthorized access attempt',
+          metadata: { endpoint: `${request.method} ${request.url}` },
+          severity: AuditSeverity.WARNING
+        })
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      }
+      userId = session.userId
+      userRoles = session.roles || []
+    } else {
+      // In demo mode, check if there's an existing session
+      const token = authManager.getTokenFromRequest(request)
+      if (token) {
+        const session = await authManager.validateToken(token)
+        if (session?.userId) {
+          userId = session.userId
+          userRoles = session.roles || []
+        }
+      }
+
+      // In demo mode, also check for role cookie
+      const roleCookie = request.cookies.get('demo-role')
+      if (roleCookie?.value) {
+        userRoles = [roleCookie.value]
+        logger.debug('Demo mode: Using role from cookie', { role: roleCookie.value, userId })
+      }
     }
-    const userId = session.userId
-    const userRoles = session.roles || []
 
     // Parse and validate input
     const body = await request.json()

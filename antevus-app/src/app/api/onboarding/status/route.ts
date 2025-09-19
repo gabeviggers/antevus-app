@@ -101,10 +101,21 @@ export async function GET(request: Request) {
       isDemo
     }
 
+    // Get user's role to determine the final step
+    let userRole = 'scientist' // Default role
+    if (isDemo) {
+      const roleCookie = request.headers.get('cookie')?.match(/demo-role=([^;]+)/)
+      if (roleCookie) {
+        userRole = roleCookie[1]
+      }
+    }
+
     // Determine next step based on normalized flow
     // The 5-step sequence: profile -> instruments -> agent -> endpoints -> (team OR hello)
     const coreStepOrder = ['profile', 'instruments', 'agent', 'endpoints']
-    const finalStep = 'team' // Default final step
+    // Final step depends on role: admin/lab_manager gets 'team', others get 'hello'
+    const isAdmin = userRole === 'admin' || userRole === 'lab_manager'
+    const finalStep = isAdmin ? 'team' : 'hello'
 
     // Find the first uncompleted step
     let nextStep = 'completed'
