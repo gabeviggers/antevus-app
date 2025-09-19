@@ -3,7 +3,7 @@ import bcrypt from 'bcryptjs'
 import { z } from 'zod'
 import { v4 as uuidv4 } from 'uuid'
 import { logger } from '@/lib/logger'
-import { auditLogger } from '@/lib/security/audit-logger'
+import { auditLogger, AuditEventType } from '@/lib/security/audit-logger'
 import { withRateLimit } from '@/lib/api/rate-limit-helper'
 
 // SOC 2 & HIPAA compliant password requirements
@@ -144,7 +144,7 @@ export async function POST(request: NextRequest) {
 
     // Log signup attempt (HIPAA audit requirement)
     auditLogger.log({
-      eventType: 'AUTH_SIGNUP_ATTEMPT' as any,
+      eventType: AuditEventType.AUTH_LOGIN_ATTEMPT,
       userId: userData.id,
       metadata: {
         email: email.split('@')[0] + '@***', // Redact domain for privacy
