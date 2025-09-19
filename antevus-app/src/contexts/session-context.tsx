@@ -45,6 +45,34 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const checkSession = async () => {
     setIsLoading(true)
     try {
+      // Check for demo mode in development
+      if (process.env.NODE_ENV === 'development') {
+        const demoEmail = localStorage.getItem('demo_email')
+        const onboardingComplete = localStorage.getItem('onboarding_complete')
+
+        if (demoEmail === 'admin@antevus.com') {
+          // Create demo admin session with FULL permissions
+          const demoUser: UserContext = {
+            id: 'demo-admin-id',
+            email: 'admin@antevus.com',
+            roles: [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.LAB_DIRECTOR],
+            attributes: {
+              name: 'Admin User',
+              department: 'Platform Administration',
+              isDemo: true
+            },
+            sessionId: `demo-session-${Date.now()}`
+          }
+
+          setUser(demoUser)
+          authManager.setToken('demo-admin-token', 7 * 24 * 60 * 60 * 1000)
+          auditLogger.setUserId(demoUser.id)
+
+          logger.info('Demo admin session restored', { email: demoEmail })
+          return
+        }
+      }
+
       // SECURITY: Sessions are memory-only for HIPAA compliance
       // Never store session data in browser storage (localStorage/sessionStorage)
       // For production, use httpOnly secure cookies
@@ -71,19 +99,23 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       // Demo mode ONLY in development environment - NEVER in production
       if (process.env.NODE_ENV === 'development' && email === 'admin@antevus.com') {
         const demoUser: UserContext = {
-          id: 'demo-user-id',
+          id: 'demo-admin-id',
           email: 'admin@antevus.com',
-          roles: ['admin' as UserRole],
+          roles: [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.LAB_DIRECTOR],
           attributes: {
-            name: 'Demo Admin',
-            department: 'Demo Lab'
+            name: 'Admin User',
+            department: 'Platform Administration',
+            isDemo: true
           },
           sessionId: `demo-session-${Date.now()}`
         }
 
         setUser(demoUser)
-        authManager.setToken('demo-token', 7 * 24 * 60 * 60 * 1000)
+        authManager.setToken('demo-admin-token', 7 * 24 * 60 * 60 * 1000)
         auditLogger.setUserId(demoUser.id)
+
+        // Store demo email for session persistence
+        localStorage.setItem('demo_email', email)
 
         auditLogger.log({
           eventType: AuditEventType.AUTH_LOGIN_SUCCESS,

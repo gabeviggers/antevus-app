@@ -60,7 +60,7 @@ function VerifyEmailContent() {
                   {/* Instant Verify Button */}
                   <button
                     type="button"
-                    onClick={() => router.push('/dashboard')}
+                    onClick={() => router.push('/onboarding/role')}
                     className="w-full flex justify-center py-2.5 px-4 border border-transparent rounded-md text-sm font-medium text-primary-foreground bg-primary hover:bg-primary/90 transition-colors"
                   >
                     Instantly Verify & Continue →
