@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
-import crypto from 'crypto'
 import { z } from 'zod'
-import { v4 as uuidv4 } from 'uuid'
 import { logger } from '@/lib/logger'
 import { auditLogger } from '@/lib/security/audit-logger'
 import { withRateLimit } from '@/lib/api/rate-limit-helper'
@@ -47,24 +45,7 @@ const emailConfig: EmailConfig = {
   }
 }
 
-// Cleanup expired verification tokens from database (runs on each request)
-// In production, this should be a scheduled job
-async function cleanupExpiredTokens() {
-  try {
-    const deleted = await prisma.verificationToken.deleteMany({
-      where: {
-        expiresAt: {
-          lt: new Date()
-        }
-      }
-    })
-    if (deleted.count > 0) {
-      logger.info('Cleaned up expired verification tokens', { count: deleted.count })
-    }
-  } catch (error) {
-    logger.error('Failed to cleanup expired tokens', error)
-  }
-}
+// Cleanup function removed - verification tokens not yet implemented in schema
 
 export async function POST(request: NextRequest) {
   try {
@@ -168,13 +149,7 @@ export async function POST(request: NextRequest) {
     // Hash password with bcrypt (HIPAA requirement)
     const passwordHash = await bcrypt.hash(password, 12)
 
-    // Cleanup expired tokens periodically (1% chance on each signup)
-    if (Math.random() < 0.01) {
-      cleanupExpiredTokens() // Fire and forget
-    }
-
     // Create user in database (transaction for data integrity)
-    let verificationToken: string = ''
     const user = await prisma.$transaction(async (tx) => {
       // Create the user
       const newUser = await tx.user.create({
@@ -183,20 +158,6 @@ export async function POST(request: NextRequest) {
           passwordHash,
           name: email.split('@')[0], // Temporary name from email
           role: 'viewer', // Default role
-        }
-      })
-
-      // Generate verification token and store in database
-      verificationToken = uuidv4()
-      const tokenHash = crypto.createHash('sha256').update(verificationToken).digest('hex')
-
-      // Store verification token in database
-      await tx.verificationToken.create({
-        data: {
-          userId: newUser.id,
-          token: verificationToken,
-          tokenHash,
-          expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
         }
       })
 
@@ -225,7 +186,6 @@ export async function POST(request: NextRequest) {
     // No need for duplicate logging here
 
     // TODO: Send verification email when SendGrid is configured
-    // Will use the verificationToken stored in pendingVerifications
 
     logger.info('User account created', {
       userId: user.id,
