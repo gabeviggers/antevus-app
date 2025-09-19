@@ -68,6 +68,38 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const login = async (email: string, password: string) => {
     setIsLoading(true)
     try {
+      // Demo mode bypass for admin@antevus.com
+      if (email === 'admin@antevus.com') {
+        const demoUser: UserContext = {
+          id: 'demo-user-id',
+          email: 'admin@antevus.com',
+          roles: ['admin' as UserRole],
+          attributes: {
+            name: 'Demo Admin',
+            department: 'Demo Lab'
+          },
+          sessionId: `demo-session-${Date.now()}`
+        }
+
+        setUser(demoUser)
+        authManager.setToken('demo-token', 7 * 24 * 60 * 60 * 1000)
+        auditLogger.setUserId(demoUser.id)
+
+        auditLogger.log({
+          eventType: AuditEventType.AUTH_LOGIN_SUCCESS,
+          action: 'Demo user logged in',
+          userId: demoUser.id,
+          metadata: {
+            email: demoUser.email,
+            roles: demoUser.roles,
+            isDemo: true
+          }
+        })
+
+        logger.info('Demo login successful', { email })
+        return
+      }
+
       // Call the real API endpoint
       const response = await fetch('/api/auth/login', {
         method: 'POST',

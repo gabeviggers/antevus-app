@@ -66,14 +66,17 @@ export default function SignupPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    // Basic validation
-    if (password !== confirmPassword) {
+    // Demo mode bypass for admin@antevus.com
+    const isDemo = email === 'admin@antevus.com'
+
+    // Basic validation (skip for demo)
+    if (!isDemo && password !== confirmPassword) {
       setError('Passwords do not match')
       return
     }
 
-    // Check if all password requirements are met
-    if (passwordStrength.percentage < 100) {
+    // Check if all password requirements are met (skip for demo)
+    if (!isDemo && passwordStrength.percentage < 100) {
       setError('Password must meet all security requirements')
       return
     }
@@ -96,11 +99,15 @@ export default function SignupPage() {
 
       // TODO: Implement secure token storage (httpOnly cookies via API)
       // NEVER store tokens in localStorage - HIPAA violation
-      // For now, just show success message since we're not creating real accounts yet
       logger.info('Signup successful', { email })
 
-      // Temporary: Just redirect to login page
-      router.push('/login')
+      // Check if demo mode response
+      const isDemo = data.isDemo || email === 'admin@antevus.com'
+
+      // Redirect to email verification page with demo flag if applicable
+      const queryParams = new URLSearchParams({ email })
+      if (isDemo) queryParams.append('demo', 'true')
+      router.push(`/verify-email?${queryParams.toString()}`)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create account')
       setIsLoading(false)
@@ -292,7 +299,7 @@ export default function SignupPage() {
             <Button
               type="submit"
               className="w-full"
-              disabled={isLoading || !email || passwordStrength.percentage < 100 || password !== confirmPassword}
+              disabled={isLoading || !email || (email !== 'admin@antevus.com' && (passwordStrength.percentage < 100 || password !== confirmPassword))}
             >
               {isLoading ? 'Creating account...' : 'Create account'}
             </Button>

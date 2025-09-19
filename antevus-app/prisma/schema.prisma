@@ -67,21 +67,19 @@ model ApiKey {
 
   // Relations
   user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  rateLimits    RateLimit[]
 
   @@index([keyHash])
   @@index([userId, isActive])
 }
 
-// Rate limiting tracking
+// Rate limiting tracking - Generic for any identifier
 model RateLimit {
   id            String    @id @default(cuid())
-  keyId         String
+  keyId         String    // Generic identifier (can be IP, user:id, api:endpoint, etc.)
   windowStart   DateTime
   requestCount  Int       @default(0)
 
-  // Relations
-  apiKey        ApiKey    @relation(fields: [keyId], references: [id], onDelete: Cascade)
+  // No foreign key - this is a generic rate limiter
 
   @@unique([keyId, windowStart])
   @@index([keyId])

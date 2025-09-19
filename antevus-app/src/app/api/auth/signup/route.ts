@@ -133,6 +133,22 @@ export async function POST(request: NextRequest) {
 
     const { email, password } = validation.data
 
+    // Demo mode for admin@antevus.com - skip real signup
+    if (email === 'admin@antevus.com') {
+      logger.info('Demo signup initiated', { email })
+
+      // Return success response for demo mode
+      return NextResponse.json(
+        {
+          message: 'Demo account ready! Proceed to verification.',
+          requiresVerification: true,
+          userId: 'demo-user-id',
+          isDemo: true
+        },
+        { status: 201 }
+      )
+    }
+
     // Check if email already exists in database
     const existingUser = await prisma.user.findUnique({
       where: { email }
