@@ -69,7 +69,26 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Rate limiting (SOC 2 requirement)
+    // Parse request body first to check for demo mode
+    const body = await request.json()
+
+    // Check for demo mode BEFORE rate limiting
+    if (body.email === 'admin@antevus.com') {
+      logger.info('Demo signup initiated', { email: body.email })
+
+      // Return success response for demo mode - bypass all checks
+      return NextResponse.json(
+        {
+          message: 'Demo account ready! Proceed to verification.',
+          requiresVerification: true,
+          userId: 'demo-user-id',
+          isDemo: true
+        },
+        { status: 201 }
+      )
+    }
+
+    // Rate limiting (SOC 2 requirement) - only for non-demo accounts
     const rateLimited = await withRateLimit(request, {
       key: 'api:auth:signup',
       limit: 5, // 5 signup attempts per minute per IP
@@ -90,8 +109,7 @@ export async function POST(request: NextRequest) {
       return rateLimited
     }
 
-    // Parse and validate request
-    const body = await request.json()
+    // Validate request data
     const validation = signupSchema.safeParse(body)
 
     if (!validation.success) {
@@ -113,22 +131,6 @@ export async function POST(request: NextRequest) {
     }
 
     const { email, password } = validation.data
-
-    // Demo mode for admin@antevus.com - skip real signup
-    if (email === 'admin@antevus.com') {
-      logger.info('Demo signup initiated', { email })
-
-      // Return success response for demo mode
-      return NextResponse.json(
-        {
-          message: 'Demo account ready! Proceed to verification.',
-          requiresVerification: true,
-          userId: 'demo-user-id',
-          isDemo: true
-        },
-        { status: 201 }
-      )
-    }
 
     // Check if email already exists in database
     const existingUser = await prisma.user.findUnique({
