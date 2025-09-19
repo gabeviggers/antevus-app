@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
     }
 
     const userId = 'demo-user-id'
-    if (process.env.NODE_ENV === 'production') {
+    if (process.env.NODE_ENV !== 'development') {
       // TODO: Implement proper authentication
       // const session = await authManager.validateToken(token)
       // if (!session?.userId) {
@@ -119,7 +119,7 @@ export async function POST(request: NextRequest) {
     })
 
     // Update user record to mark onboarding as complete
-    if (process.env.NODE_ENV === 'production') {
+    if (process.env.NODE_ENV !== 'development') {
       await prisma.user.update({
         where: { id: userId },
         data: {
@@ -224,7 +224,7 @@ export async function GET() {
     }
 
     const userId = 'demo-user-id'
-    if (process.env.NODE_ENV === 'production') {
+    if (process.env.NODE_ENV !== 'development') {
       // TODO: Implement proper authentication
       // const session = await authManager.validateToken(token)
       // if (!session?.userId) {
