@@ -4,9 +4,15 @@ import { randomBytes } from 'crypto'
 import { withAuth, type AuthenticatedSession } from '@/lib/security/auth-wrapper'
 import { protectWithCSRF } from '@/lib/security/csrf-middleware'
 import { logger } from '@/lib/logger'
+
+interface AuditUser {
+  id: string
+  [key: string]: unknown
+}
+
 // Simple audit logger fallback
 const auditLogger = {
-  logEvent: (user: any, event: string, data: any) => {
+  logEvent: (user: AuditUser, event: string, data: Record<string, unknown>) => {
     logger.info('Audit event', { user: user.id, event, data })
   }
 }

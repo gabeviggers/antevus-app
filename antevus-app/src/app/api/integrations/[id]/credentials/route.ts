@@ -2,16 +2,20 @@ import { NextRequest, NextResponse } from 'next/server'
 import { randomBytes, pbkdf2Sync, createCipheriv, createDecipheriv } from 'crypto'
 import { z } from 'zod'
 import { withAuth, type AuthenticatedSession } from '@/lib/security/auth-wrapper'
-import { protectWithCSRF } from '@/lib/security/csrf-middleware'
 import { logger } from '@/lib/logger'
 // Simple audit logger and CSRF fallbacks
+interface AuditUser {
+  id: string
+  [key: string]: unknown
+}
+
 const auditLogger = {
-  logEvent: (user: any, event: string, data: any) => {
+  logEvent: (user: AuditUser, event: string, data: Record<string, unknown>) => {
     logger.info('Audit event', { user: user.id, event, data })
   }
 }
-const validateCSRFToken = (req: any, userId: string, user: any) => ({ valid: true, error: null })
-const createCSRFTokenForUser = (userId: string) => 'demo-csrf-token'
+const validateCSRFToken = (_req: unknown, _userId: string, _user: unknown) => ({ valid: true, error: null })
+const createCSRFTokenForUser = (_userId: string) => 'demo-csrf-token'
 import { type User } from '@/lib/auth/types'
 import { UserRole } from '@/lib/security/authorization'
 

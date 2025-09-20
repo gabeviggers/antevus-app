@@ -6,8 +6,22 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { withAuth, type AuthenticatedSession } from '@/lib/security/auth-wrapper'
 import { protectWithCSRF } from '@/lib/security/csrf-middleware'
+import { logger } from '@/lib/logger'
+
+interface AuditUser {
+  id: string
+  [key: string]: unknown
+}
+
+interface AuthorizationParams {
+  user: unknown
+  resource: string
+  action: string
+  resourceData?: unknown
+}
+
 // Simple fallbacks for missing services
-const validateAPIKey = async (req: any) => ({
+const validateAPIKey = async (_req: unknown) => ({
   authenticated: true,
   keyId: 'demo-key',
   permissions: ['all'],
@@ -15,17 +29,16 @@ const validateAPIKey = async (req: any) => ({
   rateLimitReset: Date.now() + 60000,
   error: null
 })
-const validateCSRFToken = async (req: any, userId: string, sessionId: string, user: any) => ({
+const validateCSRFToken = async (_req: unknown, _userId: string, _sessionId: string, _user: unknown) => ({
   valid: true, error: null
 })
-import { logger } from '@/lib/logger'
 const auditLogger = {
-  logEvent: (user: any, event: string, data: any) => {
+  logEvent: (user: AuditUser, event: string, data: Record<string, unknown>) => {
     logger.info('Audit event', { user: user.id, event, data })
   }
 }
 const authorizationService = {
-  can: async (params: any) => true
+  can: async (_params: AuthorizationParams) => true
 }
 import { type User } from '@/lib/auth/types'
 import { UserRole } from '@/lib/security/authorization'

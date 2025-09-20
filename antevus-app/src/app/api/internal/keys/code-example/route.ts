@@ -24,7 +24,7 @@ interface CodeExampleRequest {
   language: 'python' | 'javascript' | 'curl'
 }
 
-async function handlePOST(request: NextRequest, session: AuthenticatedSession) {
+async function handlePOST(request: NextRequest, _session: AuthenticatedSession) {
   try {
 
     const body: CodeExampleRequest = await request.json()

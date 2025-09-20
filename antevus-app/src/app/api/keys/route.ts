@@ -31,7 +31,7 @@ function generateApiKey(): string {
   return prefix + randomBytesValue
 }
 
-async function handleGET(request: NextRequest, session: AuthenticatedSession) {
+async function handleGET(_request: NextRequest, _session: AuthenticatedSession) {
   if (!IS_DEMO) {
     return NextResponse.json(
       { error: 'API keys management is only available in demo mode' },
@@ -80,7 +80,7 @@ async function handleGET(request: NextRequest, session: AuthenticatedSession) {
   }
 }
 
-async function handlePOST(request: NextRequest, session: AuthenticatedSession) {
+async function handlePOST(request: NextRequest, _session: AuthenticatedSession) {
   if (!IS_DEMO) {
     return NextResponse.json(
       { error: 'API keys management is only available in demo mode' },
@@ -166,7 +166,7 @@ async function handlePOST(request: NextRequest, session: AuthenticatedSession) {
   }
 }
 
-async function handleDELETE(request: NextRequest, session: AuthenticatedSession) {
+async function handleDELETE(request: NextRequest, _session: AuthenticatedSession) {
   if (!IS_DEMO) {
     return NextResponse.json(
       { error: 'API keys management is only available in demo mode' },
@@ -239,7 +239,7 @@ async function handleDELETE(request: NextRequest, session: AuthenticatedSession)
 }
 
 // Endpoint to reveal key (demo mode only)
-async function handlePUT(request: NextRequest, session: AuthenticatedSession) {
+async function handlePUT(request: NextRequest, _session: AuthenticatedSession) {
   if (!IS_DEMO) {
     return NextResponse.json(
       { error: 'Key reveal is only available in demo mode' },
