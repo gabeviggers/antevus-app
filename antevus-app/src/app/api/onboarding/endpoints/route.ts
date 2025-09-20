@@ -4,6 +4,7 @@ import { withRateLimit } from '@/lib/api/rate-limit-helper'
 import { authManager } from '@/lib/security/auth-manager'
 import { auditLogger, AuditEventType, AuditSeverity } from '@/lib/security/audit-logger'
 import { encryptionService } from '@/lib/security/encryption-service'
+import { protectWithCSRF } from '@/lib/security/csrf-middleware'
 import { prisma } from '@/lib/database'
 import { logger } from '@/lib/logger'
 import crypto from 'crypto'
@@ -16,8 +17,6 @@ const endpointsSchema = z.object({
   allowedOrigins: z.array(z.string().url()).optional(),
   ipWhitelist: z.array(z.string()).optional()
 })
-
-import { protectWithCSRF } from '@/lib/security/csrf-middleware'
 
 async function handlePOST(request: NextRequest) {
   try {
@@ -189,9 +188,7 @@ async function handlePOST(request: NextRequest) {
   }
 }
 
-export const { POST } = protectWithCSRF({ POST: handlePOST })
-
-export async function GET(request: NextRequest) {
+async function handleGET(request: NextRequest) {
   try {
     // In demo mode during onboarding, use a temporary user ID
     let userId = 'onboarding-user'
@@ -277,3 +274,7 @@ export async function GET(request: NextRequest) {
     )
   }
 }
+
+// Export handlers with CSRF protection for POST
+export const { POST } = protectWithCSRF({ POST: handlePOST })
+export { handleGET as GET }
