@@ -25,14 +25,16 @@ import {
   MoreHorizontal,
   Pencil,
   Trash2,
-  Trash
+  Trash,
+  FileText
 } from 'lucide-react'
 
 // Base navigation items available to all users
 const baseNavigation = [
   { name: 'Instruments', href: '/dashboard', icon: LayoutDashboard },
-  { name: 'Run History', href: '/runs', icon: History },
   { name: 'Monitoring', href: '/monitoring', icon: Activity },
+  { name: 'Run History', href: '/runs', icon: History },
+  { name: 'Reports', href: '/reports', icon: FileText },
   { name: 'Integrations', href: '/integrations', icon: Plug },
   { name: 'API Playground', href: '/api-playground', icon: Code2 },
 ]

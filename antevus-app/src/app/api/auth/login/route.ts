@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server'
-import { randomBytes } from 'crypto'
-import { validateSecureCredentials } from '@/lib/auth/secure-mock-users'
-import { AuthSession } from '@/lib/auth/types'
+import { createClient } from '@/lib/supabase/server'
+import { AuthSession, UserRole } from '@/lib/auth/types'
 import { logger } from '@/lib/logger'
+import { prisma } from '@/lib/prisma'
 
 export async function POST(request: Request) {
   try {
@@ -15,26 +15,70 @@ export async function POST(request: Request) {
       )
     }
 
-    // Validate credentials against secure mock database with bcrypt
-    const { user, error } = await validateSecureCredentials(email, password)
+    // Authenticate with Supabase
+    const supabase = await createClient()
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password
+    })
 
-    if (!user) {
+    if (error || !data.user || !data.session) {
+      logger.error('Supabase login error', error)
       return NextResponse.json(
-        { success: false, error: error || 'Invalid email or password' },
+        { success: false, error: 'Invalid email or password' },
         { status: 401 }
       )
     }
 
-    // Create secure session with cryptographically secure token
-    const secureToken = randomBytes(32).toString('hex')
+    // Get user from local database (should exist from signup sync)
+    const localUser = await prisma.user.findUnique({
+      where: { id: data.user.id }
+    })
 
+    if (!localUser) {
+      // Sync user if not found (shouldn't happen but just in case)
+      await prisma.user.create({
+        data: {
+          id: data.user.id,
+          email: data.user.email!,
+          emailVerified: data.user.email_confirmed_at !== null,
+          passwordHash: 'supabase-auth', // Not used with Supabase
+          name: data.user.user_metadata?.name || data.user.email?.split('@')[0] || 'User',
+          role: 'USER',
+          createdAt: new Date(),
+          updatedAt: new Date()
+        }
+      })
+    }
+
+    // Map role to UserRole enum (handle both uppercase and lowercase)
+    const roleMap: Record<string, UserRole> = {
+      'ADMIN': UserRole.ADMIN,
+      'admin': UserRole.ADMIN,
+      'LAB_MANAGER': UserRole.LAB_MANAGER,
+      'lab_manager': UserRole.LAB_MANAGER,
+      'SCIENTIST': UserRole.SCIENTIST,
+      'scientist': UserRole.SCIENTIST,
+      'USER': UserRole.VIEWER,
+      'user': UserRole.VIEWER,
+      'VIEWER': UserRole.VIEWER,
+      'viewer': UserRole.VIEWER
+    }
+
+    // Create session response
     const session: AuthSession = {
       user: {
-        ...user,
-        lastLogin: new Date().toISOString()
+        id: data.user.id,
+        email: data.user.email!,
+        name: localUser?.name || data.user.user_metadata?.name || data.user.email?.split('@')[0] || 'User',
+        role: roleMap[localUser?.role || 'USER'] || UserRole.VIEWER,
+        organization: 'Antevus Labs', // Default organization
+        department: 'Lab Operations', // Default department
+        lastLogin: new Date().toISOString(),
+        createdAt: localUser?.createdAt?.toISOString() || new Date().toISOString()
       },
-      token: secureToken, // Cryptographically secure token
-      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() // 7 days
+      token: data.session.access_token,
+      expiresAt: new Date(data.session.expires_at! * 1000).toISOString()
     }
 
     return NextResponse.json({

@@ -35,7 +35,15 @@ export function escapeHtml(text: string): string {
  * Sanitize user input for safe storage and display
  * Removes potentially dangerous characters and scripts
  */
-export function sanitizeInput(input: string): string {
+export function sanitizeInput(input: string | any): string {
+  // Ensure input is a string
+  if (typeof input !== 'string') {
+    if (input === null || input === undefined) {
+      return '';
+    }
+    input = String(input);
+  }
+
   // Remove any script tags and their contents
   let sanitized = input.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
 

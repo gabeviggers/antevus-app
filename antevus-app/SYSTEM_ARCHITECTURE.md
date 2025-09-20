@@ -38,9 +38,10 @@
 | **UI Framework** | Tailwind CSS v4, Radix UI | Consistent design system |
 | **State Management** | Zustand, React Context | Client state, auth management |
 | **Backend** | Node.js, Next.js API Routes | API endpoints, business logic |
-| **Database** | PostgreSQL 15+ | Primary data storage |
-| **ORM** | Prisma 5.x | Database abstraction |
-| **Authentication** | JWT (jose), bcrypt | Secure authentication |
+| **Database** | PostgreSQL 15+ | Primary data storage (Prisma) |
+| **Auth Provider** | Supabase Auth | Authentication service |
+| **ORM** | Prisma 5.x | Database abstraction layer |
+| **Authentication** | Supabase Auth + JWT | Secure authentication |
 | **Hosting** | Vercel | Edge deployment |
 | **Monitoring** | Sentry, PostHog | Error tracking, analytics |
 
@@ -577,45 +578,87 @@ const roleAccess = {
 
 ## Authentication & Security
 
-### Authentication Flow
+### Authentication Flow (Hybrid: Supabase Auth + Prisma Data)
 
 ```mermaid
 sequenceDiagram
     participant User
     participant Frontend
     participant API
-    participant Database
-    participant Bcrypt
+    participant Supabase Auth
+    participant Prisma DB
+    participant Audit Service
 
     User->>Frontend: Enter credentials
     Frontend->>API: POST /api/auth/login
-    API->>Database: Fetch user by email
-    Database-->>API: User record
-    API->>Bcrypt: Compare password hash
-    Bcrypt-->>API: Valid/Invalid
 
-    alt Valid Credentials
-        API->>API: Generate JWT token
-        API->>Database: Create session
-        API->>Database: Log audit event
-        API-->>Frontend: Success + Token
-        Frontend->>Frontend: Store in memory
-        Frontend-->>User: Redirect to dashboard
-    else Invalid Credentials
-        API->>Database: Increment failed attempts
-        API->>Database: Log failed login
-        API-->>Frontend: Error response
-        Frontend-->>User: Show error
+    Note over API: Authentication Phase
+    API->>Supabase Auth: signInWithPassword(email, password)
+    Supabase Auth-->>API: Session + Access Token
+
+    Note over API: User Sync Phase
+    API->>Prisma DB: findUnique(userId)
+    alt User Not Found
+        API->>Prisma DB: Create local user record
+        Prisma DB-->>API: User created
+    else User Exists
+        Prisma DB-->>API: User record
     end
+
+    Note over API: Session Creation
+    API->>API: Create JWT session
+    API->>Audit Service: Log login event
+    API-->>Frontend: Success + Session
+    Frontend->>Frontend: Store in httpOnly cookie
+    Frontend-->>User: Redirect to dashboard
 ```
+
+### Hybrid Architecture: Supabase Auth + Prisma Data
+
+#### Why Hybrid?
+We use a hybrid approach that leverages:
+- **Supabase Auth**: For authentication, password management, and OAuth (future)
+- **Prisma + PostgreSQL**: For application data, maintaining flexibility for future migration
+
+#### Architecture Benefits
+1. **Authentication Delegation**: Supabase handles complex auth flows, password resets, MFA
+2. **Data Ownership**: Application data remains in our PostgreSQL instance via Prisma
+3. **Migration Path**: Can migrate to AWS RDS, Azure Database, or self-hosted PostgreSQL
+4. **Development Speed**: Supabase auth is production-ready out of the box
+
+#### Data Synchronization
+```typescript
+// User exists in both systems
+interface SupabaseUser {
+  id: string          // UUID, shared between systems
+  email: string       // Primary identifier
+  email_confirmed_at: string
+  // ... Supabase auth metadata
+}
+
+interface PrismaUser {
+  id: string          // Same UUID as Supabase
+  email: string       // Synced from Supabase
+  name: string        // Application-specific data
+  role: UserRole      // RBAC in our system
+  organization: string // Business data
+  // ... Application-specific fields
+}
+```
+
+#### Sync Flow
+1. **Signup**: Create user in Supabase → Create record in Prisma
+2. **Login**: Authenticate with Supabase → Fetch/sync Prisma record
+3. **Profile Update**: Update Prisma record (app data) independently
+4. **Password Change**: Handled entirely by Supabase
 
 ### Security Features
 
-#### Password Security
-- **Bcrypt hashing** with 12 salt rounds
-- **Password requirements**: Min 8 characters
-- **Account lockout**: After 5 failed attempts
-- **Lockout duration**: 30 minutes
+#### Password Security (Supabase Managed)
+- **Argon2id hashing** (Supabase default, more secure than bcrypt)
+- **Password requirements**: Min 8 characters (configurable)
+- **Account lockout**: Managed by Supabase Auth
+- **Password reset**: Email-based with secure tokens
 
 #### Session Security
 - **JWT tokens** with short expiration (7 days)
@@ -1055,8 +1098,14 @@ NODE_ENV=production
 NEXT_PUBLIC_APP_URL=https://app.antevus.com
 
 # Database
-DATABASE_URL=postgresql://user:pass@host:5432/antevus
+DATABASE_URL=postgresql://user:pass@host:5432/antevus  # Prisma DB
+DIRECT_URL=postgresql://user:pass@host:5432/antevus   # Direct connection
 DATABASE_POOL_SIZE=20
+
+# Supabase
+NEXT_PUBLIC_SUPABASE_URL=https://[project].supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJ...
+SUPABASE_SERVICE_ROLE_KEY=eyJ...  # Server-side only
 
 # Authentication
 JWT_SECRET=your-secret-key

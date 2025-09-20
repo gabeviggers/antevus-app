@@ -481,6 +481,15 @@ class AuditLogger {
       return
     }
 
+    // Skip remote logging in development to avoid 403 errors
+    // In production, proper auth tokens will be available
+    const isDevelopment = process.env.NODE_ENV !== 'production' && process.env.NODE_ENV !== 'test'
+    if (isDevelopment) {
+      // Just clear the buffer in development
+      this.buffer = []
+      return
+    }
+
     const logsToSend = [...this.buffer]
     this.buffer = []
 

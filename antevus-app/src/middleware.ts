@@ -47,7 +47,7 @@ export async function middleware(request: NextRequest) {
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: https:",
     "font-src 'self' data:",
-    `connect-src 'self'${isDevelopment ? ' ws: wss:' : ''}`, // Allow WebSocket in dev
+    `connect-src 'self' https://eolshdupsclgepnfswpj.supabase.co${isDevelopment ? ' ws: wss:' : ''}`, // Allow Supabase and WebSocket in dev
     "frame-ancestors 'none'",
   ]
 

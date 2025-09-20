@@ -100,6 +100,8 @@ export interface Message {
   containsPHI?: boolean
   containsPII?: boolean
   redactedContent?: string
+  // Metadata for special content like reports
+  metadata?: Record<string, any>
 }
 
 export interface ChatThread {
