@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { getServerSession } from '@/lib/security/session-helper';
 import { validateCSRFToken } from '@/lib/security/csrf';
 import crypto from 'crypto';
+import { logger } from '@/lib/logger';
 
 const ReportQuerySchema = z.object({
   dateRange: z.object({
@@ -203,7 +204,9 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json(response);
   } catch (error) {
-    console.error('Report preview error:', error);
+    logger.error('Report preview error', {
+      error: error instanceof Error ? error.message : String(error)
+    });
     if (error instanceof z.ZodError) {
       return NextResponse.json(
         { error: 'Invalid request data', details: error.issues },

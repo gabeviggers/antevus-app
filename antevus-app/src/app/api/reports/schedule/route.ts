@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import { logger } from '@/lib/logger';
 import { getServerSession } from '@/lib/security/session-helper';
 import { validateCSRFToken } from '@/lib/security/csrf';
 import { RRule } from 'rrule';
@@ -114,7 +115,9 @@ export async function POST(req: NextRequest) {
       createdAt: scheduledReport.createdAt.toISOString()
     });
   } catch (_error) {
-    console.error('Schedule report error:', _error);
+    logger.error('Schedule report error', {
+      error: _error instanceof Error ? _error.message : String(_error)
+    });
     if (_error instanceof z.ZodError) {
       return NextResponse.json(
         { error: 'Invalid request data', details: _error.issues },
@@ -196,7 +199,9 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json(mockScheduledReports);
   } catch (_error) {
-    console.error('Get scheduled reports error:', _error);
+    logger.error('Get scheduled reports error', {
+      error: _error instanceof Error ? _error.message : String(_error)
+    });
     return NextResponse.json(
       { error: 'Failed to retrieve scheduled reports' },
       { status: 500 }
@@ -261,7 +266,9 @@ export async function DELETE(req: NextRequest) {
 
     return NextResponse.json({ success: true, message: 'Scheduled report deleted successfully' });
   } catch (_error) {
-    console.error('Delete scheduled report error:', _error);
+    logger.error('Delete scheduled report error', {
+      error: _error instanceof Error ? _error.message : String(_error)
+    });
     return NextResponse.json(
       { error: 'Failed to delete scheduled report' },
       { status: 500 }

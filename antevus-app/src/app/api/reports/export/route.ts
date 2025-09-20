@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import { logger } from '@/lib/logger';
 import { getServerSession } from '@/lib/security/session-helper';
 import { validateCSRFToken } from '@/lib/security/csrf';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
@@ -147,7 +148,7 @@ export async function POST(req: NextRequest) {
     // };
 
     if (exportRequest.deliver?.email) {
-      console.log('Would send email to:', exportRequest.deliver.email);
+      logger.info('Would send email', { recipients: exportRequest.deliver.email });
     }
 
     return NextResponse.json({
@@ -155,7 +156,9 @@ export async function POST(req: NextRequest) {
       emailed: exportRequest.deliver?.email
     });
   } catch (error) {
-    console.error('Report export error:', error);
+    logger.error('Report export error', {
+      error: error instanceof Error ? error.message : String(error)
+    });
     if (error instanceof z.ZodError) {
       return NextResponse.json(
         { error: 'Invalid request data', details: error.issues },

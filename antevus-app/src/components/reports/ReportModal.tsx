@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { ReportPreview } from './ReportPreview';
 import { generateDemoReportData } from '@/lib/demo-data/report-demo';
 import type { ReportPlan, ReportPreviewDTO } from '@/types/reports';
+import { logger } from '@/lib/logger';
 
 interface ReportModalProps {
   isOpen: boolean;
@@ -97,15 +98,15 @@ export function ReportModal({ isOpen, onClose, reportPlan }: ReportModalProps) {
               }}
               tableData={reportData.table}
               onExport={(format) => {
-                console.log(`Exporting as ${format}...`);
+                logger.info('Exporting report', { format });
                 // Implement export functionality
               }}
               onSchedule={() => {
-                console.log('Opening schedule modal...');
+                logger.info('Opening schedule modal');
                 // Implement schedule functionality
               }}
               onEmail={(email) => {
-                console.log(`Emailing to ${email}...`);
+                logger.info('Emailing report', { email });
                 // Implement email functionality
               }}
             />
