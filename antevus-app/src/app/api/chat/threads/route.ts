@@ -6,6 +6,7 @@ import { dataClassifier } from '@/lib/security/data-classification'
 import { withRateLimit, RateLimitConfigs, addRateLimitHeaders, checkRateLimit } from '@/lib/api/rate-limit-helper'
 import { logger } from '@/lib/logger'
 import * as crypto from 'crypto'
+import { promisify } from 'util'
 
 /**
  * Production-grade Chat Storage API
@@ -54,13 +55,16 @@ function getActualEncryptionKey(): string {
 // Get the actual key (will be validated at runtime)
 const ACTUAL_ENCRYPTION_KEY = getActualEncryptionKey()
 
+// Promisify pbkdf2 for async operation
+const pbkdf2Async = promisify(crypto.pbkdf2)
+
 // Encrypt data
-function encrypt(text: string): string {
+async function encrypt(text: string): Promise<string> {
   try {
     const algorithm = 'aes-256-gcm'
     const iv = crypto.randomBytes(16)
     const salt = crypto.randomBytes(64)
-    const key = crypto.pbkdf2Sync(ACTUAL_ENCRYPTION_KEY, salt, 10000, 32, 'sha256')
+    const key = await pbkdf2Async(ACTUAL_ENCRYPTION_KEY, salt, 10000, 32, 'sha256')
 
     const cipher = crypto.createCipheriv(algorithm, key, iv)
 
@@ -78,7 +82,7 @@ function encrypt(text: string): string {
 }
 
 // Decrypt data
-function decrypt(encryptedData: string): string {
+async function decrypt(encryptedData: string): Promise<string> {
   try {
     const algorithm = 'aes-256-gcm'
     const data = Buffer.from(encryptedData, 'base64')
@@ -88,7 +92,7 @@ function decrypt(encryptedData: string): string {
     const authTag = data.subarray(80, 96)
     const encrypted = data.subarray(96)
 
-    const key = crypto.pbkdf2Sync(ACTUAL_ENCRYPTION_KEY, salt, 10000, 32, 'sha256')
+    const key = await pbkdf2Async(ACTUAL_ENCRYPTION_KEY, salt, 10000, 32, 'sha256')
 
     const decipher = crypto.createDecipheriv(algorithm, key, iv)
     decipher.setAuthTag(authTag)
@@ -135,7 +139,7 @@ async function handleGET(request: NextRequest, session: AuthenticatedSession) {
     }
 
     // Decrypt threads
-    const decryptedThreads = decrypt(storedData.threads)
+    const decryptedThreads = await decrypt(storedData.threads)
     const threads = JSON.parse(decryptedThreads)
 
     // Update last accessed
@@ -205,7 +209,7 @@ async function handlePOST(request: NextRequest, session: AuthenticatedSession) {
 
     // Encrypt threads
     const threadsJson = JSON.stringify(threads)
-    const encryptedThreads = encrypt(threadsJson)
+    const encryptedThreads = await encrypt(threadsJson)
 
     // Generate checksum for integrity
     const checksum = crypto

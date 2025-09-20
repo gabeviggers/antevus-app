@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { randomBytes, pbkdf2Sync, createCipheriv, createDecipheriv } from 'crypto'
+import { randomBytes, pbkdf2, createCipheriv, createDecipheriv } from 'crypto'
+import { promisify } from 'util'
 import { z } from 'zod'
 import { withAuth, type AuthenticatedSession } from '@/lib/security/auth-wrapper'
 import { UserRole } from '@/lib/security/authorization'
@@ -19,9 +20,8 @@ const auditLogger = {
     logger.info('Audit event', { user: user.id, event, data })
   }
 }
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
+// Mock CSRF validation - returns synchronously
 const validateCSRFToken = (_req: unknown, _userId: string, _user: unknown) => ({ valid: true, error: null })
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const createCSRFTokenForUser = (_userId: string) => 'demo-csrf-token'
 import { type User } from '@/lib/auth/types'
 
@@ -130,21 +130,24 @@ function createUserFromSession(session: AuthenticatedSession): User {
   }
 }
 
-// Derive encryption key using PBKDF2
-function deriveKey(salt: Buffer): Buffer {
-  return pbkdf2Sync(getMasterKey(), salt, ITERATIONS, 32, 'sha256')
+// Promisify pbkdf2 for async operation
+const pbkdf2Async = promisify(pbkdf2)
+
+// Derive encryption key using PBKDF2 (async to avoid blocking)
+async function deriveKey(salt: Buffer): Promise<Buffer> {
+  return pbkdf2Async(getMasterKey(), salt, ITERATIONS, 32, 'sha256')
 }
 
-// Encrypt credentials using AES-256-GCM
-function encryptCredentials(credentials: CredentialData): {
+// Encrypt credentials using AES-256-GCM (async)
+async function encryptCredentials(credentials: CredentialData): Promise<{
   encryptedData: string
   salt: string
   iv: string
   authTag: string
-} {
+}> {
   // Generate random salt for key derivation
   const salt = randomBytes(SALT_LENGTH)
-  const key = deriveKey(salt)
+  const key = await deriveKey(salt)
 
   // Generate random IV
   const iv = randomBytes(IV_LENGTH)
@@ -168,16 +171,16 @@ function encryptCredentials(credentials: CredentialData): {
   }
 }
 
-// Decrypt credentials using AES-256-GCM
-function decryptCredentials(encryptedCredential: {
+// Decrypt credentials using AES-256-GCM (async)
+async function decryptCredentials(encryptedCredential: {
   encryptedData: string
   salt: string
   iv: string
   authTag: string
-}): CredentialData {
+}): Promise<CredentialData> {
   // Derive the same key
   const salt = Buffer.from(encryptedCredential.salt, 'hex')
-  const key = deriveKey(salt)
+  const key = await deriveKey(salt)
 
   // Create decipher
   const decipher = createDecipheriv(
@@ -221,7 +224,7 @@ async function handlePOST(
     }
 
     // Validate CSRF token for state-changing operations
-    const csrfValidation = await validateCSRFToken(request, session.userId, createUserFromSession(session))
+    const csrfValidation = validateCSRFToken(request, session.userId, createUserFromSession(session))
     if (!csrfValidation.valid) {
       return NextResponse.json(
         { error: csrfValidation.error || 'Invalid CSRF token' },
@@ -250,8 +253,8 @@ async function handlePOST(
       }, { status: 400 })
     }
 
-    // Encrypt credentials using AES-256-GCM
-    const encrypted = encryptCredentials(validation.data)
+    // Encrypt credentials using AES-256-GCM (async)
+    const encrypted = await encryptCredentials(validation.data)
     const credentialId = `${integrationId}_${session.userId}`
 
     // Store encrypted credentials with all encryption parameters
@@ -293,7 +296,7 @@ async function handlePOST(
 }
 
 async function handleGET(
-  request: NextRequest,
+  _request: NextRequest,
   session: AuthenticatedSession,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -321,7 +324,7 @@ async function handleGET(
     // Never send actual credentials to client
     try {
       // Decrypt only to get field names, never expose values
-      const decrypted = decryptCredentials({
+      const decrypted = await decryptCredentials({
         encryptedData: stored.encryptedData,
         salt: stored.salt,
         iv: stored.iv,
@@ -383,7 +386,7 @@ async function handleDELETE(
     }
 
     // Validate CSRF token for state-changing operations
-    const csrfValidation = await validateCSRFToken(request, session.userId, createUserFromSession(session))
+    const csrfValidation = validateCSRFToken(request, session.userId, createUserFromSession(session))
     if (!csrfValidation.valid) {
       return NextResponse.json(
         { error: csrfValidation.error || 'Invalid CSRF token' },
