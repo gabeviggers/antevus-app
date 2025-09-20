@@ -186,6 +186,15 @@ async function handlePOST(request: NextRequest) {
 
 export const { POST } = protectWithCSRF({ POST: handlePOST })
 
+// Generate ephemeral join token with expiry
+function generateJoinToken(): string {
+  const prefix = 'ANT'
+  const segments = Array(3).fill(0).map(() =>
+    Math.random().toString(36).substring(2, 6).toUpperCase()
+  )
+  return `${prefix}-${segments.join('-')}`
+}
+
 export async function GET(request: Request) {
   try {
     // In demo mode during onboarding, use a temporary user ID
@@ -218,10 +227,12 @@ export async function GET(request: Request) {
       logger.debug('Demo mode: Using temporary onboarding user', { userId })
     }
 
-    // For demo mode, return empty data
+    // For demo mode, return empty data with join token
     if (isDemoMode()) {
       return NextResponse.json({
         agentData: null,
+        joinToken: generateJoinToken(),
+        tokenExpiry: new Date(Date.now() + 15 * 60 * 1000).toISOString(), // 15 minutes
         currentStep: 'agent',
         completedSteps: []
       })
@@ -240,6 +251,8 @@ export async function GET(request: Request) {
     if (!progress?.agentData) {
       return NextResponse.json({
         agentData: null,
+        joinToken: generateJoinToken(),
+        tokenExpiry: new Date(Date.now() + 15 * 60 * 1000).toISOString(), // 15 minutes
         currentStep: progress?.currentStep || 'agent',
         completedSteps: progress?.completedSteps || []
       })
@@ -251,6 +264,8 @@ export async function GET(request: Request) {
 
     return NextResponse.json({
       agentData,
+      joinToken: generateJoinToken(),
+      tokenExpiry: new Date(Date.now() + 15 * 60 * 1000).toISOString(), // 15 minutes
       currentStep: progress.currentStep,
       completedSteps: progress.completedSteps
     })

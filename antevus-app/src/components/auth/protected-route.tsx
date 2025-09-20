@@ -13,19 +13,21 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   const router = useRouter()
 
   useEffect(() => {
-    // No client-side demo mode bypass - rely on session context
+    // Only check authentication after loading is complete
     if (!isLoading && !isAuthenticated) {
-      // Check if there's a valid session being established
-      const checkAuth = async () => {
-        // Give session context time to check for existing sessions
-        await new Promise(resolve => setTimeout(resolve, 100))
-
+      // Use a cancellable timeout to allow for session establishment
+      const timeoutId = setTimeout(() => {
+        // Check the current authentication state
         if (!isAuthenticated) {
-          router.push('/')
+          // Use replace for immediate redirect without history entry
+          router.replace('/')
         }
-      }
+      }, 100) // Small grace period for session to establish
 
-      checkAuth()
+      // Cleanup function to cancel timeout if component unmounts or deps change
+      return () => {
+        clearTimeout(timeoutId)
+      }
     }
   }, [isAuthenticated, isLoading, router])
 

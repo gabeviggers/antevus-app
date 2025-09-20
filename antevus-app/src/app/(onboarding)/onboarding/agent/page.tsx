@@ -8,12 +8,50 @@ import { Check, Copy, RefreshCw, ArrowLeft } from 'lucide-react'
 type Platform = 'windows' | 'mac' | 'linux'
 
 export default function AgentInstallPage() {
-  const [joinToken] = useState('ANT-XY7K-9PQ2-MNBV')
+  const [joinToken, setJoinToken] = useState('')
   const [copied, setCopied] = useState(false)
   const [agentStatus, setAgentStatus] = useState<'waiting' | 'connecting' | 'connected'>('waiting')
   const [selectedPlatform, setSelectedPlatform] = useState<Platform | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const router = useRouter()
+
+  // Fetch agent data and join token from server
+  useEffect(() => {
+    const fetchAgentData = async () => {
+      try {
+        const response = await fetch('/api/onboarding/agent', {
+          method: 'GET',
+          credentials: 'include',
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        })
+
+        if (response.ok) {
+          const data = await response.json()
+
+          if (data.agentData) {
+            // Pre-fill form with existing data
+            if (data.agentData.enableAutomation) {
+              setAgentStatus('connected')
+            }
+          }
+
+          if (data.joinToken) {
+            setJoinToken(data.joinToken)
+          }
+        }
+      } catch (error) {
+        console.error('Failed to fetch agent data:', error)
+        // Generate a fallback token if fetch fails
+        setJoinToken('ANT-' + Math.random().toString(36).substring(2, 6).toUpperCase() + '-' +
+                     Math.random().toString(36).substring(2, 6).toUpperCase() + '-' +
+                     Math.random().toString(36).substring(2, 6).toUpperCase())
+      }
+    }
+
+    fetchAgentData()
+  }, [])
 
   // In development, auto-connect after copying token (simulates real agent)
   useEffect(() => {

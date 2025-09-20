@@ -130,11 +130,11 @@ export async function POST(request: NextRequest) {
       })
 
       if (existingDemoUser) {
-        // Demo user exists, just return success to allow flow continuation
+        // Demo user exists, just return success - demos don't need verification
         return NextResponse.json(
           {
-            message: 'Demo account ready! Proceed to verification.',
-            requiresVerification: true,
+            message: 'Demo account ready!',
+            requiresVerification: false,
             userId: existingDemoUser.id,
             isDemo: true
           },
@@ -155,8 +155,8 @@ export async function POST(request: NextRequest) {
 
         return NextResponse.json(
           {
-            message: 'Demo account created! Proceed to verification.',
-            requiresVerification: true,
+            message: 'Demo account created!',
+            requiresVerification: false,
             userId: demoUser.id,
             isDemo: true
           },

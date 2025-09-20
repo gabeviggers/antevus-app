@@ -63,18 +63,29 @@ function validateProductionConfig(): void {
   }
 
   if (isProd && !config.isDemoMode) {
+    // Require JWT configuration in production
     if (!config.jwksUri && !config.jwtPublicKey) {
       logger.error('PRODUCTION ERROR: Either JWKS_URI or JWT_PUBLIC_KEY must be configured')
-      // Don't throw during build, but log the error
+      // Don't throw during build, but fail in runtime
       if (process.env.NEXT_PHASE !== 'phase-production-build') {
         throw new Error('PRODUCTION ERROR: Either JWKS_URI or JWT_PUBLIC_KEY must be configured')
       }
     }
+
+    // SECURITY: Require explicit issuer in production - no defaults
     if (!config.jwtIssuer) {
-      logger.warn('JWT_ISSUER is not configured - using default')
+      logger.error('PRODUCTION ERROR: JWT_ISSUER must be configured - no defaults allowed')
+      if (process.env.NEXT_PHASE !== 'phase-production-build') {
+        throw new Error('PRODUCTION ERROR: JWT_ISSUER must be configured in production')
+      }
     }
+
+    // SECURITY: Require explicit audience in production - no defaults
     if (!config.jwtAudience) {
-      logger.warn('JWT_AUDIENCE is not configured - using default')
+      logger.error('PRODUCTION ERROR: JWT_AUDIENCE must be configured - no defaults allowed')
+      if (process.env.NEXT_PHASE !== 'phase-production-build') {
+        throw new Error('PRODUCTION ERROR: JWT_AUDIENCE must be configured in production')
+      }
     }
   }
 }
@@ -285,10 +296,12 @@ class SecureAuthManager {
 
       if (this.jwks) {
         // Verify using JWKS (recommended for production)
-        const result = await jwtVerify(token, this.jwks, {
-          issuer: config.jwtIssuer,
-          audience: config.jwtAudience,
-        })
+        // SECURITY: Only pass issuer/audience if configured - no defaults
+        const verifyOptions: Parameters<typeof jwtVerify>[2] = {}
+        if (config.jwtIssuer) verifyOptions.issuer = config.jwtIssuer
+        if (config.jwtAudience) verifyOptions.audience = config.jwtAudience
+
+        const result = await jwtVerify(token, this.jwks, verifyOptions)
         payload = result.payload
       } else if (config.jwtPublicKey) {
         // Verify using static public key with jose.importSPKI
@@ -302,11 +315,14 @@ class SecureAuthManager {
         // Import the public key using jose's importSPKI
         const publicKey = await importSPKI(pemKey, 'RS256')
 
-        const result = await jwtVerify(token, publicKey, {
-          issuer: config.jwtIssuer || 'https://auth.antevus.com',
-          audience: config.jwtAudience || 'https://api.antevus.com',
+        // SECURITY: No fallback defaults - config must be explicit
+        const verifyOptions: Parameters<typeof jwtVerify>[2] = {
           algorithms: ['RS256']
-        })
+        }
+        if (config.jwtIssuer) verifyOptions.issuer = config.jwtIssuer
+        if (config.jwtAudience) verifyOptions.audience = config.jwtAudience
+
+        const result = await jwtVerify(token, publicKey, verifyOptions)
         payload = result.payload
       } else {
         // No verification configuration available
@@ -391,9 +407,27 @@ class SecureAuthManager {
     // Then check cookies (for httpOnly cookie support)
     const cookieHeader = request.headers.get('cookie')
     if (cookieHeader) {
-      const cookies = Object.fromEntries(
-        cookieHeader.split('; ').map(c => c.split('=').map(v => decodeURIComponent(v)))
-      )
+      const cookies: Record<string, string> = {}
+
+      // Parse cookies properly, handling values with '=' in them
+      cookieHeader.split('; ').forEach(cookie => {
+        const eqIndex = cookie.indexOf('=')
+        if (eqIndex === -1) {
+          // Cookie without value (just a flag)
+          const name = cookie.trim()
+          if (name) {
+            cookies[decodeURIComponent(name)] = ''
+          }
+        } else {
+          // Split on first '=' only
+          const name = cookie.substring(0, eqIndex).trim()
+          const value = cookie.substring(eqIndex + 1)
+          if (name) {
+            cookies[decodeURIComponent(name)] = decodeURIComponent(value)
+          }
+        }
+      })
+
       if (cookies['auth-token']) {
         return cookies['auth-token']
       }
