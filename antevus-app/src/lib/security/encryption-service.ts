@@ -25,8 +25,20 @@ const TAG_LENGTH = 16
 const KEY_LENGTH = 32
 
 // Get encryption key from environment or generate for development
+const isProd = process.env.NODE_ENV === 'production'
+
 const getEncryptionKey = (): Buffer => {
-  const envKey = process.env.ENCRYPTION_KEY || process.env.NEXT_PUBLIC_ENCRYPTION_KEY
+  const envKey = process.env.ENCRYPTION_KEY
+
+  // In production, key is absolutely required
+  if (!envKey && isProd) {
+    throw new Error('ENCRYPTION_KEY is required in production')
+  }
+
+  // Reject NEXT_PUBLIC_* in production for security
+  if (isProd && process.env.NEXT_PUBLIC_ENCRYPTION_KEY) {
+    throw new Error('NEXT_PUBLIC_ENCRYPTION_KEY must not be used server-side in production')
+  }
 
   if (envKey) {
     // Check if it's a hex string (64 chars for 32 bytes)
@@ -39,14 +51,16 @@ const getEncryptionKey = (): Buffer => {
   }
 
   // Development fallback - generate deterministic key
-  // NEVER use this in production
-  if (process.env.NODE_ENV === 'development') {
+  // ONLY in development, never in production
+  if (!isProd) {
     const password = 'DEVELOPMENT_ONLY_KEY_DO_NOT_USE_IN_PRODUCTION'
     const salt = Buffer.from('antevus_dev_salt_2025', 'utf8')
+    logger.warn('Using development encryption key - NEVER use in production')
     return scryptSync(password, salt, KEY_LENGTH)
   }
 
-  throw new Error('ENCRYPTION_KEY environment variable is required in production')
+  // Should never reach here due to earlier checks
+  throw new Error('Failed to initialize encryption key')
 }
 
 class EncryptionService {

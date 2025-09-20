@@ -1,9 +1,15 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
+import { withAuth, type AuthenticatedSession } from '@/lib/security/auth-wrapper'
 
 // Development only: Reset rate limits
-export async function GET() {
+async function handleGET(request: NextRequest, session: AuthenticatedSession) {
   if (process.env.NODE_ENV !== 'development') {
     return NextResponse.json({ error: 'Only available in development' }, { status: 403 })
+  }
+
+  // Only allow admin users to reset rate limits
+  if (!session.roles?.includes('admin')) {
+    return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
   }
 
   // Clear the in-memory rate limit store
@@ -13,6 +19,9 @@ export async function GET() {
   return NextResponse.json({
     success: true,
     message: 'Rate limits will reset after timeout period',
-    note: 'Restart the dev server to immediately clear all rate limits'
+    note: 'Restart the dev server to immediately clear all rate limits',
+    resetBy: session.userId
   })
 }
+
+export const GET = withAuth(handleGET)

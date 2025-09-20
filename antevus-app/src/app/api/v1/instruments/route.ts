@@ -3,6 +3,7 @@ import { validateAPIKey } from '@/lib/api/auth-db'
 import { auditLogger } from '@/lib/audit/logger'
 import { mockInstruments } from '@/lib/mock-data/instruments'
 import { logger } from '@/lib/logger'
+import { protectWithCSRF } from '@/lib/security/csrf-middleware'
 
 // Force Node.js runtime
 export const runtime = 'nodejs'
@@ -135,7 +136,7 @@ export async function GET(request: NextRequest) {
 }
 
 // POST /api/v1/instruments - Register a new instrument (requires write permission)
-export async function POST(request: NextRequest) {
+async function handlePOST(request: NextRequest) {
   // Validate API key with write permission
   const authResult = await validateAPIKey(request, ['write'])
 
@@ -229,3 +230,8 @@ export async function POST(request: NextRequest) {
     )
   }
 }
+
+// Export with CSRF protection
+export const { POST } = protectWithCSRF({
+  POST: handlePOST
+})

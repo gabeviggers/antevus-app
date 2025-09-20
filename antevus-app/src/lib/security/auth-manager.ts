@@ -38,17 +38,32 @@ interface VerifiedClaims {
 }
 
 // Configuration from environment variables
-const config = {
-  // Demo mode - only enable for development/testing
-  isDemoMode: process.env.NEXT_PUBLIC_DEMO_MODE === 'true' || process.env.DEMO_MODE === 'true',
+const isProd = process.env.NODE_ENV === 'production'
 
-  // JWT Configuration (for production)
-  jwksUri: process.env.JWKS_URI || process.env.NEXT_PUBLIC_JWKS_URI,
-  jwtIssuer: process.env.JWT_ISSUER || process.env.NEXT_PUBLIC_JWT_ISSUER || 'https://auth.antevus.com',
-  jwtAudience: process.env.JWT_AUDIENCE || process.env.NEXT_PUBLIC_JWT_AUDIENCE || 'https://api.antevus.com',
+const config = {
+  // Demo mode - only enable for development/testing, NEVER use NEXT_PUBLIC_* for server security
+  isDemoMode: process.env.NODE_ENV === 'development' && process.env.DEMO_MODE === 'true',
+
+  // JWT Configuration (for production) - no NEXT_PUBLIC_* fallbacks
+  jwksUri: process.env.JWKS_URI,
+  jwtIssuer: process.env.JWT_ISSUER,
+  jwtAudience: process.env.JWT_AUDIENCE,
 
   // Alternative: Use a static public key instead of JWKS
-  jwtPublicKey: process.env.JWT_PUBLIC_KEY || process.env.NEXT_PUBLIC_JWT_PUBLIC_KEY,
+  jwtPublicKey: process.env.JWT_PUBLIC_KEY,
+}
+
+// Validate required config in production
+if (isProd) {
+  if (!config.jwksUri && !config.jwtPublicKey) {
+    throw new Error('PRODUCTION ERROR: Either JWKS_URI or JWT_PUBLIC_KEY must be configured')
+  }
+  if (!config.jwtIssuer) {
+    throw new Error('PRODUCTION ERROR: JWT_ISSUER is required in production')
+  }
+  if (!config.jwtAudience) {
+    throw new Error('PRODUCTION ERROR: JWT_AUDIENCE is required in production')
+  }
 }
 
 class SecureAuthManager {
@@ -269,8 +284,8 @@ class SecureAuthManager {
         const publicKey = await importSPKI(pemKey, 'RS256')
 
         const result = await jwtVerify(token, publicKey, {
-          issuer: config.jwtIssuer,
-          audience: config.jwtAudience,
+          issuer: config.jwtIssuer || 'https://auth.antevus.com',
+          audience: config.jwtAudience || 'https://api.antevus.com',
           algorithms: ['RS256']
         })
         payload = result.payload

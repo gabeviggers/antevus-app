@@ -1,12 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
-import crypto from 'crypto'
+import { randomBytes, createHash, randomUUID } from 'crypto'
+import { withAuth, type AuthenticatedSession } from '@/lib/security/auth-wrapper'
+import { protectWithCSRF } from '@/lib/security/csrf-middleware'
 
 export const runtime = 'nodejs'
-
-// TODO: Import getServerSession from '@/lib/auth/session' once authentication is fully implemented
-// This will replace all IS_DEMO checks with proper session validation
-// In production, this would be stored in a secure database
-// For demo purposes, we're using in-memory storage
 const apiKeysStore = new Map<string, {
   id: string
   name: string
@@ -22,21 +19,19 @@ const IS_DEMO =
   process.env.DEMO_MODE === 'true' ||
   process.env.NEXT_PUBLIC_DEMO === 'true'
 function hashApiKey(key: string): string {
-  return crypto.createHash('sha256').update(key).digest('hex')
+  return createHash('sha256').update(key).digest('hex')
 }
 
 function generateApiKey(): string {
   const prefix = IS_DEMO ? 'av_demo_' : 'av_live_'
-  const randomBytes = crypto.randomBytes(24).toString('base64')
+  const randomBytesValue = randomBytes(24).toString('base64')
     .replace(/\+/g, '-')
     .replace(/\//g, '_')
     .replace(/=/g, '')
-  return prefix + randomBytes
+  return prefix + randomBytesValue
 }
 
-export async function GET() {
-  // TODO: Replace IS_DEMO check with getServerSession from src/lib/auth/session.ts
-  // once real authentication is implemented
+async function handleGET(request: NextRequest, session: AuthenticatedSession) {
   if (!IS_DEMO) {
     return NextResponse.json(
       { error: 'API keys management is only available in demo mode' },
@@ -85,9 +80,7 @@ export async function GET() {
   }
 }
 
-export async function POST(request: NextRequest) {
-  // TODO: Replace IS_DEMO check with getServerSession from src/lib/auth/session.ts
-  // once real authentication is implemented
+async function handlePOST(request: NextRequest, session: AuthenticatedSession) {
   if (!IS_DEMO) {
     return NextResponse.json(
       { error: 'API keys management is only available in demo mode' },
@@ -120,7 +113,7 @@ export async function POST(request: NextRequest) {
     const fullKey = generateApiKey()
     const hashedKey = hashApiKey(fullKey)
     const last4 = fullKey.slice(-4)
-    const id = crypto.randomUUID()
+    const id = randomUUID()
 
     const keyData = {
       id,
@@ -173,9 +166,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-export async function DELETE(request: NextRequest) {
-  // TODO: Replace IS_DEMO check with getServerSession from src/lib/auth/session.ts
-  // once real authentication is implemented
+async function handleDELETE(request: NextRequest, session: AuthenticatedSession) {
   if (!IS_DEMO) {
     return NextResponse.json(
       { error: 'API keys management is only available in demo mode' },
@@ -248,9 +239,7 @@ export async function DELETE(request: NextRequest) {
 }
 
 // Endpoint to reveal key (demo mode only)
-export async function PUT(request: NextRequest) {
-  // TODO: Replace IS_DEMO check with getServerSession from src/lib/auth/session.ts
-  // once real authentication is implemented
+async function handlePUT(request: NextRequest, session: AuthenticatedSession) {
   if (!IS_DEMO) {
     return NextResponse.json(
       { error: 'Key reveal is only available in demo mode' },
@@ -282,7 +271,7 @@ export async function PUT(request: NextRequest) {
     }
 
     // In demo mode, return a mock key for display
-    const demoKey = `av_demo_${key.last4}_EXAMPLE_KEY_${crypto.randomBytes(8).toString('hex')}`
+    const demoKey = `av_demo_${key.last4}_EXAMPLE_KEY_${randomBytes(8).toString('hex')}`
 
     return NextResponse.json(
       {
@@ -309,3 +298,11 @@ export async function PUT(request: NextRequest) {
     )
   }
 }
+
+// Export wrapped handlers
+export const { GET, POST, PUT, DELETE } = protectWithCSRF({
+  GET: withAuth(handleGET),
+  POST: withAuth(handlePOST),
+  PUT: withAuth(handlePUT),
+  DELETE: withAuth(handleDELETE)
+})

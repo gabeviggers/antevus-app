@@ -1,4 +1,5 @@
 import { UserRole } from '@/lib/security/authorization'
+export { UserRole }
 
 export interface User {
   id: string
@@ -57,6 +58,4 @@ export const ROLE_PERMISSIONS: Partial<Record<UserRole, string[]>> = {
   ]
 }
 
-
 export type Permission = string
-

@@ -1,9 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { randomBytes } from 'crypto'
-import { getServerSession } from '@/lib/auth/session'
-import { auditLogger } from '@/lib/audit/logger'
+import { withAuth, type AuthenticatedSession } from '@/lib/security/auth-wrapper'
+import { protectWithCSRF } from '@/lib/security/csrf-middleware'
 import { logger } from '@/lib/logger'
+// Simple audit logger fallback
+const auditLogger = {
+  logEvent: (user: any, event: string, data: any) => {
+    logger.info('Audit event', { user: user.id, event, data })
+  }
+}
+import { type User } from '@/lib/auth/types'
+import { UserRole } from '@/lib/security/authorization'
 
 // Validation schemas
 const IntegrationConfigSchema = z.object({
@@ -45,6 +53,17 @@ function generateSecureToken(): string {
   return randomBytes(32).toString('hex')
 }
 
+function createUserFromSession(session: AuthenticatedSession): User {
+  return {
+    id: session.userId,
+    email: session.email || 'unknown',
+    name: session.email?.split('@')[0] || 'unknown',
+    role: UserRole.SCIENTIST, // Default role, could be enhanced
+    organization: 'Default Organization',
+    createdAt: new Date().toISOString()
+  }
+}
+
 function checkRateLimit(userId: string): boolean {
   const now = Date.now()
   const limit = rateLimitMap.get(userId)
@@ -62,17 +81,12 @@ function checkRateLimit(userId: string): boolean {
   return true
 }
 
-export async function GET(request: NextRequest) {
+async function handleGET(request: NextRequest, session: AuthenticatedSession) {
   try {
-    const session = await getServerSession(request)
-
-    if (!session?.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
 
     // Generate CSRF token for this session
     const csrfToken = generateSecureToken()
-    const userId = session.user.id
+    const userId = session.userId
     csrfTokens.set(userId, { token: csrfToken, expiry: Date.now() + 3600000 }) // 1 hour expiry
 
     // Return integrations without sensitive data
@@ -103,25 +117,20 @@ export async function GET(request: NextRequest) {
   }
 }
 
-export async function POST(request: NextRequest) {
+async function handlePOST(request: NextRequest, session: AuthenticatedSession) {
   try {
-    const session = await getServerSession(request)
-
-    if (!session?.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
 
     // Check rate limit
-    if (!checkRateLimit(session.user.id)) {
+    if (!checkRateLimit(session.userId)) {
       return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429 })
     }
 
     // Verify CSRF token
     const csrfToken = request.headers.get('X-CSRF-Token')
-    const storedToken = csrfTokens.get(session.user.id)
+    const storedToken = csrfTokens.get(session.userId)
 
     if (!csrfToken || !storedToken || csrfToken !== storedToken.token || Date.now() > storedToken.expiry) {
-      auditLogger.logEvent(session.user, 'settings.update', {
+      auditLogger.logEvent(createUserFromSession(session), 'settings.update', {
         resourceType: 'integration',
         success: false,
         errorMessage: 'Invalid CSRF token',
@@ -143,7 +152,7 @@ export async function POST(request: NextRequest) {
     )
 
     if (hasCredentials) {
-      auditLogger.logEvent(session.user, 'integration.error', {
+      auditLogger.logEvent(createUserFromSession(session), 'integration.error', {
         resourceType: 'integration',
         success: false,
         errorMessage: 'Credentials rejected at generic endpoint',
@@ -176,7 +185,7 @@ export async function POST(request: NextRequest) {
       name: body.name,
       status: 'connected',
       lastSync: new Date().toISOString(),
-      userId: session.user.id,
+      userId: session.userId,
       hasCredentials: false, // Credentials must be set via dedicated endpoint
       syncInterval: config.syncInterval,
       enableNotifications: config.enableNotifications,
@@ -188,7 +197,7 @@ export async function POST(request: NextRequest) {
     })
 
     // Comprehensive audit logging
-    auditLogger.logEvent(session.user, 'settings.update', {
+    auditLogger.logEvent(createUserFromSession(session), 'settings.update', {
       resourceType: 'integration',
       resourceId: integrationId,
       success: true,
@@ -218,22 +227,17 @@ export async function POST(request: NextRequest) {
   }
 }
 
-export async function DELETE(request: NextRequest) {
+async function handleDELETE(request: NextRequest, session: AuthenticatedSession) {
   try {
-    const session = await getServerSession(request)
-
-    if (!session?.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
 
     // Check rate limit
-    if (!checkRateLimit(session.user.id)) {
+    if (!checkRateLimit(session.userId)) {
       return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429 })
     }
 
     // Verify CSRF token
     const csrfToken = request.headers.get('X-CSRF-Token')
-    const storedToken = csrfTokens.get(session.user.id)
+    const storedToken = csrfTokens.get(session.userId)
 
     if (!csrfToken || !storedToken || csrfToken !== storedToken.token) {
       return NextResponse.json({ error: 'Invalid CSRF token' }, { status: 403 })
@@ -248,7 +252,7 @@ export async function DELETE(request: NextRequest) {
 
     const integration = integrationConfigs.get(integrationId)
 
-    if (!integration || integration.userId !== session.user.id) {
+    if (!integration || integration.userId !== session.userId) {
       return NextResponse.json({ error: 'Integration not found' }, { status: 404 })
     }
 
@@ -256,7 +260,7 @@ export async function DELETE(request: NextRequest) {
     integrationConfigs.delete(integrationId)
 
     // Audit log
-    auditLogger.logEvent(session.user, 'settings.update', {
+    auditLogger.logEvent(createUserFromSession(session), 'settings.update', {
       resourceType: 'integration',
       resourceId: integrationId,
       success: true,
@@ -277,3 +281,10 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
+
+// Export wrapped handlers
+export const { GET, POST, DELETE } = protectWithCSRF({
+  GET: withAuth(handleGET),
+  POST: withAuth(handlePOST),
+  DELETE: withAuth(handleDELETE)
+})
