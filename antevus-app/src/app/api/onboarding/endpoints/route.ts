@@ -17,7 +17,9 @@ const endpointsSchema = z.object({
   ipWhitelist: z.array(z.string()).optional()
 })
 
-export async function POST(request: NextRequest) {
+import { protectWithCSRF } from '@/lib/security/csrf-middleware'
+
+async function handlePOST(request: NextRequest) {
   try {
     // Rate limiting
     const rateLimited = await withRateLimit(request, {
@@ -39,6 +41,16 @@ export async function POST(request: NextRequest) {
       })
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+
+    // ...rest of handler...
+
+    return NextResponse.json(response, { headers: { 'Cache-Control': 'no-store' } })
+  } catch (err) {
+    throw err
+  }
+}
+
+export const { POST } = protectWithCSRF({ POST: handlePOST })
     const userId = session.userId
 
     // Parse and validate input

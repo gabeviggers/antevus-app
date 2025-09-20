@@ -59,7 +59,7 @@ async function handlePost(request: NextRequest) {
     // CSRF Protection for state-changing operation
     // Skip CSRF validation in demo mode
     if (shouldEnforceCSRF()) {
-      const csrfValidation = validateCSRFToken(request, userId)
+      const csrfValidation = await validateCSRFToken(request, userId)
       if (!csrfValidation.valid) {
         await auditLogger.log({
           eventType: AuditEventType.AUTH_LOGIN_FAILURE,

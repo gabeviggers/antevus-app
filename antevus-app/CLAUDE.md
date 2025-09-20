@@ -8,7 +8,7 @@
 - **Lab Assistant Frontend**: Complete with UI, state management, and security ✅
 - **Lab Assistant Backend**: In development - LLM integration and real-time streaming 🚧
 - **Pricing & Packaging**: Comprehensive pricing model defined and documented ✅
-- **Security & Compliance**: Enterprise-grade implementation - HIPAA/SOC 2 compliant ✅
+- **Security & Compliance**: Enterprise-grade design — HIPAA-/SOC 2-aligned; formal audits pending ✅
 
 ### Critical Security Implementation (December 2024) ✅
 - **Complete removal of localStorage PII vulnerabilities** - Zero client-side sensitive data storage
@@ -206,10 +206,10 @@ GET  /lab-assistant/capabilities � Get available actions per role
 - **Input sanitization** with Zod schemas on all endpoints
 
 ### Compliance & Audit
-- **HIPAA Compliant** - No unencrypted PII in browser storage (164.312 compliant)
-- **SOC 2 Type II ready** - Comprehensive audit logging with severity levels
-- **21 CFR Part 11** - Complete audit trails with tamper-proof logging
-- **GDPR compliant** - Data encryption, right to deletion, audit trails
+- **HIPAA-aligned** — No PII in browser storage; encryption and access controls mapped to 164.312
+- **SOC 2 Type II readiness** — Controls and audit logging in place; certification pending audit window
+- **21 CFR Part 11-aligned** — Complete audit trails with tamper-evident logging; e-signature controls available
+- **GDPR-aligned** — Encryption, deletion workflows, and audit trails implemented
 - **Rate limiting** on all sensitive endpoints (configurable per route)
 - **Security event tracking** with automatic alerting for suspicious activity
 

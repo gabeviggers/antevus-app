@@ -105,25 +105,45 @@ export async function POST(request: NextRequest) {
       JSON.stringify(agentData)
     )
 
-    // Update onboarding progress
-    const progress = await prisma.onboardingProgress.findUnique({
+    // CSRF validation for state-changing operations
+    if (shouldEnforceCSRF()) {
+      const csrfValidation = validateCSRFToken(request as NextRequest, userId)
+      if (!csrfValidation.valid) {
+        await auditLogger.log({
+          eventType: AuditEventType.SECURITY_CSRF_DETECTED,
+          action: 'CSRF token validation failed',
+          userId,
+          metadata: { endpoint: `${(request as NextRequest).method} ${(request as NextRequest).url}`, reason: csrfValidation.error || 'Unknown' },
+          severity: AuditSeverity.WARNING
+        })
+        return NextResponse.json({ error: 'Invalid CSRF token' }, { status: 403 })
+      }
+    }
+
+    // Update onboarding progress (create if missing)
+    const existing = await prisma.onboardingProgress.findUnique({
       where: { userId },
       select: { completedSteps: true }
     })
 
-    const currentCompletedSteps = progress?.completedSteps || []
+    const currentCompletedSteps = existing?.completedSteps || []
     const updatedSteps = Array.from(new Set([...currentCompletedSteps, 'agent']))
 
-    const onboardingProgress = await prisma.onboardingProgress.update({
+    const onboardingProgress = await prisma.onboardingProgress.upsert({
       where: { userId },
-      data: {
+      update: {
         agentData: encryptedAgentData,
         completedSteps: updatedSteps,
         currentStep: 'endpoints',
         updatedAt: new Date()
+      },
+      create: {
+        userId,
+        agentData: encryptedAgentData,
+        completedSteps: updatedSteps,
+        currentStep: 'endpoints'
       }
     })
-
     // Audit log
     await auditLogger.log({
       eventType: AuditEventType.DATA_ACCESS_GRANTED,
