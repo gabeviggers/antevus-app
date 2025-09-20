@@ -42,15 +42,6 @@ async function handlePOST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // ...rest of handler...
-
-    return NextResponse.json(response, { headers: { 'Cache-Control': 'no-store' } })
-  } catch (err) {
-    throw err
-  }
-}
-
-export const { POST } = protectWithCSRF({ POST: handlePOST })
     const userId = session.userId
 
     // Parse and validate input
@@ -198,7 +189,9 @@ export const { POST } = protectWithCSRF({ POST: handlePOST })
   }
 }
 
-export async function GET(request: Request) {
+export const { POST } = protectWithCSRF({ POST: handlePOST })
+
+export async function GET(request: NextRequest) {
   try {
     // In demo mode during onboarding, use a temporary user ID
     let userId = 'onboarding-user'

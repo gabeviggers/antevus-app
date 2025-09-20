@@ -7,6 +7,7 @@ import { encryptionService } from '@/lib/security/encryption-service'
 import { prisma } from '@/lib/database'
 import { logger } from '@/lib/logger'
 import { isDemoMode } from '@/lib/config/demo-mode'
+import { protectWithCSRF } from '@/lib/security/csrf-middleware'
 
 const agentSchema = z.object({
   enableAutomation: z.boolean().default(false),
@@ -25,7 +26,7 @@ const agentSchema = z.object({
   })
 })
 
-export async function POST(request: NextRequest) {
+async function handlePOST(request: NextRequest) {
   try {
     // Rate limiting
     const rateLimited = await withRateLimit(request, {
@@ -105,20 +106,7 @@ export async function POST(request: NextRequest) {
       JSON.stringify(agentData)
     )
 
-    // CSRF validation for state-changing operations
-    if (shouldEnforceCSRF()) {
-      const csrfValidation = validateCSRFToken(request as NextRequest, userId)
-      if (!csrfValidation.valid) {
-        await auditLogger.log({
-          eventType: AuditEventType.SECURITY_CSRF_DETECTED,
-          action: 'CSRF token validation failed',
-          userId,
-          metadata: { endpoint: `${(request as NextRequest).method} ${(request as NextRequest).url}`, reason: csrfValidation.error || 'Unknown' },
-          severity: AuditSeverity.WARNING
-        })
-        return NextResponse.json({ error: 'Invalid CSRF token' }, { status: 403 })
-      }
-    }
+    // CSRF validation is now handled by the middleware
 
     // Update onboarding progress (create if missing)
     const existing = await prisma.onboardingProgress.findUnique({
@@ -195,6 +183,8 @@ export async function POST(request: NextRequest) {
     )
   }
 }
+
+export const { POST } = protectWithCSRF({ POST: handlePOST })
 
 export async function GET(request: Request) {
   try {
