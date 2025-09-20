@@ -157,8 +157,11 @@ export async function cachedFetch<T>(
  * @param _options - Cache options
  */
 export function useCachedAPI<T>(
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   _key: string,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   _fetcher: () => Promise<T>,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   _options?: {
     ttl?: number
     refreshInterval?: number

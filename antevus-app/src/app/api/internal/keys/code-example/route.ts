@@ -4,7 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from '@/lib/auth/session'
+import { withAuth, type AuthenticatedSession } from '@/lib/security/auth-wrapper'
 import { logger } from '@/lib/logger'
 
 // Force Node.js runtime
@@ -24,13 +24,9 @@ interface CodeExampleRequest {
   language: 'python' | 'javascript' | 'curl'
 }
 
-export async function POST(request: NextRequest) {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+async function handlePOST(request: NextRequest, _session: AuthenticatedSession) {
   try {
-    // Verify user authentication
-    const session = await getServerSession(request)
-    if (!session?.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
 
     const body: CodeExampleRequest = await request.json()
     const { endpoint, language } = body
@@ -55,6 +51,14 @@ export async function POST(request: NextRequest) {
     )
   }
 }
+
+// Export wrapped handlers (GET only for this endpoint)
+// Export with CSRF protection
+import { protectWithCSRF } from '@/lib/security/csrf-middleware'
+
+export const { POST } = protectWithCSRF({
+  POST: withAuth(handlePOST)
+})
 
 function generateSecureCodeExample(
   endpoint: CodeExampleRequest['endpoint'],

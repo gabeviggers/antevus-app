@@ -39,7 +39,7 @@ import { NotificationsDropdown } from '@/components/notifications/notifications-
 import { MetricCard } from '@/components/ui/metric-card'
 
 export default function RunHistoryPage() {
-  const { user, hasRole } = useSession()
+  const { user, hasRole: _hasRole } = useSession() // eslint-disable-line @typescript-eslint/no-unused-vars
   const [runs] = useState<RunData[]>([...mockRuns])
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<RunStatus | 'all'>('all')

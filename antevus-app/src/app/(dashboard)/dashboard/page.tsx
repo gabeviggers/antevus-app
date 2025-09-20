@@ -9,14 +9,186 @@ import { Button } from '@/components/ui/button'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { MetricCard } from '@/components/ui/metric-card'
 import { NotificationsDropdown } from '@/components/notifications/notifications-dropdown'
+import { logger } from '@/lib/logger'
+
+// Extended type for instruments with UI-specific fields
+type InstrumentWithUi = Instrument & {
+  isSynced?: boolean
+  syncedAt?: string | null
+  serialNumber?: string | null
+}
+
+// Type for synced instrument data from API
+interface SyncedInstrumentData {
+  id?: string
+  name: string
+  model?: string
+  serial?: string
+  status: string
+}
 
 export default function InstrumentsDashboard() {
-  const [instruments, setInstruments] = useState<Instrument[]>(mockInstruments)
+  const [instruments, setInstruments] = useState<InstrumentWithUi[]>([])
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<InstrumentStatus | 'all'>('all')
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
-  const [selectedInstrument, setSelectedInstrument] = useState<Instrument | null>(null)
+  const [selectedInstrument, setSelectedInstrument] = useState<InstrumentWithUi | null>(null)
   const [isRefreshing, setIsRefreshing] = useState(false)
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [syncedInstruments, setSyncedInstruments] = useState<SyncedInstrumentData[]>([])
+  const [teamInvites, setTeamInvites] = useState<{teamMembers?: unknown[]} | null>(null)
+  const [toastMessage, setToastMessage] = useState<{ title: string; description: string } | null>(null)
+
+  // Load instruments from onboarding on mount
+  useEffect(() => {
+    // Load user data from secure API
+    const loadDashboardData = async () => {
+      try {
+        const [profileRes, instrumentsRes, teamRes, progressRes] = await Promise.all([
+          fetch('/api/onboarding/profile'),
+          fetch('/api/onboarding/instruments'),
+          fetch('/api/onboarding/team'),
+          fetch('/api/onboarding/progress')
+        ])
+
+        const profile = await profileRes.json()
+        const instrumentsData = await instrumentsRes.json()
+        const teamData = await teamRes.json()
+        const progress = await progressRes.json()
+
+        const onboardingComplete = progress.onboardingComplete
+        const storedInstruments = instrumentsData.instruments || []
+        const storedInvites = teamData.teamMembers || []
+
+        // Load team invites if available
+        if (storedInvites.length > 0) {
+          setTeamInvites({ teamMembers: storedInvites })
+        }
+
+        // Check for demo mode via server API
+        if (process.env.NODE_ENV === 'development') {
+          try {
+            const demoResponse = await fetch('/api/auth/demo', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ email: profile.email })
+            })
+
+            if (demoResponse.ok) {
+              const demoData = await demoResponse.json()
+              if (demoData.isDemo) {
+                // Use full mock instruments for demo
+                setInstruments(mockInstruments)
+
+                // Show sync notification if just completed onboarding
+                if (onboardingComplete && storedInstruments.length > 0) {
+                  setSyncedInstruments(storedInstruments)
+
+                  // Show toast notification for synced instruments
+                  setToastMessage({
+                    title: 'Instruments synced',
+                    description: `Successfully connected ${storedInstruments.length} instruments`
+                  })
+                  setTimeout(() => setToastMessage(null), 3000)
+
+                  // Mark progress as displayed
+                  await fetch('/api/onboarding/progress', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ displayedInDashboard: true })
+                  })
+                }
+
+                // Show team invites toast if applicable
+                if (teamInvites && teamInvites.teamMembers && teamInvites.teamMembers.length > 0) {
+                  setTimeout(() => {
+                    setToastMessage({
+                      title: 'Team invitations sent',
+                      description: `${teamInvites.teamMembers!.length} invitations sent successfully`
+                    })
+                    setTimeout(() => setToastMessage(null), 3000)
+                  }, 500)
+                }
+                return
+              }
+            }
+          } catch (error) {
+            logger.error('Demo mode check failed', error)
+          }
+        }
+
+        if (onboardingComplete && storedInstruments.length > 0) {
+          try {
+            setSyncedInstruments(storedInstruments)
+
+            // Create proper Instrument objects with sync timestamp
+            const syncTime = new Date().toISOString()
+            const instrumentsWithSync: InstrumentWithUi[] = storedInstruments.map((inst: SyncedInstrumentData, index: number) => {
+              // Validate and default status to a safe value
+              const validStatuses: InstrumentStatus[] = ['running', 'idle', 'error', 'maintenance']
+              const status = (validStatuses.includes(inst.status as InstrumentStatus)
+                ? inst.status
+                : 'idle') as InstrumentStatus
+
+              return {
+                // Required Instrument fields
+                id: inst.id || `synced-${index}`,
+                name: inst.name,
+                manufacturer: inst.model?.split(' ')[0] || 'Unknown',
+                model: inst.model || 'Model Unknown',
+                type: 'Laboratory Instrument', // Default type when not provided
+                status,
+                location: 'Lab A - Bench 1',
+                lastRun: syncTime,
+                nextMaintenance: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString(),
+                usage: 0, // Default usage percentage
+                metrics: {
+                  totalRuns: 0,
+                  successRate: 100,
+                  avgRunTime: '0h 0m'
+                },
+                // UI-specific fields
+                serialNumber: inst.serial || `SN-${Date.now()}-${index}`,
+                syncedAt: syncTime,
+                isSynced: true
+              }
+            })
+
+            // Merge with default mock instruments for demo
+            const allInstruments = [...instrumentsWithSync, ...mockInstruments.slice(instrumentsWithSync.length)]
+            setInstruments(allInstruments)
+
+            // Show toast notification
+            setToastMessage({
+              title: 'Instruments synced',
+              description: `Successfully connected ${storedInstruments.length} instruments`
+            })
+            setTimeout(() => setToastMessage(null), 3000)
+
+            // Mark progress as displayed
+            await fetch('/api/onboarding/progress', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ displayedInDashboard: true })
+            })
+          } catch (error) {
+            logger.error('Failed to load onboarding instruments', error)
+            setInstruments(mockInstruments)
+          }
+        } else {
+          // No onboarding data, use mock instruments
+          setInstruments(mockInstruments)
+        }
+      } catch (error) {
+        logger.error('Failed to load dashboard data', error)
+        // Default to mock instruments on error
+        setInstruments(mockInstruments)
+      }
+    }
+
+    loadDashboardData()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Simulate real-time updates
   useEffect(() => {
@@ -78,6 +250,16 @@ export default function InstrumentsDashboard() {
 
   return (
     <div className="p-6">
+      {/* Toast Notification */}
+      {toastMessage && (
+        <div className="fixed bottom-4 right-4 z-50 animate-in slide-in-from-bottom-2 fade-in-0">
+          <div className="bg-background border border-border rounded-lg shadow-lg p-4 max-w-sm">
+            <p className="font-medium text-sm">{toastMessage.title}</p>
+            <p className="text-xs text-muted-foreground mt-1">{toastMessage.description}</p>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="mb-6">
         <div className="flex items-start justify-between">
@@ -195,11 +377,17 @@ export default function InstrumentsDashboard() {
       {viewMode === 'grid' ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {filteredInstruments.map((instrument) => (
-            <InstrumentCard
-              key={instrument.id}
-              instrument={instrument}
-              onClick={() => setSelectedInstrument(instrument)}
-            />
+            <div key={instrument.id} className="relative">
+              {instrument.isSynced && (
+                <div className="absolute -top-2 -right-2 z-10 bg-green-500 text-white text-xs px-2 py-1 rounded-full">
+                  ✓ Synced
+                </div>
+              )}
+              <InstrumentCard
+                instrument={instrument}
+                onClick={() => setSelectedInstrument(instrument)}
+              />
+            </div>
           ))}
         </div>
       ) : (

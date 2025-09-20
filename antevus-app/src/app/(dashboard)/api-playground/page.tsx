@@ -242,7 +242,7 @@ export default function APIPlayground() {
       } else {
         throw new Error(data.error || 'Failed to create key')
       }
-    } catch (error) {
+    } catch {
       toast({
         title: 'Error',
         description: 'Failed to create API key',
@@ -271,7 +271,7 @@ export default function APIPlayground() {
       } else {
         throw new Error('Failed to delete key')
       }
-    } catch (error) {
+    } catch {
       toast({
         title: 'Error',
         description: 'Failed to delete API key',
@@ -660,9 +660,9 @@ export default function APIPlayground() {
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => router.back()}
+            onClick={() => router.push('/dashboard')}
             className="mr-2"
-            aria-label="Go back"
+            aria-label="Go to dashboard"
           >
             <ArrowLeft className="h-5 w-5" />
           </Button>

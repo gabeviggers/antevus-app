@@ -18,6 +18,8 @@
 import { jwtVerify, createRemoteJWKSet, importSPKI, JWTPayload, errors as joseErrors } from 'jose'
 import { UserRole } from '@/lib/security/authorization'
 import { logger } from '@/lib/logger'
+import { isDemoMode } from '@/lib/config/demo-mode'
+import jwt from 'jsonwebtoken'
 
 interface AuthToken {
   value: string
@@ -39,16 +41,67 @@ interface VerifiedClaims {
 
 // Configuration from environment variables
 const config = {
-  // Demo mode - only enable for development/testing
-  isDemoMode: process.env.NEXT_PUBLIC_DEMO_MODE === 'true' || process.env.DEMO_MODE === 'true',
+  // Demo mode - use centralized function
+  isDemoMode: isDemoMode(),
 
-  // JWT Configuration (for production)
-  jwksUri: process.env.JWKS_URI || process.env.NEXT_PUBLIC_JWKS_URI,
-  jwtIssuer: process.env.JWT_ISSUER || process.env.NEXT_PUBLIC_JWT_ISSUER || 'https://auth.antevus.com',
-  jwtAudience: process.env.JWT_AUDIENCE || process.env.NEXT_PUBLIC_JWT_AUDIENCE || 'https://api.antevus.com',
+  // JWT Configuration (for production) - no NEXT_PUBLIC_* fallbacks
+  jwksUri: process.env.JWKS_URI,
+  jwtIssuer: process.env.JWT_ISSUER,
+  jwtAudience: process.env.JWT_AUDIENCE,
 
   // Alternative: Use a static public key instead of JWKS
-  jwtPublicKey: process.env.JWT_PUBLIC_KEY || process.env.NEXT_PUBLIC_JWT_PUBLIC_KEY,
+  jwtPublicKey: process.env.JWT_PUBLIC_KEY,
+}
+
+// Helper to get JWT secret with proper validation
+function getJwtSecret(): string {
+  const secret = process.env.JWT_SECRET
+  if (!secret) {
+    if (process.env.NODE_ENV === 'production') {
+      logger.error('CRITICAL: JWT_SECRET must be set in production')
+      throw new Error('JWT_SECRET must be set in production')
+    }
+    // Only allow fallback in development
+    return 'development-secret-change-in-production'
+  }
+  return secret
+}
+
+// Runtime validation function - only validates when actually used
+function validateProductionConfig(): void {
+  const isProd = process.env.NODE_ENV === 'production'
+
+  // Skip validation during build phase
+  if (typeof window === 'undefined' && process.env.NEXT_PHASE === 'phase-production-build') {
+    return
+  }
+
+  if (isProd && !config.isDemoMode) {
+    // Require JWT configuration in production
+    if (!config.jwksUri && !config.jwtPublicKey) {
+      logger.error('PRODUCTION ERROR: Either JWKS_URI or JWT_PUBLIC_KEY must be configured')
+      // Don't throw during build, but fail in runtime
+      if (process.env.NEXT_PHASE !== 'phase-production-build') {
+        throw new Error('PRODUCTION ERROR: Either JWKS_URI or JWT_PUBLIC_KEY must be configured')
+      }
+    }
+
+    // SECURITY: Require explicit issuer in production - no defaults
+    if (!config.jwtIssuer) {
+      logger.error('PRODUCTION ERROR: JWT_ISSUER must be configured - no defaults allowed')
+      if (process.env.NEXT_PHASE !== 'phase-production-build') {
+        throw new Error('PRODUCTION ERROR: JWT_ISSUER must be configured in production')
+      }
+    }
+
+    // SECURITY: Require explicit audience in production - no defaults
+    if (!config.jwtAudience) {
+      logger.error('PRODUCTION ERROR: JWT_AUDIENCE must be configured - no defaults allowed')
+      if (process.env.NEXT_PHASE !== 'phase-production-build') {
+        throw new Error('PRODUCTION ERROR: JWT_AUDIENCE must be configured in production')
+      }
+    }
+  }
 }
 
 class SecureAuthManager {
@@ -59,6 +112,11 @@ class SecureAuthManager {
   private jwks: ReturnType<typeof createRemoteJWKSet> | null = null
 
   constructor() {
+    // Validate configuration at runtime (not during build)
+    if (typeof window !== 'undefined' || process.env.NEXT_PHASE !== 'phase-production-build') {
+      validateProductionConfig()
+    }
+
     // Initialize JWKS if URI is provided
     if (config.jwksUri && !config.isDemoMode) {
       try {
@@ -208,36 +266,39 @@ class SecureAuthManager {
       return null
     }
 
-    // CRITICAL: Check for demo tokens FIRST before any other validation
-    // This ensures demo_token_* patterns work even if not stored
-    if (config.isDemoMode && token.startsWith('demo_token_')) {
-      // Parse demo token format: demo_token_<timestamp>_<userId>
-      const parts = token.split('_')
+    // Check for demo tokens with proper JWT validation
+    if (config.isDemoMode) {
+      try {
+        const jwtSecret = getJwtSecret()
 
-      // Format: demo_token_<timestamp>_<userId>
-      if (parts.length >= 4 && parts[0] === 'demo' && parts[1] === 'token') {
-        logger.info('Demo mode: Accepting demo_token with userId', { userId: parts[3] })
-        return {
-          sub: parts[3] || 'demo-user-001',
-          email: 'demo@antevus.com',
-          roles: [UserRole.SCIENTIST],
-          exp: Math.floor(Date.now() / 1000) + 3600, // 1 hour from now
-          iat: Math.floor(Date.now() / 1000),
-          iss: 'demo-issuer',
-          aud: 'demo-audience'
+        // Verify and decode the token with specific validations
+        // Restrict algorithms to prevent algorithm confusion attacks
+        const decoded = jwt.verify(token, jwtSecret, {
+          algorithms: ['HS256'],
+          issuer: 'antevus-demo',
+          audience: 'antevus-platform'
+        }) as jwt.JwtPayload
+
+        // Check if token is a valid demo token
+        if (decoded.isDemo) {
+          logger.info('Demo mode: Valid demo JWT token', { userId: decoded.userId })
+          return {
+            sub: decoded.userId || 'demo-user-001',
+            email: decoded.email || 'demo@antevus.com',
+            roles: decoded.roles || [UserRole.SCIENTIST],
+            exp: decoded.exp,
+            iat: decoded.iat,
+            iss: decoded.iss,
+            aud: decoded.aud
+          }
         }
-      }
-
-      // Simple format: demo_token_<timestamp> or just demo_token_*
-      logger.info('Demo mode: Accepting simple demo_token')
-      return {
-        sub: 'demo-user-001',
-        email: 'demo@antevus.com',
-        roles: ['scientist'],
-        exp: Math.floor(Date.now() / 1000) + 3600,
-        iat: Math.floor(Date.now() / 1000),
-        iss: 'demo-issuer',
-        aud: 'demo-audience'
+      } catch (error) {
+        // Not a valid demo JWT, continue to regular validation
+        if (error instanceof jwt.TokenExpiredError) {
+          logger.debug('Demo token expired')
+        } else if (error instanceof jwt.JsonWebTokenError) {
+          logger.debug('Invalid demo token - trying regular validation')
+        }
       }
     }
 
@@ -251,10 +312,12 @@ class SecureAuthManager {
 
       if (this.jwks) {
         // Verify using JWKS (recommended for production)
-        const result = await jwtVerify(token, this.jwks, {
-          issuer: config.jwtIssuer,
-          audience: config.jwtAudience,
-        })
+        // SECURITY: Only pass issuer/audience if configured - no defaults
+        const verifyOptions: Parameters<typeof jwtVerify>[2] = {}
+        if (config.jwtIssuer) verifyOptions.issuer = config.jwtIssuer
+        if (config.jwtAudience) verifyOptions.audience = config.jwtAudience
+
+        const result = await jwtVerify(token, this.jwks, verifyOptions)
         payload = result.payload
       } else if (config.jwtPublicKey) {
         // Verify using static public key with jose.importSPKI
@@ -268,11 +331,14 @@ class SecureAuthManager {
         // Import the public key using jose's importSPKI
         const publicKey = await importSPKI(pemKey, 'RS256')
 
-        const result = await jwtVerify(token, publicKey, {
-          issuer: config.jwtIssuer,
-          audience: config.jwtAudience,
+        // SECURITY: No fallback defaults - config must be explicit
+        const verifyOptions: Parameters<typeof jwtVerify>[2] = {
           algorithms: ['RS256']
-        })
+        }
+        if (config.jwtIssuer) verifyOptions.issuer = config.jwtIssuer
+        if (config.jwtAudience) verifyOptions.audience = config.jwtAudience
+
+        const result = await jwtVerify(token, publicKey, verifyOptions)
         payload = result.payload
       } else {
         // No verification configuration available
@@ -341,6 +407,127 @@ class SecureAuthManager {
       securityMode: 'memory-only', // Never localStorage/sessionStorage
       demoMode: config.isDemoMode
     }
+  }
+
+  /**
+   * Extract token from incoming request (server-side)
+   * Checks Authorization header and cookies
+   */
+  getTokenFromRequest(request: Request): string | null {
+    // First check Authorization header
+    const authHeader = request.headers.get('authorization')
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      return authHeader.slice(7)
+    }
+
+    // Then check cookies (for httpOnly cookie support)
+    const cookieHeader = request.headers.get('cookie')
+    if (cookieHeader) {
+      const cookies: Record<string, string> = {}
+
+      // Parse cookies properly, handling values with '=' in them
+      cookieHeader.split('; ').forEach(cookie => {
+        const eqIndex = cookie.indexOf('=')
+        if (eqIndex === -1) {
+          // Cookie without value (just a flag)
+          const name = cookie.trim()
+          if (name) {
+            cookies[decodeURIComponent(name)] = ''
+          }
+        } else {
+          // Split on first '=' only
+          const name = cookie.substring(0, eqIndex).trim()
+          const value = cookie.substring(eqIndex + 1)
+          if (name) {
+            cookies[decodeURIComponent(name)] = decodeURIComponent(value)
+          }
+        }
+      })
+
+      if (cookies['auth-token']) {
+        return cookies['auth-token']
+      }
+    }
+
+    return null
+  }
+
+  /**
+   * Validate token and return session info with expiration checking
+   * This combines token extraction and verification
+   */
+  async validateToken(token: string | null): Promise<{
+    userId: string
+    email?: string
+    roles?: string[]
+    expiresAt?: Date
+    isExpired?: boolean
+  } | null> {
+    if (!token) {
+      logger.debug('No token provided for validation')
+      return null
+    }
+
+    const claims = await this.verifyToken(token)
+    if (!claims) {
+      logger.debug('Token verification failed')
+      return null
+    }
+
+    // Check token expiration
+    const now = Math.floor(Date.now() / 1000) // Current time in seconds
+    const isExpired = claims.exp ? claims.exp < now : false
+
+    if (isExpired) {
+      logger.warn('Token has expired', {
+        exp: claims.exp,
+        now,
+        userId: claims.sub
+      })
+
+      // Still return the session info but mark as expired
+      // This allows the caller to decide how to handle expired sessions
+      return {
+        userId: claims.sub,
+        email: claims.email,
+        roles: claims.roles,
+        expiresAt: claims.exp ? new Date(claims.exp * 1000) : undefined,
+        isExpired: true
+      }
+    }
+
+    // Calculate time until expiration for monitoring
+    if (claims.exp) {
+      const expiresInSeconds = claims.exp - now
+      if (expiresInSeconds < 300) { // Less than 5 minutes
+        logger.info('Token expiring soon', {
+          expiresInSeconds,
+          userId: claims.sub
+        })
+      }
+    }
+
+    return {
+      userId: claims.sub,
+      email: claims.email,
+      roles: claims.roles,
+      expiresAt: claims.exp ? new Date(claims.exp * 1000) : undefined,
+      isExpired: false
+    }
+  }
+
+  /**
+   * Check if a session needs refresh based on expiration time
+   */
+  shouldRefreshToken(expiresAt: Date | undefined): boolean {
+    if (!expiresAt) return false
+
+    const now = Date.now()
+    const expiryTime = expiresAt.getTime()
+    const timeUntilExpiry = expiryTime - now
+    const refreshThreshold = 5 * 60 * 1000 // 5 minutes
+
+    return timeUntilExpiry <= refreshThreshold
   }
 }
 

@@ -45,6 +45,43 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const checkSession = async () => {
     setIsLoading(true)
     try {
+      // First check for demo session via cookies (no token required)
+      try {
+        const response = await fetch('/api/auth/demo', {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer demo-check`
+          }
+        })
+
+        if (response.ok) {
+          const data = await response.json()
+          if (data.valid && data.user) {
+            // Restore demo session
+            const demoUser: UserContext = {
+              id: data.user.id,
+              email: data.user.email,
+              roles: data.user.roles.includes('admin') ? [UserRole.ADMIN] :
+                     data.user.roles.includes('demo_user') ? [UserRole.VIEWER] : [],
+              attributes: {
+                name: data.user.name || 'Demo Admin',
+                department: 'Demo',
+                isDemo: true
+              },
+              sessionId: `demo-session-${Date.now()}`
+            }
+
+            setUser(demoUser)
+            authManager.setToken('demo-token') // Set a token so authManager knows we're authenticated
+            auditLogger.setUserId(demoUser.id)
+            logger.info('Demo session restored')
+            return
+          }
+        }
+      } catch {
+        logger.debug('Demo session check failed')
+      }
+
       // SECURITY: Sessions are memory-only for HIPAA compliance
       // Never store session data in browser storage (localStorage/sessionStorage)
       // For production, use httpOnly secure cookies
@@ -68,37 +105,53 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const login = async (email: string, password: string) => {
     setIsLoading(true)
     try {
-      // Demo mode ONLY in development environment - NEVER in production
-      if (process.env.NODE_ENV === 'development' && email === 'admin@antevus.com') {
-        const demoUser: UserContext = {
-          id: 'demo-user-id',
-          email: 'admin@antevus.com',
-          roles: ['admin' as UserRole],
-          attributes: {
-            name: 'Demo Admin',
-            department: 'Demo Lab'
-          },
-          sessionId: `demo-session-${Date.now()}`
-        }
+      // Check if demo mode is available
+      const demoCheck = await fetch('/api/auth/demo')
+      const demoStatus = await demoCheck.json()
 
-        setUser(demoUser)
-        authManager.setToken('demo-token', 7 * 24 * 60 * 60 * 1000)
-        auditLogger.setUserId(demoUser.id)
-
-        auditLogger.log({
-          eventType: AuditEventType.AUTH_LOGIN_SUCCESS,
-          action: 'Demo user logged in (dev only)',
-          userId: demoUser.id,
-          metadata: {
-            email: demoUser.email,
-            roles: demoUser.roles,
-            isDemo: true,
-            environment: 'development'
-          }
+      if (demoStatus.demoAvailable) {
+        // Request demo authentication from server
+        const demoAuth = await fetch('/api/auth/demo', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            demoKey: process.env.NEXT_PUBLIC_DEMO_KEY // Optional extra security
+          })
         })
 
-        logger.info('Demo login successful (dev only)', { email })
-        return
+        if (demoAuth.ok) {
+          const demoData = await demoAuth.json()
+
+          const demoUser: UserContext = {
+            id: demoData.user.id,
+            email: demoData.user.email,
+            roles: demoData.user.roles.includes('demo_user') ? [UserRole.VIEWER] : [],
+            attributes: {
+              name: 'Demo User',
+              department: 'Demo',
+              isDemo: true
+            },
+            sessionId: demoData.token
+          }
+
+          setUser(demoUser)
+          authManager.setToken(demoData.token, new Date(demoData.expiresAt).getTime() - Date.now())
+          auditLogger.setUserId(demoUser.id)
+
+          auditLogger.log({
+            eventType: AuditEventType.AUTH_LOGIN_SUCCESS,
+            action: 'Demo user authenticated via server',
+            userId: demoUser.id,
+            metadata: {
+              email: demoUser.email,
+              roles: demoUser.roles,
+              isDemo: true
+            }
+          })
+
+          logger.info('Demo authentication successful', { userId: demoUser.id })
+          return
+        }
       }
 
       // Call the real API endpoint

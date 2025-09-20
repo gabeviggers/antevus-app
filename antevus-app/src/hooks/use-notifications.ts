@@ -17,11 +17,11 @@ export function useNotifications() {
     if (store.preferences.desktopEnabled && store.permission === 'default') {
       store.requestPermission()
     }
-  }, [store.preferences.desktopEnabled, store.permission, store.requestPermission])
+  }, [store.preferences.desktopEnabled, store.permission, store.requestPermission]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const notify = useCallback((options: NotificationOptions) => {
     return store.notify(options)
-  }, [store.notify])
+  }, [store.notify]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return {
     notify,

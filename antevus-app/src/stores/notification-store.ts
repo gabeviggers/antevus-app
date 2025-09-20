@@ -13,6 +13,7 @@ import {
   isInDNDWindow,
   requestDesktopPermission
 } from '@/lib/notifications/desktop'
+import { logger } from '@/lib/logger'
 
 // Create rate limiter
 const rateLimiter = createRateLimiter(
@@ -42,7 +43,7 @@ export const useNotificationStore = create<NotificationStore>()(
         // Check rate limiting
         if (!rateLimiter(options.source)) {
           if (process.env.NODE_ENV !== 'production') {
-            console.warn('Notification rate limit exceeded', options.source)
+            logger.warn('Notification rate limit exceeded', { source: options.source })
           }
           return id
         }

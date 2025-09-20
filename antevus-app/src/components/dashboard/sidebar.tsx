@@ -59,7 +59,19 @@ export function Sidebar({ sidebarOpen, setSidebarOpen, collapsed, setCollapsed }
 
   // Determine if user has access to Ask Antevus (everyone except VIEWER and GUEST)
   const hasAssistantAccess = useMemo(() => {
+    // For demo mode or authenticated users with proper roles
     if (!user?.roles) return false
+
+    // Check if user has admin or manager roles
+    const hasAdminAccess = user.roles.includes(UserRole.ADMIN) ||
+                           user.roles.includes(UserRole.SUPER_ADMIN) ||
+                           user.roles.includes(UserRole.LAB_DIRECTOR)
+
+    if (hasAdminAccess) {
+      return true
+    }
+
+    // Check if user is NOT a viewer or guest
     const restrictedRoles = [UserRole.VIEWER, UserRole.GUEST]
     return !user.roles.some(role => restrictedRoles.includes(role))
   }, [user?.roles])

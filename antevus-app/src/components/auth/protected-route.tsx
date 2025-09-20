@@ -13,8 +13,21 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   const router = useRouter()
 
   useEffect(() => {
+    // Only check authentication after loading is complete
     if (!isLoading && !isAuthenticated) {
-      router.push('/')
+      // Use a cancellable timeout to allow for session establishment
+      const timeoutId = setTimeout(() => {
+        // Check the current authentication state
+        if (!isAuthenticated) {
+          // Use replace for immediate redirect without history entry
+          router.replace('/')
+        }
+      }, 100) // Small grace period for session to establish
+
+      // Cleanup function to cancel timeout if component unmounts or deps change
+      return () => {
+        clearTimeout(timeoutId)
+      }
     }
   }, [isAuthenticated, isLoading, router])
 
@@ -26,6 +39,7 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
     )
   }
 
+  // Allow access only if authenticated
   if (!isAuthenticated) {
     return null
   }

@@ -114,23 +114,58 @@ export async function POST(request: NextRequest) {
 
     const { email, password } = validation.data
 
-    // Demo mode ONLY in development environment
-    if (process.env.NODE_ENV === 'development' && email === 'admin@antevus.com') {
-      logger.info('Demo signup initiated (dev only)', { email })
+    // Check if demo mode is available (controlled by server environment)
+    const demoModeEnabled = process.env.DEMO_MODE === 'true'
+    const demoAllowedEmail = process.env.DEMO_ALLOWED_EMAIL // Server-side config
 
-      // Return success response for demo mode
-      return NextResponse.json(
-        {
-          message: 'Demo account ready! Proceed to verification.',
-          requiresVerification: true,
-          userId: 'demo-user-id',
-          isDemo: true
-        },
-        { status: 201 }
-      )
+    if (demoModeEnabled && demoAllowedEmail && email === demoAllowedEmail) {
+      logger.info('Demo signup initiated', {
+        email,
+        environment: process.env.NODE_ENV
+      })
+
+      // For demo account, check if it exists and either create or return success
+      const existingDemoUser = await prisma.user.findUnique({
+        where: { email: demoAllowedEmail }
+      })
+
+      if (existingDemoUser) {
+        // Demo user exists, just return success - demos don't need verification
+        return NextResponse.json(
+          {
+            message: 'Demo account ready!',
+            requiresVerification: false,
+            userId: existingDemoUser.id,
+            isDemo: true
+          },
+          { status: 201 }
+        )
+      } else {
+        // Create the demo user
+        const hashedPassword = await bcrypt.hash(password, 12)
+        const demoUser = await prisma.user.create({
+          data: {
+            email: demoAllowedEmail,
+            passwordHash: hashedPassword,
+            name: 'Demo Admin',
+            role: 'admin'
+            // Note: Demo account doesn't need email verification
+          }
+        })
+
+        return NextResponse.json(
+          {
+            message: 'Demo account created!',
+            requiresVerification: false,
+            userId: demoUser.id,
+            isDemo: true
+          },
+          { status: 201 }
+        )
+      }
     }
 
-    // Check if email already exists in database
+    // Check if email already exists in database (non-demo accounts)
     const existingUser = await prisma.user.findUnique({
       where: { email }
     })

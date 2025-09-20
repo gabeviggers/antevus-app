@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
-import { authManager } from '@/lib/security/auth-manager'
+import { withAuth, type AuthenticatedSession } from '@/lib/security/auth-wrapper'
+import { protectWithCSRF } from '@/lib/security/csrf-middleware'
 import { authorizationService, Resource, Action, UserRole } from '@/lib/security/authorization'
 import { encryptionService } from '@/lib/security/encryption'
 import { auditLogger, AuditEventType, AuditSeverity } from '@/lib/security/audit-logger'
@@ -67,7 +68,7 @@ function createErrorResponse(message: string, status: number): NextResponse {
  * - Comprehensive audit logging
  * - Input validation and sanitization
  */
-export async function POST(request: NextRequest) {
+async function handlePOST(request: NextRequest, session: AuthenticatedSession) {
   try {
     // SECURITY: Apply rate limiting (10 requests/minute for archiving)
     const rateLimited = await withRateLimit(request, {
@@ -90,42 +91,11 @@ export async function POST(request: NextRequest) {
       return createErrorResponse('Request entity too large - max 5MB', 413)
     }
 
-    // SECURITY: Verify authentication
-    const authHeader = request.headers.get('authorization')
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      auditLogger.log({
-        eventType: AuditEventType.DATA_ACCESS_DENIED,
-        action: 'Unauthorized archive attempt',
-        severity: AuditSeverity.WARNING,
-        outcome: 'FAILURE',
-        metadata: {
-          reason: 'Missing or invalid authorization header'
-        }
-      })
-      return createErrorResponse('Authentication required', 401)
-    }
-
-    // Extract and verify token
-    const token = authHeader.substring(7)
-    const claims = await authManager.verifyToken(token)
-    if (!claims?.sub) {
-      auditLogger.log({
-        eventType: AuditEventType.DATA_ACCESS_DENIED,
-        action: 'Invalid token in archive request',
-        severity: AuditSeverity.WARNING,
-        outcome: 'FAILURE',
-        metadata: {
-          tokenLength: token?.length
-        }
-      })
-      return createErrorResponse('Invalid or expired token', 401)
-    }
-
     // SECURITY: Check RBAC permissions
     const userContext = {
-      id: claims.sub,
-      email: claims.email || '',
-      roles: (claims.roles || []) as UserRole[]
+      id: session.userId,
+      email: session.email || '',
+      roles: (session.roles || []) as UserRole[]
     }
 
     // Check if user has permission to archive threads (using DELETE action on CHAT_HISTORY)
@@ -134,7 +104,7 @@ export async function POST(request: NextRequest) {
       resource: Resource.CHAT_HISTORY,
       action: Action.DELETE,
       context: {
-        userId: claims.sub,
+        userId: session.userId,
         operation: 'archive'
       }
     })
@@ -186,7 +156,7 @@ export async function POST(request: NextRequest) {
         const encrypted = await encryptionService.encrypt(threadData)
         return {
           id: thread.id,
-          userId: userContext.id,
+          userId: session.userId,
           encryptedData: encrypted.encrypted,
           iv: encrypted.iv,
           authTag: encrypted.tag,
@@ -204,7 +174,7 @@ export async function POST(request: NextRequest) {
     auditLogger.log({
       eventType: AuditEventType.DATA_EXPORT,
       action: 'Chat threads archived',
-      userId: userContext.id,
+      userId: session.userId,
       severity: AuditSeverity.INFO,
       outcome: 'SUCCESS',
       metadata: {
@@ -216,7 +186,7 @@ export async function POST(request: NextRequest) {
     })
 
     logger.info('Chat threads archived successfully', {
-      userId: userContext.id,
+      userId: session.userId,
       threadCount: storedCount,
       reason: archiveReason
     })
@@ -270,7 +240,7 @@ export async function POST(request: NextRequest) {
  * GET /api/chat/archive
  * Retrieve archived threads (with permission checks)
  */
-export async function GET(request: NextRequest) {
+async function handleGET(request: NextRequest, session: AuthenticatedSession) {
   try {
     // SECURITY: Apply rate limiting
     const rateLimited = await withRateLimit(request, {
@@ -283,23 +253,11 @@ export async function GET(request: NextRequest) {
       return addSecureHeaders(rateLimited)
     }
 
-    // SECURITY: Verify authentication
-    const authHeader = request.headers.get('authorization')
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return createErrorResponse('Authentication required', 401)
-    }
-
-    const token = authHeader.substring(7)
-    const claims = await authManager.verifyToken(token)
-    if (!claims?.sub) {
-      return createErrorResponse('Invalid or expired token', 401)
-    }
-
     // SECURITY: Check permissions
     const userContext = {
-      id: claims.sub,
-      email: claims.email || '',
-      roles: (claims.roles || []) as UserRole[]
+      id: session.userId,
+      email: session.email || '',
+      roles: (session.roles || []) as UserRole[]
     }
 
     const authResult = await authorizationService.can({
@@ -307,7 +265,7 @@ export async function GET(request: NextRequest) {
       resource: Resource.CHAT_HISTORY,
       action: Action.VIEW,
       context: {
-        userId: claims.sub,
+        userId: session.userId,
         operation: 'read_archive'
       }
     })
@@ -324,7 +282,7 @@ export async function GET(request: NextRequest) {
     auditLogger.log({
       eventType: AuditEventType.DATA_ACCESS_GRANTED,
       action: 'Archived threads accessed',
-      userId: userContext.id,
+      userId: session.userId,
       severity: AuditSeverity.INFO,
       outcome: 'SUCCESS',
       metadata: {
@@ -366,6 +324,11 @@ export async function DELETE() {
 export async function HEAD() {
   return createErrorResponse('Method not allowed', 405)
 }
+
+export const { GET, POST } = protectWithCSRF({
+  GET: withAuth(handleGET),
+  POST: withAuth(handlePOST)
+})
 
 export async function OPTIONS() {
   const response = new NextResponse(null, { status: 204 })

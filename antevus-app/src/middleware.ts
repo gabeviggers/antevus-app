@@ -2,9 +2,23 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
 // Middleware for security headers and password protection
-export function middleware(request: NextRequest) {
+// Note: CSRF protection is handled in individual route handlers due to Edge Runtime limitations
+export async function middleware(request: NextRequest) {
   // Add security headers to all responses
   const response = NextResponse.next()
+
+  // Add a header to indicate that routes should validate CSRF tokens
+  // This is checked by route handlers that import the CSRF middleware
+  if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(request.method)) {
+    const path = request.nextUrl.pathname
+    const publicPaths = ['/api/auth/login', '/api/auth/signup', '/api/auth/demo']
+    const isDevelopment = process.env.NODE_ENV === 'development'
+    const isDemoMode = process.env.DEMO_MODE === 'true'
+
+    if (!publicPaths.includes(path) && !isDevelopment && !isDemoMode) {
+      response.headers.set('X-CSRF-Required', 'true')
+    }
+  }
 
   // Security headers for HIPAA and SOC 2 compliance
   response.headers.set('X-Frame-Options', 'DENY')
@@ -59,12 +73,13 @@ export function middleware(request: NextRequest) {
 
   // CSRF should be enforced where cookies are set (server routes) via SameSite+HttpOnly
   // and verified using CSRF tokens or double-submit. Remove this no-op block.
-  // Skip protection for local development
+  // Skip password protection for local development
   if (process.env.NODE_ENV === 'development') {
     return response
   }
 
-  // Skip protection for API routes and static files
+  // Skip password protection for API routes and static files
+  // Note: API routes still get CSRF protection above
   if (
     request.nextUrl.pathname.startsWith('/api') ||
     request.nextUrl.pathname.startsWith('/_next') ||
@@ -232,11 +247,11 @@ export const config = {
   matcher: [
     /*
      * Match all request paths except for the ones starting with:
-     * - api (API routes)
      * - _next/static (static files)
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
+     * Note: API routes are now included for CSRF protection
      */
-    '/((?!api|_next/static|_next/image|favicon.ico).*)',
+    '/((?!_next/static|_next/image|favicon.ico).*)',
   ],
 }

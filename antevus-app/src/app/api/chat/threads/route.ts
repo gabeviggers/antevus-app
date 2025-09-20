@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { authManager } from '@/lib/security/auth-manager'
+import { withAuth, type AuthenticatedSession } from '@/lib/security/auth-wrapper'
+import { protectWithCSRF } from '@/lib/security/csrf-middleware'
 import { auditLogger, AuditEventType } from '@/lib/security/audit-logger'
 import { dataClassifier } from '@/lib/security/data-classification'
 import { withRateLimit, RateLimitConfigs, addRateLimitHeaders, checkRateLimit } from '@/lib/api/rate-limit-helper'
 import { logger } from '@/lib/logger'
-import crypto from 'crypto'
+import * as crypto from 'crypto'
 
 /**
  * Production-grade Chat Storage API
@@ -28,7 +29,30 @@ const chatStorage = new Map<string, {
 }>()
 
 // Encryption key (in production, use KMS or Vault)
-const ENCRYPTION_KEY = process.env.CHAT_ENCRYPTION_KEY || 'demo-key-32-chars-xxxxxxxxxxxxxxx'
+const ENCRYPTION_KEY = process.env.CHAT_ENCRYPTION_KEY
+
+// Function to get encryption key with runtime validation
+function getActualEncryptionKey(): string {
+  const isBuildPhase = process.env.NEXT_PHASE === 'phase-production-build'
+  const isProd = process.env.NODE_ENV === 'production'
+
+  // During build phase, return a dummy key
+  if (isBuildPhase) {
+    return 'build-phase-dummy-key-32-chars-xx'
+  }
+
+  // In production runtime, key is required
+  if (!ENCRYPTION_KEY && isProd) {
+    logger.error('CHAT_ENCRYPTION_KEY is required in production')
+    throw new Error('CHAT_ENCRYPTION_KEY is required in production')
+  }
+
+  // Use actual key or development fallback
+  return ENCRYPTION_KEY || 'demo-key-32-chars-xxxxxxxxxxxxxxx'
+}
+
+// Get the actual key (will be validated at runtime)
+const ACTUAL_ENCRYPTION_KEY = getActualEncryptionKey()
 
 // Encrypt data
 function encrypt(text: string): string {
@@ -36,7 +60,7 @@ function encrypt(text: string): string {
     const algorithm = 'aes-256-gcm'
     const iv = crypto.randomBytes(16)
     const salt = crypto.randomBytes(64)
-    const key = crypto.pbkdf2Sync(ENCRYPTION_KEY, salt, 10000, 32, 'sha256')
+    const key = crypto.pbkdf2Sync(ACTUAL_ENCRYPTION_KEY, salt, 10000, 32, 'sha256')
 
     const cipher = crypto.createCipheriv(algorithm, key, iv)
 
@@ -48,7 +72,7 @@ function encrypt(text: string): string {
     const authTag = cipher.getAuthTag()
 
     return Buffer.concat([salt, iv, authTag, encrypted]).toString('base64')
-  } catch (error) {
+  } catch {
     throw new Error('Encryption failed')
   }
 }
@@ -64,35 +88,32 @@ function decrypt(encryptedData: string): string {
     const authTag = data.subarray(80, 96)
     const encrypted = data.subarray(96)
 
-    const key = crypto.pbkdf2Sync(ENCRYPTION_KEY, salt, 10000, 32, 'sha256')
+    const key = crypto.pbkdf2Sync(ACTUAL_ENCRYPTION_KEY, salt, 10000, 32, 'sha256')
 
     const decipher = crypto.createDecipheriv(algorithm, key, iv)
     decipher.setAuthTag(authTag)
 
-    return decipher.update(encrypted) + decipher.final('utf8')
+    // Properly handle Buffer outputs from decipher
+    const decryptedBuffer = Buffer.concat([
+      decipher.update(encrypted),
+      decipher.final()
+    ])
+
+    return decryptedBuffer.toString('utf8')
   } catch (error) {
-    throw new Error('Decryption failed')
+    throw new Error(`Decryption failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
   }
 }
 
 // GET /api/chat/threads - Retrieve user's chat threads
-export async function GET(request: NextRequest) {
+async function handleGET(request: NextRequest, session: AuthenticatedSession) {
   // Apply rate limiting
   const rateLimited = await withRateLimit(request, RateLimitConfigs.chatThreads)
   if (rateLimited) return rateLimited
 
-  let userId: string | undefined
+  const userId = session.userId
 
   try {
-    // Extract user from auth token
-    const authHeader = request.headers.get('authorization')
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    // In production, validate JWT and extract user ID
-    // For demo, simulate user extraction
-    userId = 'demo-user-' + authHeader.slice(7, 15)
 
     // Retrieve encrypted threads
     const storedData = chatStorage.get(userId)
@@ -151,23 +172,15 @@ export async function GET(request: NextRequest) {
 }
 
 // POST /api/chat/threads - Save user's chat threads
-export async function POST(request: NextRequest) {
+async function handlePOST(request: NextRequest, session: AuthenticatedSession) {
   // Apply rate limiting
   const rateLimited = await withRateLimit(request, RateLimitConfigs.chatThreads)
   if (rateLimited) return rateLimited
 
-  let userId: string | undefined
+  const userId = session.userId
   let threads: unknown[] = []
 
   try {
-    // Extract user from auth token
-    const authHeader = request.headers.get('authorization')
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    // In production, validate JWT and extract user ID
-    userId = 'demo-user-' + authHeader.slice(7, 15)
 
     const body = await request.json()
     threads = body.threads
@@ -246,21 +259,14 @@ export async function POST(request: NextRequest) {
 }
 
 // DELETE /api/chat/threads - Delete user's chat threads
-export async function DELETE(request: NextRequest) {
+async function handleDELETE(request: NextRequest, session: AuthenticatedSession) {
   // Apply rate limiting
   const rateLimited = await withRateLimit(request, RateLimitConfigs.chatThreads)
   if (rateLimited) return rateLimited
 
-  let userId: string | undefined
+  const userId = session.userId
 
   try {
-    // Extract user from auth token
-    const authHeader = request.headers.get('authorization')
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    userId = 'demo-user-' + authHeader.slice(7, 15)
 
     // Delete user's data
     const deleted = chatStorage.delete(userId)
@@ -293,3 +299,10 @@ export async function DELETE(request: NextRequest) {
     )
   }
 }
+
+// Export protected handlers
+export const { GET, POST, DELETE } = protectWithCSRF({
+  GET: withAuth(handleGET),
+  POST: withAuth(handlePOST),
+  DELETE: withAuth(handleDELETE)
+})

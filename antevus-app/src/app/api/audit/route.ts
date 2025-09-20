@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { authManager } from '@/lib/security/auth-manager'
 import { logger } from '@/lib/logger'
 import { withRateLimit, checkRateLimit, addRateLimitHeaders } from '@/lib/api/rate-limit-helper'
+import { protectWithCSRF } from '@/lib/security/csrf-middleware'
 
 // Constants for security limits
 const MAX_REQUEST_SIZE = 1024 * 1024 // 1MB max request size
@@ -90,7 +91,7 @@ const AuditLogBatchSchema = z.object({
   clientTime: z.string()
 })
 
-export async function POST(request: NextRequest) {
+async function handlePOST(request: NextRequest) {
   try {
     // SECURITY: Apply rate limiting for authenticated requests
     // This is reasonable for audit logs while preventing abuse
@@ -167,7 +168,7 @@ export async function POST(request: NextRequest) {
       return createErrorResponse('Invalid audit log format', 400)
     }
 
-    const { logs, clientTime } = validation.data
+    const { logs, clientTime: _clientTime } = validation.data // eslint-disable-line @typescript-eslint/no-unused-vars
 
     // SECURITY: Limit number of logs per request
     if (logs.length > MAX_LOGS_PER_REQUEST) {
@@ -278,15 +279,15 @@ export async function GET() {
   return createErrorResponse('Method not allowed - only POST is supported', 405, ['POST'])
 }
 
-export async function PUT() {
+async function handlePUT() {
   return createErrorResponse('Method not allowed - only POST is supported', 405, ['POST'])
 }
 
-export async function PATCH() {
+async function handlePATCH() {
   return createErrorResponse('Method not allowed - only POST is supported', 405, ['POST'])
 }
 
-export async function DELETE() {
+async function handleDELETE() {
   return createErrorResponse('Method not allowed - only POST is supported', 405, ['POST'])
 }
 
@@ -303,3 +304,11 @@ export async function OPTIONS() {
   response.headers.set('Access-Control-Max-Age', '86400')
   return addSecureHeaders(response)
 }
+
+// Export with CSRF protection for mutating methods
+export const { POST, PUT, PATCH, DELETE } = protectWithCSRF({
+  POST: handlePOST,
+  PUT: handlePUT,
+  PATCH: handlePATCH,
+  DELETE: handleDELETE
+})

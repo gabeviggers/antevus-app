@@ -67,6 +67,35 @@ function AssistantPageContent() {
   // Check authorization when user changes
   useEffect(() => {
     const checkAuthorization = async () => {
+      // Check for demo mode admin first via secure API
+      if (process.env.NODE_ENV === 'development') {
+        try {
+          const profileResponse = await fetch('/api/onboarding/profile')
+          if (profileResponse.ok) {
+            const profile = await profileResponse.json()
+
+            // Use the demo authentication API to check demo status
+            const demoResponse = await fetch('/api/auth/demo', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ email: profile.email })
+            })
+
+            if (demoResponse.ok) {
+              const demoData = await demoResponse.json()
+              if (demoData.isDemo) {
+                // Demo user has full access
+                setHasPermission(true)
+                setAuthError(null)
+                return
+              }
+            }
+          }
+        } catch {
+          logger.debug('Demo check failed, continuing with regular auth')
+        }
+      }
+
       if (!user) {
         setHasPermission(false)
         setAuthError({ message: 'You must be logged in to use the Lab Assistant' })
@@ -407,7 +436,7 @@ How can I assist you with your lab operations today?`
             })
         }, 100) // Small delay for state update
       }, 500) // Show thinking for 500ms
-    } catch (error) {
+    } catch {
       // Error handled internally
       setIsLoading(false)
     }

@@ -137,7 +137,8 @@ class SendGridService {
       const categories = options.categories || [EMAIL_CATEGORIES.TRANSACTIONAL]
 
       // Prepare email data
-      const emailData = {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const _emailData = {
         personalizations: [{
           to: Array.isArray(options.to) ? options.to : [options.to],
           dynamic_template_data: options.dynamicTemplateData
