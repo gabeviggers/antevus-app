@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { randomBytes, pbkdf2Sync, createCipheriv, createDecipheriv } from 'crypto'
 import { z } from 'zod'
 import { withAuth, type AuthenticatedSession } from '@/lib/security/auth-wrapper'
+import { UserRole } from '@/lib/security/authorization'
 import { logger } from '@/lib/logger'
 // Simple audit logger and CSRF fallbacks
 interface AuditUser {
@@ -23,7 +24,6 @@ const validateCSRFToken = (_req: unknown, _userId: string, _user: unknown) => ({
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const createCSRFTokenForUser = (_userId: string) => 'demo-csrf-token'
 import { type User } from '@/lib/auth/types'
-import { UserRole } from '@/lib/security/authorization'
 
 // Credentials API must run on Node.js and never be cached
 export const runtime = 'nodejs'
@@ -202,6 +202,23 @@ async function handlePOST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // RBAC: Only admins or super admins can set credentials
+    const userRoles = session.roles || []
+    const hasPrivilegedRole = userRoles.some(role =>
+      [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.LAB_MANAGER].includes(role as UserRole)
+    )
+
+    if (!hasPrivilegedRole) {
+      logger.warn('Unauthorized credential modification attempt', {
+        userId: session.userId,
+        roles: userRoles,
+        action: 'POST',
+        integrationId: (await params).id
+      })
+      return NextResponse.json({
+        error: 'Forbidden: Insufficient privileges to manage credentials'
+      }, { status: 403 })
+    }
 
     // Validate CSRF token for state-changing operations
     const csrfValidation = await validateCSRFToken(request, session.userId, createUserFromSession(session))
@@ -347,6 +364,23 @@ async function handleDELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // RBAC: Only admins or super admins can delete credentials
+    const userRoles = session.roles || []
+    const hasPrivilegedRole = userRoles.some(role =>
+      [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.LAB_MANAGER].includes(role as UserRole)
+    )
+
+    if (!hasPrivilegedRole) {
+      logger.warn('Unauthorized credential deletion attempt', {
+        userId: session.userId,
+        roles: userRoles,
+        action: 'DELETE',
+        integrationId: (await params).id
+      })
+      return NextResponse.json({
+        error: 'Forbidden: Insufficient privileges to delete credentials'
+      }, { status: 403 })
+    }
 
     // Validate CSRF token for state-changing operations
     const csrfValidation = await validateCSRFToken(request, session.userId, createUserFromSession(session))
