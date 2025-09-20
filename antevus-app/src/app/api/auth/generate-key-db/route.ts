@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
     const csrfValidation = validateCSRFToken(request, session.userId)
     if (!csrfValidation.valid) {
       await auditLogger.logEvent(
-        { id: session.userId, email: session.email, role: session.role, organizationId: 'unknown' },
+        { id: session.userId, email: session.email, name: '', role: session.role as UserRole, organization: 'unknown', createdAt: new Date().toISOString() },
         'api.key.generate.failed',
         {
           resourceType: 'api_key',
@@ -77,7 +77,7 @@ export async function POST(request: NextRequest) {
     // Check user permissions (must be Admin or Scientist)
     if (session.role !== UserRole.ADMIN && session.role !== UserRole.SCIENTIST) {
       await auditLogger.logEvent(
-        { id: session.userId, email: session.email, role: session.role, organizationId: 'unknown' },
+        { id: session.userId, email: session.email, name: '', role: session.role as UserRole, organization: 'unknown', createdAt: new Date().toISOString() },
         'api.key.generate.failed',
         {
           resourceType: 'api_key',
@@ -103,7 +103,7 @@ export async function POST(request: NextRequest) {
 
     if (!validation.success) {
       await auditLogger.logEvent(
-        { id: session.userId, email: session.email, role: session.role, organizationId: 'unknown' },
+        { id: session.userId, email: session.email, name: '', role: session.role as UserRole, organization: 'unknown', createdAt: new Date().toISOString() },
         'api.key.generate.failed',
         {
           resourceType: 'api_key',
@@ -112,13 +112,13 @@ export async function POST(request: NextRequest) {
           errorMessage: 'Validation failed',
           metadata: {
             reason: 'Validation failed',
-            errors: validation.error.flatten()
+            errors: validation.error.issues
           }
         }
       )
 
       return NextResponse.json(
-        { error: 'Invalid request', details: validation.error.flatten() },
+        { error: 'Invalid request', details: validation.error.issues },
         { status: 400 }
       )
     }
@@ -137,7 +137,7 @@ export async function POST(request: NextRequest) {
 
     // Audit log the creation
     await auditLogger.logEvent(
-      { id: session.userId, email: session.email, role: session.role, organizationId: 'unknown' },
+      { id: session.userId, email: session.email, name: '', role: session.role as UserRole, organization: 'unknown', createdAt: new Date().toISOString() },
       'api.key.generate',
       {
         resourceType: 'api_key',
@@ -170,7 +170,7 @@ export async function POST(request: NextRequest) {
     // Check for specific errors
     if (error instanceof Error && error.message.includes('Maximum number of API keys')) {
       await auditLogger.logEvent(
-        session ? { id: session.userId, email: session.email, role: session.role, organizationId: 'unknown' } : null,
+        session ? { id: session.userId, email: session.email, name: '', role: session.role as UserRole, organization: 'unknown', createdAt: new Date().toISOString() } : null,
         'api.key.generate.failed',
         {
           resourceType: 'api_key',
@@ -192,7 +192,7 @@ export async function POST(request: NextRequest) {
     logger.error('API key generation failed', error, { userId: session?.userId })
 
     await auditLogger.logEvent(
-      session?.user || null,
+      session ? { id: session.userId, email: session.email, name: '', role: session.role as UserRole, organization: 'unknown', createdAt: new Date().toISOString() } : null,
       'api.key.generate.failed',
       {
         resourceType: 'api_key',
@@ -242,7 +242,7 @@ export async function GET(request: NextRequest) {
 
     // Audit the list operation
     await auditLogger.logEvent(
-      { id: session.userId, email: session.email, role: session.role, organizationId: 'unknown' },
+      { id: session.userId, email: session.email, name: '', role: session.role as UserRole, organization: 'unknown', createdAt: new Date().toISOString() },
       'api.key.list',
       {
         resourceType: 'api_key',
@@ -300,7 +300,7 @@ export async function DELETE(request: NextRequest) {
 
     // Audit the revocation
     await auditLogger.logEvent(
-      { id: session.userId, email: session.email, role: session.role, organizationId: 'unknown' },
+      { id: session.userId, email: session.email, name: '', role: session.role as UserRole, organization: 'unknown', createdAt: new Date().toISOString() },
       'api.key.revoke',
       {
         resourceType: 'api_key',
