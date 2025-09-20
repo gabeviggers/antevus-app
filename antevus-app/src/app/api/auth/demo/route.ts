@@ -1,19 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { logger } from '@/lib/logger'
+import { isDemoMode } from '@/lib/config/demo-mode'
+import { createDemoToken } from '@/lib/security/session-helper'
 
 // PUT endpoint to validate demo session
 export async function PUT(request: NextRequest) {
   try {
-    // Check for demo mode
-    if (process.env.NODE_ENV === 'development' && process.env.DEMO_MODE === 'true') {
-      // Check for demo session cookies
+    // Check for demo mode using centralized function
+    if (isDemoMode()) {
+      // Check for demo session JWT token
       const demoSession = request.cookies.get('demo-session')
-      const demoRole = request.cookies.get('demo-role')
       const onboardingComplete = request.cookies.get('demo-onboarding-complete')
 
-      // If we have a demo session or onboarding is complete, return valid session
-      if (demoSession?.value === 'demo-active' || onboardingComplete?.value === 'true') {
-        const role = demoRole?.value || 'admin'
+      // If we have a valid JWT demo token, it will be validated by session-helper
+      if (demoSession?.value || onboardingComplete?.value === 'true') {
+        const role = 'admin' // Demo users get admin role
 
         logger.info('Demo session validated', {
           role,
@@ -51,17 +52,20 @@ export async function PUT(request: NextRequest) {
 // POST endpoint to create demo session (called after login)
 export async function POST(request: NextRequest) {
   try {
-    // Check for demo mode
-    if (process.env.NODE_ENV === 'development' && process.env.DEMO_MODE === 'true') {
+    // Check for demo mode using centralized function
+    if (isDemoMode()) {
       const body = await request.json()
 
       // Check if this is the demo admin email
       if (body.email === process.env.DEMO_ALLOWED_EMAIL) {
         logger.info('Demo login successful')
 
+        // Create a properly signed JWT demo token
+        const demoToken = createDemoToken('demo-admin-id', body.email)
+
         const response = NextResponse.json({
           success: true,
-          token: 'demo-token',
+          token: demoToken,
           user: {
             id: 'demo-admin-id',
             email: process.env.DEMO_ALLOWED_EMAIL,
@@ -70,12 +74,12 @@ export async function POST(request: NextRequest) {
           }
         })
 
-        // Set demo session cookie
-        response.cookies.set('demo-session', 'demo-active', {
+        // Set secure demo session cookie with JWT token
+        response.cookies.set('demo-session', demoToken, {
           httpOnly: true,
-          secure: false, // Development only
+          secure: process.env.NODE_ENV === 'production',
           sameSite: 'strict',
-          maxAge: 60 * 60 * 24 * 7, // 7 days
+          maxAge: 60 * 60 * 24, // 24 hours
           path: '/'
         })
 

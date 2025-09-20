@@ -3,6 +3,7 @@ import { cookies } from 'next/headers'
 import jwt from 'jsonwebtoken'
 import { prisma } from '@/lib/database'
 import { logger } from '@/lib/logger'
+import { isDemoMode } from '@/lib/config/demo-mode'
 
 export interface SessionUser {
   userId: string
@@ -17,18 +18,17 @@ export interface SessionUser {
  */
 export async function getServerSession(request: NextRequest): Promise<SessionUser | null> {
   try {
-    // Check for demo mode first (development only)
-    if (process.env.NODE_ENV === 'development' && process.env.DEMO_MODE === 'true') {
-      // In demo mode, check for demo session cookie or header
+    // Check for demo mode using centralized function
+    if (isDemoMode()) {
+      // In demo mode, check for properly signed demo session token
       const cookieStore = await cookies()
       const demoToken = cookieStore.get('demo-session')?.value
 
-      if (demoToken === 'demo-active') {
-        return {
-          userId: 'demo-user-id',
-          email: process.env.DEMO_ALLOWED_EMAIL || 'demo@antevus.com',
-          role: 'admin',
-          isDemo: true
+      if (demoToken) {
+        // Validate the demo JWT token
+        const demoUser = await validateDemoToken(demoToken)
+        if (demoUser) {
+          return demoUser
         }
       }
     }
@@ -163,4 +163,78 @@ export async function clearSessionCookie() {
   const cookieStore = await cookies()
   cookieStore.delete('session-token')
   cookieStore.delete('demo-session')
+}
+
+/**
+ * Validate a demo session token (JWT)
+ */
+async function validateDemoToken(token: string): Promise<SessionUser | null> {
+  try {
+    const jwtSecret = process.env.JWT_SECRET || 'development-secret-change-in-production'
+
+    // Verify and decode the token with specific validations
+    const decoded = jwt.verify(token, jwtSecret, {
+      issuer: 'antevus-demo',
+      audience: 'antevus-platform'
+    }) as jwt.JwtPayload & { isDemo?: boolean; userId?: string; email?: string; role?: string }
+
+    // Check if token is a valid demo token
+    if (!decoded.isDemo || !decoded.userId) {
+      logger.warn('Invalid demo token claims')
+      return null
+    }
+
+    return {
+      userId: decoded.userId,
+      email: decoded.email || 'demo@antevus.com',
+      role: decoded.role || 'admin',
+      isDemo: true
+    }
+  } catch (error) {
+    if (error instanceof jwt.TokenExpiredError) {
+      logger.debug('Demo token expired')
+    } else if (error instanceof jwt.JsonWebTokenError) {
+      logger.debug('Invalid demo token')
+    } else {
+      logger.error('Demo token validation error', error)
+    }
+    return null
+  }
+}
+
+/**
+ * Create a signed demo session token
+ */
+export function createDemoToken(userId: string = 'demo-user-id', email?: string): string {
+  const jwtSecret = process.env.JWT_SECRET || 'development-secret-change-in-production'
+
+  return jwt.sign(
+    {
+      userId,
+      email: email || process.env.DEMO_ALLOWED_EMAIL || 'demo@antevus.com',
+      role: 'admin',
+      isDemo: true
+    },
+    jwtSecret,
+    {
+      expiresIn: '24h', // Demo tokens expire in 24 hours
+      issuer: 'antevus-demo',
+      audience: 'antevus-platform'
+    } as jwt.SignOptions
+  )
+}
+
+/**
+ * Set secure demo session cookie
+ */
+export async function setDemoSessionCookie(token: string) {
+  const cookieStore = await cookies()
+
+  cookieStore.set('demo-session', token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'strict',
+    maxAge: 60 * 60 * 24, // 24 hours
+    path: '/'
+  })
 }

@@ -4,6 +4,7 @@ import { isDemoMode, shouldEnforceCSRF } from '@/lib/config/demo-mode'
 import { authManager } from '@/lib/security/auth-manager'
 import { auditLogger, AuditEventType, AuditSeverity } from '@/lib/security/audit-logger'
 import { validateCSRFToken } from '@/lib/security/csrf'
+import { createDemoToken } from '@/lib/security/session-helper'
 
 export async function POST(request: NextRequest) {
   try {
@@ -85,12 +86,14 @@ export async function POST(request: NextRequest) {
           path: '/'
         })
 
-        // Ensure demo session stays active
-        response.cookies.set('demo-session', 'demo-active', {
+        // Create and set secure demo JWT token
+        const demoToken = createDemoToken('demo-admin-id', process.env.DEMO_ALLOWED_EMAIL)
+
+        response.cookies.set('demo-session', demoToken, {
           httpOnly: true,
-          secure: process.env.NODE_ENV === 'production', // HTTPS in production, HTTP in dev
+          secure: process.env.NODE_ENV === 'production',
           sameSite: 'strict',
-          maxAge: 60 * 60 * 24 * 7, // 7 days
+          maxAge: 60 * 60 * 24, // 24 hours
           path: '/'
         })
 

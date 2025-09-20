@@ -5,6 +5,7 @@ import { authManager } from '@/lib/security/auth-manager'
 import { auditLogger, AuditEventType, AuditSeverity } from '@/lib/security/audit-logger'
 import { validateCSRFToken } from '@/lib/security/csrf'
 import { shouldEnforceCSRF, isDemoMode } from '@/lib/config/demo-mode'
+import { createDemoToken } from '@/lib/security/session-helper'
 
 const profileSchema = z.object({
   name: z.string()
@@ -121,10 +122,12 @@ async function handlePost(request: NextRequest) {
         }
       })
 
-      // Set demo session cookie
-      response.cookies.set('demo-session', 'demo-active', {
+      // Create and set secure demo JWT token
+      const demoToken = createDemoToken('demo-user-' + Date.now(), process.env.DEMO_ALLOWED_EMAIL)
+
+      response.cookies.set('demo-session', demoToken, {
         httpOnly: true,
-        secure: false, // Development only
+        secure: process.env.NODE_ENV === 'production',
         sameSite: 'strict',
         maxAge: 60 * 60 * 24, // 24 hours
         path: '/'

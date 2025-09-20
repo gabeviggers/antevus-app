@@ -18,6 +18,8 @@
 import { jwtVerify, createRemoteJWKSet, importSPKI, JWTPayload, errors as joseErrors } from 'jose'
 import { UserRole } from '@/lib/security/authorization'
 import { logger } from '@/lib/logger'
+import { isDemoMode } from '@/lib/config/demo-mode'
+import jwt from 'jsonwebtoken'
 
 interface AuthToken {
   value: string
@@ -39,8 +41,8 @@ interface VerifiedClaims {
 
 // Configuration from environment variables
 const config = {
-  // Demo mode - only enable for development/testing, NEVER use NEXT_PUBLIC_* for server security
-  isDemoMode: process.env.NODE_ENV === 'development' && process.env.DEMO_MODE === 'true',
+  // Demo mode - use centralized function
+  isDemoMode: isDemoMode(),
 
   // JWT Configuration (for production) - no NEXT_PUBLIC_* fallbacks
   jwksUri: process.env.JWKS_URI,
@@ -239,36 +241,37 @@ class SecureAuthManager {
       return null
     }
 
-    // CRITICAL: Check for demo tokens FIRST before any other validation
-    // This ensures demo_token_* patterns work even if not stored
-    if (config.isDemoMode && token.startsWith('demo_token_')) {
-      // Parse demo token format: demo_token_<timestamp>_<userId>
-      const parts = token.split('_')
+    // Check for demo tokens with proper JWT validation
+    if (config.isDemoMode) {
+      try {
+        const jwtSecret = process.env.JWT_SECRET || 'development-secret-change-in-production'
 
-      // Format: demo_token_<timestamp>_<userId>
-      if (parts.length >= 4 && parts[0] === 'demo' && parts[1] === 'token') {
-        logger.info('Demo mode: Accepting demo_token with userId', { userId: parts[3] })
-        return {
-          sub: parts[3] || 'demo-user-001',
-          email: 'demo@antevus.com',
-          roles: [UserRole.SCIENTIST],
-          exp: Math.floor(Date.now() / 1000) + 3600, // 1 hour from now
-          iat: Math.floor(Date.now() / 1000),
-          iss: 'demo-issuer',
-          aud: 'demo-audience'
+        // Verify and decode the token with specific validations
+        const decoded = jwt.verify(token, jwtSecret, {
+          issuer: 'antevus-demo',
+          audience: 'antevus-platform'
+        }) as jwt.JwtPayload
+
+        // Check if token is a valid demo token
+        if (decoded.isDemo) {
+          logger.info('Demo mode: Valid demo JWT token', { userId: decoded.userId })
+          return {
+            sub: decoded.userId || 'demo-user-001',
+            email: decoded.email || 'demo@antevus.com',
+            roles: decoded.roles || [UserRole.SCIENTIST],
+            exp: decoded.exp,
+            iat: decoded.iat,
+            iss: decoded.iss,
+            aud: decoded.aud
+          }
         }
-      }
-
-      // Simple format: demo_token_<timestamp> or just demo_token_*
-      logger.info('Demo mode: Accepting simple demo_token')
-      return {
-        sub: 'demo-user-001',
-        email: 'demo@antevus.com',
-        roles: ['scientist'],
-        exp: Math.floor(Date.now() / 1000) + 3600,
-        iat: Math.floor(Date.now() / 1000),
-        iss: 'demo-issuer',
-        aud: 'demo-audience'
+      } catch (error) {
+        // Not a valid demo JWT, continue to regular validation
+        if (error instanceof jwt.TokenExpiredError) {
+          logger.debug('Demo token expired')
+        } else if (error instanceof jwt.JsonWebTokenError) {
+          logger.debug('Invalid demo token - trying regular validation')
+        }
       }
     }
 
