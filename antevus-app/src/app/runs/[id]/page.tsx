@@ -310,7 +310,7 @@ export default function RunResultPage() {
                   {runData.cancellationReason}
                 </p>
                 <p className="text-xs text-gray-600 dark:text-gray-400 mt-2">
-                  The protocol was stopped at the user's request. No data was collected after cancellation.
+                  The protocol was stopped at the user&apos;s request. No data was collected after cancellation.
                 </p>
               </div>
             </div>

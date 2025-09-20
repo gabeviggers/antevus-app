@@ -33,7 +33,7 @@ async function handlePost(request: NextRequest) {
     const supabase = await createClient()
     const { data: { user }, error } = await supabase.auth.getUser()
 
-    let userId = user?.id || 'onboarding-user'
+    const userId = user?.id || 'onboarding-user'
 
     if (!user && !isDemoMode()) {
       auditLogger.log({

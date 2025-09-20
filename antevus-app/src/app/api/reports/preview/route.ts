@@ -100,7 +100,7 @@ export async function POST(req: NextRequest) {
       const inDateRange = run.startedAt >= startDate && run.startedAt <= endDate;
       const matchesInstrument = !query.instruments || query.instruments.includes(run.instrument.name);
       const matchesProject = !query.projects || query.projects.includes(run.project.name);
-      const matchesStatus = !query.statuses || query.statuses.includes(run.status as any);
+      const matchesStatus = !query.statuses || query.statuses.includes(run.status as 'passed' | 'failed' | 'warning');
 
       return inDateRange && matchesInstrument && matchesProject && matchesStatus;
     });

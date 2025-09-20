@@ -26,7 +26,30 @@ const ScheduleReportSchema = z.object({
 });
 
 // Mock storage for scheduled reports (in production, use database)
-const scheduledReports: Map<string, any> = new Map();
+interface ScheduledReport {
+  id: string;
+  createdBy: string;
+  name: string;
+  query: {
+    dateRange: { start: string; end: string };
+    instruments?: string[];
+    projects?: string[];
+    statuses?: ('passed' | 'failed' | 'warning')[];
+    metrics?: ('runs' | 'fail_rate' | 'runtime' | 'qc_flags' | 'samples')[];
+    groupBy?: 'day' | 'instrument' | 'project';
+  };
+  rrule: string;
+  delivery: {
+    email?: string[];
+    slack?: string;
+  };
+  nextRunAt: Date;
+  enabled: boolean;
+  createdAt: Date;
+  lastRunAt: Date | null;
+}
+
+const scheduledReports: Map<string, ScheduledReport> = new Map();
 
 export async function POST(req: NextRequest) {
   try {
