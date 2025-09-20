@@ -6,7 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { UserRole } from '@/lib/security/authorization'
-import { getServerSession } from '@/lib/auth/session'
+import { getServerSession } from '@/lib/security/session-helper'
 import { auditLogger } from '@/lib/audit/logger'
 import { validateCSRFToken } from '@/lib/security/csrf'
 import { logger } from '@/lib/logger'
@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
   try {
     // Verify authentication
     session = await getServerSession(request)
-    if (!session?.user) {
+    if (!session) {
       await auditLogger.logEvent(
         null,
         'api.key.generate.failed',
@@ -51,10 +51,10 @@ export async function POST(request: NextRequest) {
     }
 
     // Validate CSRF token
-    const csrfValidation = validateCSRFToken(request, session.user.id, session.user)
+    const csrfValidation = validateCSRFToken(request, session.userId)
     if (!csrfValidation.valid) {
       await auditLogger.logEvent(
-        session.user,
+        { id: session.userId, email: session.email, role: session.role, organizationId: 'unknown' },
         'api.key.generate.failed',
         {
           resourceType: 'api_key',
@@ -75,9 +75,9 @@ export async function POST(request: NextRequest) {
     }
 
     // Check user permissions (must be Admin or Scientist)
-    if (session.user.role !== UserRole.ADMIN && session.user.role !== UserRole.SCIENTIST) {
+    if (session.role !== UserRole.ADMIN && session.role !== UserRole.SCIENTIST) {
       await auditLogger.logEvent(
-        session.user,
+        { id: session.userId, email: session.email, role: session.role, organizationId: 'unknown' },
         'api.key.generate.failed',
         {
           resourceType: 'api_key',
@@ -86,7 +86,7 @@ export async function POST(request: NextRequest) {
           errorMessage: 'Insufficient permissions',
           metadata: {
             reason: 'Insufficient permissions',
-            userRole: session.user.role
+            userRole: session.role
           }
         }
       )
@@ -103,7 +103,7 @@ export async function POST(request: NextRequest) {
 
     if (!validation.success) {
       await auditLogger.logEvent(
-        session.user,
+        { id: session.userId, email: session.email, role: session.role, organizationId: 'unknown' },
         'api.key.generate.failed',
         {
           resourceType: 'api_key',
@@ -127,7 +127,7 @@ export async function POST(request: NextRequest) {
 
     // Generate API key using database repository
     const { key, apiKey } = await apiKeyRepository.create({
-      userId: session.user.id,
+      userId: session.userId,
       name,
       permissions,
       ipAllowlist,
@@ -137,7 +137,7 @@ export async function POST(request: NextRequest) {
 
     // Audit log the creation
     await auditLogger.logEvent(
-      session.user,
+      { id: session.userId, email: session.email, role: session.role, organizationId: 'unknown' },
       'api.key.generate',
       {
         resourceType: 'api_key',
@@ -170,7 +170,7 @@ export async function POST(request: NextRequest) {
     // Check for specific errors
     if (error instanceof Error && error.message.includes('Maximum number of API keys')) {
       await auditLogger.logEvent(
-        session?.user || null,
+        session ? { id: session.userId, email: session.email, role: session.role, organizationId: 'unknown' } : null,
         'api.key.generate.failed',
         {
           resourceType: 'api_key',
@@ -189,7 +189,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    logger.error('API key generation failed', error, { userId: session?.user?.id })
+    logger.error('API key generation failed', error, { userId: session?.userId })
 
     await auditLogger.logEvent(
       session?.user || null,
@@ -218,12 +218,12 @@ export async function GET(request: NextRequest) {
 
   try {
     session = await getServerSession(request)
-    if (!session?.user) {
+    if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     // Get user's API keys from database
-    const userKeys = await apiKeyRepository.listByUser(session.user.id)
+    const userKeys = await apiKeyRepository.listByUser(session.userId)
 
     // Format for response (ensure no sensitive data)
     const formattedKeys = userKeys.map(k => ({
@@ -242,7 +242,7 @@ export async function GET(request: NextRequest) {
 
     // Audit the list operation
     await auditLogger.logEvent(
-      session.user,
+      { id: session.userId, email: session.email, role: session.role, organizationId: 'unknown' },
       'api.key.list',
       {
         resourceType: 'api_key',
@@ -257,7 +257,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ keys: formattedKeys })
 
   } catch (error) {
-    logger.error('API key listing failed', error, { userId: session?.user?.id })
+    logger.error('API key listing failed', error, { userId: session?.userId })
     return NextResponse.json(
       { error: 'Failed to list API keys' },
       { status: 500 }
@@ -271,12 +271,12 @@ export async function DELETE(request: NextRequest) {
 
   try {
     session = await getServerSession(request)
-    if (!session?.user) {
+    if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     // Validate CSRF token
-    const csrfValidation = validateCSRFToken(request, session.user.id, session.user)
+    const csrfValidation = validateCSRFToken(request, session.userId)
     if (!csrfValidation.valid) {
       return NextResponse.json(
         { error: csrfValidation.error || 'Invalid CSRF token' },
@@ -292,7 +292,7 @@ export async function DELETE(request: NextRequest) {
     }
 
     // Revoke key using database repository
-    const revoked = await apiKeyRepository.revoke(keyId, session.user.id)
+    const revoked = await apiKeyRepository.revoke(keyId, session.userId)
 
     if (!revoked) {
       return NextResponse.json({ error: 'API key not found' }, { status: 404 })
@@ -300,7 +300,7 @@ export async function DELETE(request: NextRequest) {
 
     // Audit the revocation
     await auditLogger.logEvent(
-      session.user,
+      { id: session.userId, email: session.email, role: session.role, organizationId: 'unknown' },
       'api.key.revoke',
       {
         resourceType: 'api_key',
@@ -315,7 +315,7 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ success: true, message: 'API key revoked' })
 
   } catch (error) {
-    logger.error('API key revocation failed', error, { userId: session?.user?.id })
+    logger.error('API key revocation failed', error, { userId: session?.userId })
     return NextResponse.json(
       { error: 'Failed to revoke API key' },
       { status: 500 }

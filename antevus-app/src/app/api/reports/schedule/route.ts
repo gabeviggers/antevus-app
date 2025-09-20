@@ -170,27 +170,29 @@ export async function GET(req: NextRequest) {
       }
     ];
 
-    // Add any reports from mock storage
-    Array.from(scheduledReports.values()).forEach(report => {
-      mockScheduledReports.push({
-        id: report.id,
-        name: report.name,
-        query: report.query as {
-          dateRange: { start: string; end: string };
-          instruments?: string[];
-          projects?: string[];
-          statuses?: string[];
-          metrics?: string[];
-        },
-        rrule: report.rrule,
-        delivery: report.delivery as { email?: string[]; slack?: string },
-        lastRunAt: report.lastRunAt?.toISOString() || null,
-        nextRunAt: report.nextRunAt.toISOString(),
-        enabled: report.enabled,
-        createdBy: report.createdBy,
-        createdAt: report.createdAt.toISOString()
+    // Add any reports from mock storage - filtered by current user
+    Array.from(scheduledReports.values())
+      .filter(report => report.createdBy === session.userId)
+      .forEach(report => {
+        mockScheduledReports.push({
+          id: report.id,
+          name: report.name,
+          query: report.query as {
+            dateRange: { start: string; end: string };
+            instruments?: string[];
+            projects?: string[];
+            statuses?: string[];
+            metrics?: string[];
+          },
+          rrule: report.rrule,
+          delivery: report.delivery as { email?: string[]; slack?: string },
+          lastRunAt: report.lastRunAt?.toISOString() || null,
+          nextRunAt: report.nextRunAt.toISOString(),
+          enabled: report.enabled,
+          createdBy: report.createdBy,
+          createdAt: report.createdAt.toISOString()
+        });
       });
-    });
 
     return NextResponse.json(mockScheduledReports);
   } catch (error) {
@@ -224,22 +226,40 @@ export async function DELETE(req: NextRequest) {
       );
     }
 
-    // Check if report exists in mock storage
-    if (!scheduledReports.has(id)) {
-      // Check if it's one of the mock reports
-      const mockIds = ['sched-001', 'sched-002'];
-      if (!mockIds.includes(id)) {
-        return NextResponse.json(
-          { error: 'Scheduled report not found' },
-          { status: 404 }
-        );
-      }
-    } else {
-      // Delete from mock storage
-      scheduledReports.delete(id);
+    // Define seeded demo report IDs that cannot be deleted
+    const seededDemoIds = ['sched-001', 'sched-002'];
+
+    // Check if it's a seeded demo report - these cannot be deleted
+    if (seededDemoIds.includes(id)) {
+      return NextResponse.json(
+        { error: 'Cannot delete seeded demo reports' },
+        { status: 403 }
+      );
     }
 
-    return NextResponse.json({ success: true });
+    // Try to find the report in mock storage
+    const report = scheduledReports.get(id);
+
+    // Report not found
+    if (!report) {
+      return NextResponse.json(
+        { error: 'Scheduled report not found' },
+        { status: 404 }
+      );
+    }
+
+    // Check ownership - user can only delete their own reports
+    if (report.createdBy !== session.userId) {
+      return NextResponse.json(
+        { error: 'You do not have permission to delete this report' },
+        { status: 403 }
+      );
+    }
+
+    // All checks passed - delete the report
+    scheduledReports.delete(id);
+
+    return NextResponse.json({ success: true, message: 'Scheduled report deleted successfully' });
   } catch (error) {
     console.error('Delete scheduled report error:', error);
     return NextResponse.json(

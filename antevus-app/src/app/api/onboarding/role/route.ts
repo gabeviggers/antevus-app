@@ -69,20 +69,43 @@ export async function POST(request: NextRequest) {
     // Save role for Supabase users
     if (user) {
       try {
-        // Create role data to store in profileData
-        const roleData = { role }
+        // First, fetch existing onboarding progress to preserve profileData
+        const existingProgress = await prisma.onboardingProgress.findUnique({
+          where: { userId: user.id },
+          select: { profileData: true }
+        })
+
+        // Parse existing profile data, defaulting to empty object on error
+        let existingProfileData = {}
+        if (existingProgress?.profileData) {
+          try {
+            existingProfileData = JSON.parse(existingProgress.profileData)
+          } catch (parseError) {
+            logger.warn('Failed to parse existing profileData', {
+              userId: user.id,
+              error: parseError instanceof Error ? parseError.message : 'Unknown parse error'
+            })
+            // Continue with empty object as fallback
+          }
+        }
+
+        // Merge new role with existing profile data
+        const updatedProfileData = {
+          ...existingProfileData,
+          role // This overwrites only the role field
+        }
 
         // Save or update role in database
         await prisma.onboardingProgress.upsert({
           where: { userId: user.id },
           update: {
-            profileData: JSON.stringify(roleData),
+            profileData: JSON.stringify(updatedProfileData),
             currentStep: 'profile',
             updatedAt: new Date()
           },
           create: {
             userId: user.id,
-            profileData: JSON.stringify(roleData),
+            profileData: JSON.stringify(updatedProfileData),
             currentStep: 'profile',
             completedSteps: [],
             isCompleted: false

@@ -316,12 +316,13 @@ function AssistantPageContent() {
                 final[finalIdx] = finalCmd;
 
                 // Create a run result entry
+                const timestamp = Date.now();
                 const runResult = {
-                  id: `RUN-${Date.now()}`,
+                  id: `RUN-${timestamp}-${Math.random().toString(36).substring(2, 11)}`,
                   type: 'run' as const,
                   title: finalCmd.title + ' - Complete',
                   status: 'completed' as const,
-                  runId: `ELISA-${Date.now()}`,
+                  runId: `ELISA-${timestamp}`,
                   duration: '45 minutes',
                   samples: 96,
                   result: 'success' as const,
@@ -415,12 +416,13 @@ function AssistantPageContent() {
         simulateStreaming(assistantResult.threadId, assistantResult.messageId, 'Protocol execution cancelled. The instrument remains in standby mode.');
 
         // Create a cancelled run entry
+        const cancelTimestamp = Date.now();
         const cancelledRun = {
-          id: `RUN-${Date.now()}`,
+          id: `RUN-${cancelTimestamp}-${Math.random().toString(36).substring(2, 11)}`,
           type: 'run' as const,
           title: 'ELISA Protocol - Cancelled',
           status: 'cancelled' as const,
-          runId: `ELISA-CANCELLED-${Date.now()}`,
+          runId: `ELISA-CANCELLED-${cancelTimestamp}`,
           duration: '0 minutes',
           samples: 0,
           result: 'failure' as const,
