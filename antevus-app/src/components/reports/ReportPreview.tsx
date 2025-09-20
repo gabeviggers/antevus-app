@@ -233,7 +233,7 @@ export function ReportPreview({
                   outerRadius={100}
                   paddingAngle={2}
                   dataKey="value"
-                  label={(props: { percent: number }) => `${(props.percent * 100).toFixed(0)}%`}
+                  label={(entry) => `${(entry.percent * 100).toFixed(0)}%`}
                 >
                   <Cell fill={COLORS.passed} />
                   <Cell fill={COLORS.failed} />
