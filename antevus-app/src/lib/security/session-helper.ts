@@ -5,6 +5,20 @@ import { prisma } from '@/lib/database'
 import { logger } from '@/lib/logger'
 import { isDemoMode } from '@/lib/config/demo-mode'
 
+// Helper to get JWT secret with proper validation
+function getJwtSecret(): string {
+  const secret = process.env.JWT_SECRET
+  if (!secret) {
+    if (process.env.NODE_ENV === 'production') {
+      logger.error('CRITICAL: JWT_SECRET must be set in production')
+      throw new Error('JWT_SECRET must be set in production')
+    }
+    // Only allow fallback in development
+    return 'development-secret-change-in-production'
+  }
+  return secret
+}
+
 export interface SessionUser {
   userId: string
   email: string
@@ -63,8 +77,8 @@ export async function getServerSession(request: NextRequest): Promise<SessionUse
  */
 async function validateSessionToken(token: string): Promise<SessionUser | null> {
   try {
-    // Use JWT_SECRET from environment
-    const jwtSecret = process.env.JWT_SECRET || 'development-secret-change-in-production'
+    // Use JWT_SECRET from environment with validation
+    const jwtSecret = getJwtSecret()
 
     // Verify and decode the token
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -124,7 +138,7 @@ async function validateSessionToken(token: string): Promise<SessionUser | null> 
  * Create a new session token
  */
 export function createSessionToken(user: SessionUser): string {
-  const jwtSecret = process.env.JWT_SECRET || 'development-secret-change-in-production'
+  const jwtSecret = getJwtSecret()
   const expiresIn = process.env.JWT_EXPIRATION || '7d'
 
   return jwt.sign(
@@ -170,10 +184,12 @@ export async function clearSessionCookie() {
  */
 async function validateDemoToken(token: string): Promise<SessionUser | null> {
   try {
-    const jwtSecret = process.env.JWT_SECRET || 'development-secret-change-in-production'
+    const jwtSecret = getJwtSecret()
 
     // Verify and decode the token with specific validations
+    // Restrict algorithms to prevent algorithm confusion attacks
     const decoded = jwt.verify(token, jwtSecret, {
+      algorithms: ['HS256'],
       issuer: 'antevus-demo',
       audience: 'antevus-platform'
     }) as jwt.JwtPayload & { isDemo?: boolean; userId?: string; email?: string; role?: string }
@@ -206,7 +222,7 @@ async function validateDemoToken(token: string): Promise<SessionUser | null> {
  * Create a signed demo session token
  */
 export function createDemoToken(userId: string = 'demo-user-id', email?: string): string {
-  const jwtSecret = process.env.JWT_SECRET || 'development-secret-change-in-production'
+  const jwtSecret = getJwtSecret()
 
   return jwt.sign(
     {

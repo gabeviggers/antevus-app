@@ -53,6 +53,20 @@ const config = {
   jwtPublicKey: process.env.JWT_PUBLIC_KEY,
 }
 
+// Helper to get JWT secret with proper validation
+function getJwtSecret(): string {
+  const secret = process.env.JWT_SECRET
+  if (!secret) {
+    if (process.env.NODE_ENV === 'production') {
+      logger.error('CRITICAL: JWT_SECRET must be set in production')
+      throw new Error('JWT_SECRET must be set in production')
+    }
+    // Only allow fallback in development
+    return 'development-secret-change-in-production'
+  }
+  return secret
+}
+
 // Runtime validation function - only validates when actually used
 function validateProductionConfig(): void {
   const isProd = process.env.NODE_ENV === 'production'
@@ -255,10 +269,12 @@ class SecureAuthManager {
     // Check for demo tokens with proper JWT validation
     if (config.isDemoMode) {
       try {
-        const jwtSecret = process.env.JWT_SECRET || 'development-secret-change-in-production'
+        const jwtSecret = getJwtSecret()
 
         // Verify and decode the token with specific validations
+        // Restrict algorithms to prevent algorithm confusion attacks
         const decoded = jwt.verify(token, jwtSecret, {
+          algorithms: ['HS256'],
           issuer: 'antevus-demo',
           audience: 'antevus-platform'
         }) as jwt.JwtPayload

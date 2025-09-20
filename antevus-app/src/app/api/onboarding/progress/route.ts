@@ -128,7 +128,19 @@ export async function POST(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   try {
-    // Authentication
+    // Demo mode: check cookies first before requiring auth
+    if (isDemoMode()) {
+      const completeCookie = request.cookies.get('demo-onboarding-complete')
+      const roleCookie = request.cookies.get('demo-role')
+
+      return NextResponse.json({
+        isCompleted: completeCookie?.value === 'true',
+        role: roleCookie?.value || null,
+        needsOnboarding: completeCookie?.value !== 'true'
+      })
+    }
+
+    // Authentication (non-demo mode)
     const token = authManager.getTokenFromRequest(request)
     const session = await authManager.validateToken(token)
     if (!session?.userId) {
@@ -139,19 +151,6 @@ export async function GET(request: NextRequest) {
         severity: AuditSeverity.WARNING
       })
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-    // userId available via session.userId if needed
-
-    // Check progress for demo
-    if (isDemoMode()) {
-      const completeCookie = request.cookies.get('demo-onboarding-complete')
-      const roleCookie = request.cookies.get('demo-role')
-
-      return NextResponse.json({
-        isCompleted: completeCookie?.value === 'true',
-        role: roleCookie?.value || null,
-        needsOnboarding: completeCookie?.value !== 'true'
-      })
     }
 
     return NextResponse.json({

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { logger } from '@/lib/logger'
 import { isDemoMode } from '@/lib/config/demo-mode'
-import { createDemoToken } from '@/lib/security/session-helper'
+import { createDemoToken, getServerSession } from '@/lib/security/session-helper'
 
 // PUT endpoint to validate demo session
 export async function PUT(request: NextRequest) {
@@ -12,24 +12,28 @@ export async function PUT(request: NextRequest) {
       const demoSession = request.cookies.get('demo-session')
       const onboardingComplete = request.cookies.get('demo-onboarding-complete')
 
-      // If we have a valid JWT demo token, it will be validated by session-helper
+      // Actually validate the JWT demo token, not just check presence
       if (demoSession?.value || onboardingComplete?.value === 'true') {
-        const role = 'admin' // Demo users get admin role
+        // Use the session helper to properly validate the token
+        const session = await getServerSession(request)
 
-        logger.info('Demo session validated', {
-          role,
-          onboardingComplete: !!onboardingComplete,
-          demoSession: !!demoSession
-        })
+        if (session?.isDemo) {
+          logger.info('Demo session validated', { userId: session.userId })
+          return NextResponse.json({
+            valid: true,
+            user: {
+              id: session.userId,
+              email: session.email,
+              roles: ['admin', 'demo_user'],
+              name: 'Demo Admin'
+            }
+          })
+        }
 
-        return NextResponse.json({
-          valid: true,
-          user: {
-            id: 'demo-admin-id',
-            email: process.env.DEMO_ALLOWED_EMAIL || 'admin@antevus.com',
-            roles: [role, 'demo_user'],
-            name: 'Demo Admin'
-          }
+        // Token exists but is invalid
+        logger.warn('Invalid demo token', {
+          hasToken: !!demoSession?.value,
+          hasOnboarding: !!onboardingComplete?.value
         })
       }
     }

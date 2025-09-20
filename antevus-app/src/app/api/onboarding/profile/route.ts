@@ -175,21 +175,7 @@ async function handlePost(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   try {
-    // Authentication
-    const token = authManager.getTokenFromRequest(request)
-    const session = await authManager.validateToken(token)
-    if (!session?.userId) {
-      auditLogger.log({
-        eventType: AuditEventType.AUTH_LOGIN_FAILURE,
-        action: 'Unauthorized access attempt',
-        metadata: { endpoint: `${request.method} ${request.url}` },
-        severity: AuditSeverity.WARNING
-      })
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-    // userId available via session.userId if needed
-
-    // For demo mode, retrieve from cookies
+    // Demo mode: check cookies first before requiring auth
     if (isDemoMode()) {
       const profileCookie = request.cookies.get('demo-profile')
       const roleCookie = request.cookies.get('demo-role')
@@ -215,6 +201,19 @@ export async function GET(request: NextRequest) {
         currentStep: 'profile',
         completedSteps: profileData ? ['profile'] : []
       })
+    }
+
+    // Authentication (non-demo mode)
+    const token = authManager.getTokenFromRequest(request)
+    const session = await authManager.validateToken(token)
+    if (!session?.userId) {
+      auditLogger.log({
+        eventType: AuditEventType.AUTH_LOGIN_FAILURE,
+        action: 'Unauthorized access attempt',
+        metadata: { endpoint: `${request.method} ${request.url}` },
+        severity: AuditSeverity.WARNING
+      })
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     // Return empty profile data if not found
