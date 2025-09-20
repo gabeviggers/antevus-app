@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { getServerSession } from '@/lib/auth-helper';
+import { useServerSession } from '@/lib/security/session-helper';
 import { prisma } from '@/lib/prisma';
 import { validateCSRFToken } from '@/lib/security/csrf';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
@@ -26,7 +26,7 @@ const s3Client = new S3Client({
 
 export async function POST(req: NextRequest) {
   try {
-    const session = await getServerSession();
+    const session = await useServerSession();
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
