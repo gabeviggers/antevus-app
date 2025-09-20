@@ -3,8 +3,7 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
 import { User, Session } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/client'
-import { signIn, signUp, signOut, getCurrentUser, getSession } from '@/lib/supabase/auth'
-import { UserRole } from '@/lib/security/authorization'
+import { signIn, signUp, signOut, getSession } from '@/lib/supabase/auth'
 import { auditLogger, AuditEventType } from '@/lib/security/audit-logger'
 import { logger } from '@/lib/logger'
 
@@ -69,7 +68,7 @@ export function SupabaseSessionProvider({ children }: { children: ReactNode }) {
     })
 
     return () => subscription.unsubscribe()
-  }, [])
+  }, [supabase.auth])
 
   const checkSession = async () => {
     setIsLoading(true)
@@ -90,7 +89,7 @@ export function SupabaseSessionProvider({ children }: { children: ReactNode }) {
   const login = async (email: string, password: string) => {
     setIsLoading(true)
     try {
-      const { session, user } = await signIn(email, password)
+      const { user } = await signIn(email, password)
 
       if (session && user) {
         setSession(session)
@@ -124,7 +123,7 @@ export function SupabaseSessionProvider({ children }: { children: ReactNode }) {
   const signup = async (email: string, password: string) => {
     setIsLoading(true)
     try {
-      const { session, user } = await signUp(email, password)
+      const { user } = await signUp(email, password)
 
       if (user) {
         // Create user profile in Prisma
@@ -174,7 +173,7 @@ export function SupabaseSessionProvider({ children }: { children: ReactNode }) {
   }
 
   const refreshSession = async () => {
-    const { data, error } = await supabase.auth.refreshSession()
+    const { data } = await supabase.auth.refreshSession()
     if (data.session) {
       setSession(data.session)
       setUser(data.session.user)

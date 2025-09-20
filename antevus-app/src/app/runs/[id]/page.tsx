@@ -2,36 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import {
-  ArrowLeft,
-  CheckCircle,
-  XCircle,
-  Clock,
-  Activity,
-  Beaker,
-  TrendingUp,
-  AlertCircle,
-  Download,
-  Share2,
-  FileText
-} from 'lucide-react';
-import {
-  LineChart,
-  Line,
-  AreaChart,
-  Area,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell
-} from 'recharts';
+import { ArrowLeft, Download, Share2, Activity, Clock, Beaker, TrendingUp, AlertCircle, CheckCircle, XCircle, FileText } from 'lucide-react';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 
 // Mock data for the run - in production this would come from your API
 const generateRunData = (runId: string) => {
@@ -327,7 +299,7 @@ export default function RunResultPage() {
                   Quality Control Issues
                 </h3>
                 <ul className="space-y-1">
-                  {runData.qcFlags.map((flag, idx) => (
+                  {runData.qcFlags.map((flag: string, idx: number) => (
                     <li key={idx} className="text-sm text-red-800 dark:text-red-300">
                       • {flag}
                     </li>
@@ -342,7 +314,7 @@ export default function RunResultPage() {
         <div className="bg-card rounded-lg border p-6">
           <h2 className="text-lg font-semibold mb-4">Protocol Execution Timeline</h2>
           <div className="space-y-3">
-            {runData.stages.map((stage, idx) => (
+            {runData.stages.map((stage: { name: string; status: string; duration: string; result: string }, idx: number) => (
               <div key={idx} className="flex items-center gap-4">
                 <div className={`h-8 w-8 rounded-full flex items-center justify-center ${
                   stage.status === 'completed' ? 'bg-green-100 dark:bg-green-900/30' :
@@ -405,12 +377,15 @@ export default function RunResultPage() {
                   cx="50%"
                   cy="50%"
                   labelLine={false}
-                  label={(entry) => `${entry.name}: ${entry.value}`}
+                  label={(props: unknown) => {
+                    const entry = props as { name?: string; value?: number };
+                    return entry.name && entry.value ? `${entry.name}: ${entry.value}` : '';
+                  }}
                   outerRadius={80}
                   fill="#8884d8"
                   dataKey="value"
                 >
-                  {runData.distribution.map((entry, index) => (
+                  {runData.distribution.map((entry: { color: string }, index: number) => (
                     <Cell key={`cell-${index}`} fill={entry.color} />
                   ))}
                 </Pie>

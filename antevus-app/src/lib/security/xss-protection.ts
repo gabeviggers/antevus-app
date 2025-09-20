@@ -35,7 +35,7 @@ export function escapeHtml(text: string): string {
  * Sanitize user input for safe storage and display
  * Removes potentially dangerous characters and scripts
  */
-export function sanitizeInput(input: string | any): string {
+export function sanitizeInput(input: string | unknown): string {
   // Ensure input is a string
   if (typeof input !== 'string') {
     if (input === null || input === undefined) {

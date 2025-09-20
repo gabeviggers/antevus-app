@@ -14,7 +14,7 @@ interface ReportModalProps {
 }
 
 export function ReportModal({ isOpen, onClose, reportPlan }: ReportModalProps) {
-  const [reportData, setReportData] = useState<any>(null);
+  const [reportData, setReportData] = useState<unknown>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {

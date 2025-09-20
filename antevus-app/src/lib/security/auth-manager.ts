@@ -68,41 +68,7 @@ function getJwtSecret(): string {
 }
 
 // Runtime validation function - only validates when actually used
-function validateProductionConfig(): void {
-  const isProd = process.env.NODE_ENV === 'production'
 
-  // Skip validation during build phase
-  if (typeof window === 'undefined' && process.env.NEXT_PHASE === 'phase-production-build') {
-    return
-  }
-
-  if (isProd && !config.isDemoMode) {
-    // Require JWT configuration in production
-    if (!config.jwksUri && !config.jwtPublicKey) {
-      logger.error('PRODUCTION ERROR: Either JWKS_URI or JWT_PUBLIC_KEY must be configured')
-      // Don't throw during build, but fail in runtime
-      if (process.env.NEXT_PHASE !== 'phase-production-build') {
-        throw new Error('PRODUCTION ERROR: Either JWKS_URI or JWT_PUBLIC_KEY must be configured')
-      }
-    }
-
-    // SECURITY: Require explicit issuer in production - no defaults
-    if (!config.jwtIssuer) {
-      logger.error('PRODUCTION ERROR: JWT_ISSUER must be configured - no defaults allowed')
-      if (process.env.NEXT_PHASE !== 'phase-production-build') {
-        throw new Error('PRODUCTION ERROR: JWT_ISSUER must be configured in production')
-      }
-    }
-
-    // SECURITY: Require explicit audience in production - no defaults
-    if (!config.jwtAudience) {
-      logger.error('PRODUCTION ERROR: JWT_AUDIENCE must be configured - no defaults allowed')
-      if (process.env.NEXT_PHASE !== 'phase-production-build') {
-        throw new Error('PRODUCTION ERROR: JWT_AUDIENCE must be configured in production')
-      }
-    }
-  }
-}
 
 class SecureAuthManager {
   private token: AuthToken | null = null

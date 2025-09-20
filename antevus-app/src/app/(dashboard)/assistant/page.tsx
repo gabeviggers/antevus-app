@@ -14,7 +14,6 @@ import { PermissionDenied } from '@/components/auth/permission-denied'
 import { ChatErrorBoundary } from '@/components/chat/chat-error-boundary'
 import { useRouter } from 'next/navigation'
 import { logger } from '@/lib/logger'
-import { format } from 'date-fns'
 // ReportModal removed - using full report page instead
 import type { ReportPlan } from '@/types/reports'
 
@@ -352,15 +351,20 @@ function AssistantPageContent() {
 
     const originalInput = input.trim()
 
+    // Type for window with protocol
+    interface WindowWithProtocol extends Window {
+      __pendingProtocol?: { protocolId: string; threadId: string; messageId: string };
+    }
+
     // Check if this is a confirmation for a pending protocol
-    if ((window as any).__pendingProtocol &&
+    if ((window as unknown as WindowWithProtocol).__pendingProtocol &&
         (originalInput.toLowerCase().includes('confirm') ||
          originalInput.toLowerCase().includes('yes') ||
          originalInput.toLowerCase().includes('proceed'))) {
-      const { protocolId, threadId, messageId } = (window as any).__pendingProtocol;
+      const { protocolId } = (window as unknown as WindowWithProtocol).__pendingProtocol;
 
       // Clear pending protocol
-      delete (window as any).__pendingProtocol;
+      delete (window as unknown as WindowWithProtocol).__pendingProtocol;
 
       // Update the assistant message to show protocol started
       const startedMessage = `Protocol execution confirmed! ✅\n\nStarting ELISA protocol on PR-07...\n\nYou can track the progress in the right panel →`;
@@ -392,14 +396,14 @@ function AssistantPageContent() {
     }
 
     // Check if this is a cancellation
-    if ((window as any).__pendingProtocol &&
+    if ((window as unknown as WindowWithProtocol).__pendingProtocol &&
         (originalInput.toLowerCase().includes('cancel') ||
          originalInput.toLowerCase().includes('no') ||
          originalInput.toLowerCase().includes('stop'))) {
-      const { protocolId } = (window as any).__pendingProtocol;
+      const { protocolId } = (window as unknown as WindowWithProtocol).__pendingProtocol;
 
       // Clear pending protocol
-      delete (window as any).__pendingProtocol;
+      delete (window as unknown as WindowWithProtocol).__pendingProtocol;
 
       // Add cancellation message
       addMessage({
@@ -747,7 +751,7 @@ Would you like to proceed with this protocol?`;
                 setRecentCommands(prev => [protocolCommand, ...prev].slice(0, 10));
 
                 // Store protocol data for confirmation handling
-                (window as any).__pendingProtocol = {
+                (window as unknown as WindowWithProtocol).__pendingProtocol = {
                   protocolId,
                   threadId: assistantThreadId,
                   messageId: assistantMessageId

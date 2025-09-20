@@ -147,7 +147,7 @@ async function handlePost(request: NextRequest) {
             percentComplete: 20
           }
         })
-      } catch (dbError) {
+      } catch (_dbError) {
         logger.error('Failed to save profile to database', dbError)
         return NextResponse.json(
           { error: 'Failed to save profile' },
@@ -205,7 +205,7 @@ async function handlePost(request: NextRequest) {
       { status: 401 }
     )
 
-  } catch (error) {
+  } catch (_error) {
     logger.error('Profile API error', error)
     return NextResponse.json(
       { error: 'Internal server error' },
@@ -241,7 +241,7 @@ export async function GET(request: NextRequest) {
             completedSteps: onboardingData.completedSteps || []
           })
         }
-      } catch (dbError) {
+      } catch (_dbError) {
         logger.debug('No onboarding data found for user', { userId: user.id })
       }
 
@@ -303,7 +303,7 @@ export async function GET(request: NextRequest) {
       completedSteps: []
     })
 
-  } catch (error) {
+  } catch (_error) {
     logger.error('Failed to retrieve profile data', error)
     return NextResponse.json(
       { error: 'Failed to retrieve profile data' },

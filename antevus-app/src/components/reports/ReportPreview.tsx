@@ -64,7 +64,6 @@ export function ReportPreview({
   onEmail
 }: ReportPreviewProps) {
   const [selectedDateRange, setSelectedDateRange] = useState('custom');
-  const [selectedInstruments, setSelectedInstruments] = useState<string[]>([]);
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
 
   const formatDate = (dateStr: string) => {
@@ -108,12 +107,12 @@ export function ReportPreview({
     </Card>
   );
 
-  const CustomTooltip = ({ active, payload, label }: any) => {
+  const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: Array<{ color: string; name: string; value: number }>; label?: string }) => {
     if (active && payload && payload.length) {
       return (
         <div className="rounded-lg border border-gray-200 bg-white p-3 shadow-sm">
           <p className="text-sm font-medium">{label}</p>
-          {payload.map((entry: any, index: number) => (
+          {payload.map((entry, index: number) => (
             <p key={index} className="text-sm" style={{ color: entry.color }}>
               {entry.name}: {entry.value}
             </p>
@@ -234,7 +233,7 @@ export function ReportPreview({
                   outerRadius={100}
                   paddingAngle={2}
                   dataKey="value"
-                  label={(props: any) => `${(props.percent * 100).toFixed(0)}%`}
+                  label={(props: { percent: number }) => `${(props.percent * 100).toFixed(0)}%`}
                 >
                   <Cell fill={COLORS.passed} />
                   <Cell fill={COLORS.failed} />

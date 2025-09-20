@@ -123,7 +123,7 @@ export async function POST(request: NextRequest) {
           role,
           nextStep: 'profile'
         })
-      } catch (dbError) {
+      } catch (_dbError) {
         logger.error('Failed to save role to database', {
           error: dbError instanceof Error ? dbError.message : String(dbError),
           stack: dbError instanceof Error ? dbError.stack : undefined,
@@ -204,7 +204,7 @@ export async function GET(request: NextRequest) {
           role,
           success: !!role
         })
-      } catch (dbError) {
+      } catch (_dbError) {
         logger.debug('No role found for user', { userId: user.id })
         return NextResponse.json({
           role: null,

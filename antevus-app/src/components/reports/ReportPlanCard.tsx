@@ -1,19 +1,10 @@
 'use client';
 
-import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import {
-  CalendarIcon,
-  ChartBarIcon,
-  DocumentArrowDownIcon,
-  EnvelopeIcon,
-  BeakerIcon,
-  ChartPieIcon,
-  ClockIcon,
-  FlagIcon
-} from '@heroicons/react/24/outline';
+import { CalendarIcon, ChartBarIcon, BeakerIcon, ClockIcon, ChartPieIcon, FlagIcon, EnvelopeIcon } from '@heroicons/react/24/outline';
 import { ReportPlanCardProps } from '@/types/reports';
+import { Card, CardHeader, CardContent, CardFooter } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 
 export function ReportPlanCard({
   title,

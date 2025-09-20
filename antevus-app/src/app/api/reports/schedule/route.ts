@@ -78,7 +78,7 @@ export async function POST(req: NextRequest) {
         );
       }
       nextRunAt = nextOccurrence;
-    } catch (error) {
+    } catch (_error) {
       return NextResponse.json(
         { error: 'Invalid RRULE format' },
         { status: 400 }
@@ -113,7 +113,7 @@ export async function POST(req: NextRequest) {
       createdBy: session.userId,
       createdAt: scheduledReport.createdAt.toISOString()
     });
-  } catch (error) {
+  } catch (_error) {
     console.error('Schedule report error:', error);
     if (error instanceof z.ZodError) {
       return NextResponse.json(
@@ -136,7 +136,7 @@ export async function GET(req: NextRequest) {
     }
 
     // Return mock scheduled reports
-    const mockScheduledReports: any[] = [
+    const mockScheduledReports: unknown[] = [
       {
         id: 'sched-001',
         name: 'Weekly Lab Report',
@@ -195,7 +195,7 @@ export async function GET(req: NextRequest) {
       });
 
     return NextResponse.json(mockScheduledReports);
-  } catch (error) {
+  } catch (_error) {
     console.error('Get scheduled reports error:', error);
     return NextResponse.json(
       { error: 'Failed to retrieve scheduled reports' },
@@ -260,7 +260,7 @@ export async function DELETE(req: NextRequest) {
     scheduledReports.delete(id);
 
     return NextResponse.json({ success: true, message: 'Scheduled report deleted successfully' });
-  } catch (error) {
+  } catch (_error) {
     console.error('Delete scheduled report error:', error);
     return NextResponse.json(
       { error: 'Failed to delete scheduled report' },
