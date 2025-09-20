@@ -5,7 +5,7 @@ import { X, Download, Calendar, Mail } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ReportPreview } from './ReportPreview';
 import { generateDemoReportData } from '@/lib/demo-data/report-demo';
-import type { ReportPlan } from '@/types/reports';
+import type { ReportPlan, ReportPreviewDTO } from '@/types/reports';
 
 interface ReportModalProps {
   isOpen: boolean;
@@ -14,7 +14,7 @@ interface ReportModalProps {
 }
 
 export function ReportModal({ isOpen, onClose, reportPlan }: ReportModalProps) {
-  const [reportData, setReportData] = useState<unknown>(null);
+  const [reportData, setReportData] = useState<ReportPreviewDTO | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -89,7 +89,12 @@ export function ReportModal({ isOpen, onClose, reportPlan }: ReportModalProps) {
                 statuses: reportPlan.scope.filters.includes('Status: Failed') ? ['failed'] : undefined
               }}
               kpis={reportData.kpis}
-              charts={reportData.series}
+              charts={{
+                runsByDay: reportData.series.runsByDay,
+                passFail: reportData.series.passFail,
+                failuresByInstrument: reportData.series.failuresByInstrument,
+                runtimeTrend: reportData.series.runtimeTrend
+              }}
               tableData={reportData.table}
               onExport={(format) => {
                 console.log(`Exporting as ${format}...`);

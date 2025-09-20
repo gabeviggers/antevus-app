@@ -114,10 +114,10 @@ export async function POST(req: NextRequest) {
       createdAt: scheduledReport.createdAt.toISOString()
     });
   } catch (_error) {
-    console.error('Schedule report error:', error);
-    if (error instanceof z.ZodError) {
+    console.error('Schedule report error:', _error);
+    if (_error instanceof z.ZodError) {
       return NextResponse.json(
-        { error: 'Invalid request data', details: error.issues },
+        { error: 'Invalid request data', details: _error.issues },
         { status: 400 }
       );
     }
@@ -196,7 +196,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json(mockScheduledReports);
   } catch (_error) {
-    console.error('Get scheduled reports error:', error);
+    console.error('Get scheduled reports error:', _error);
     return NextResponse.json(
       { error: 'Failed to retrieve scheduled reports' },
       { status: 500 }
@@ -261,7 +261,7 @@ export async function DELETE(req: NextRequest) {
 
     return NextResponse.json({ success: true, message: 'Scheduled report deleted successfully' });
   } catch (_error) {
-    console.error('Delete scheduled report error:', error);
+    console.error('Delete scheduled report error:', _error);
     return NextResponse.json(
       { error: 'Failed to delete scheduled report' },
       { status: 500 }

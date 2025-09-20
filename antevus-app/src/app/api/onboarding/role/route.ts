@@ -125,15 +125,15 @@ export async function POST(request: NextRequest) {
         })
       } catch (_dbError) {
         logger.error('Failed to save role to database', {
-          error: dbError instanceof Error ? dbError.message : String(dbError),
-          stack: dbError instanceof Error ? dbError.stack : undefined,
+          error: _dbError instanceof Error ? _dbError.message : String(_dbError),
+          stack: _dbError instanceof Error ? _dbError.stack : undefined,
           userId: user.id,
           role
         })
         return NextResponse.json(
           {
             error: 'Failed to save role',
-            details: dbError instanceof Error ? dbError.message : 'Database error'
+            details: _dbError instanceof Error ? _dbError.message : 'Database error'
           },
           { status: 500 }
         )

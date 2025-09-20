@@ -357,11 +357,12 @@ function AssistantPageContent() {
     }
 
     // Check if this is a confirmation for a pending protocol
-    if ((window as unknown as WindowWithProtocol).__pendingProtocol &&
+    const pendingProtocol = (window as unknown as WindowWithProtocol).__pendingProtocol;
+    if (pendingProtocol &&
         (originalInput.toLowerCase().includes('confirm') ||
          originalInput.toLowerCase().includes('yes') ||
          originalInput.toLowerCase().includes('proceed'))) {
-      const { protocolId } = (window as unknown as WindowWithProtocol).__pendingProtocol;
+      const { protocolId } = pendingProtocol;
 
       // Clear pending protocol
       delete (window as unknown as WindowWithProtocol).__pendingProtocol;
@@ -396,11 +397,12 @@ function AssistantPageContent() {
     }
 
     // Check if this is a cancellation
-    if ((window as unknown as WindowWithProtocol).__pendingProtocol &&
+    const cancelPendingProtocol = (window as unknown as WindowWithProtocol).__pendingProtocol;
+    if (cancelPendingProtocol &&
         (originalInput.toLowerCase().includes('cancel') ||
          originalInput.toLowerCase().includes('no') ||
          originalInput.toLowerCase().includes('stop'))) {
-      const { protocolId } = (window as unknown as WindowWithProtocol).__pendingProtocol;
+      const { protocolId } = cancelPendingProtocol;
 
       // Clear pending protocol
       delete (window as unknown as WindowWithProtocol).__pendingProtocol;
@@ -1022,10 +1024,10 @@ How can I assist you with your lab operations today?`
                       isStreaming={message.isStreaming}
                       renderMarkdown={message.role === 'assistant'}
                     />
-                    {message.metadata?.reportId && (
+                    {message.metadata?.reportId && typeof message.metadata.reportId === 'string' ? (
                       <div className="mt-4">
                         <button
-                          onClick={() => router.push(`/reports/${message.metadata!.reportId}`)}
+                          onClick={() => router.push(`/reports/${message.metadata?.reportId as string}`)}
                           className="inline-flex items-center gap-2 px-4 py-2 bg-primary/10 hover:bg-primary/20 text-primary rounded-lg transition-all group hover:scale-105"
                         >
                           <Mail className="h-5 w-5 group-hover:scale-110 transition-transform" />
@@ -1033,7 +1035,7 @@ How can I assist you with your lab operations today?`
                           <ExternalLink className="h-3 w-3 opacity-50" />
                         </button>
                       </div>
-                    )}
+                    ) : null}
                   </div>
                 </div>
               </div>

@@ -148,7 +148,7 @@ async function handlePost(request: NextRequest) {
           }
         })
       } catch (_dbError) {
-        logger.error('Failed to save profile to database', dbError)
+        logger.error('Failed to save profile to database', _dbError)
         return NextResponse.json(
           { error: 'Failed to save profile' },
           { status: 500 }
@@ -206,7 +206,7 @@ async function handlePost(request: NextRequest) {
     )
 
   } catch (_error) {
-    logger.error('Profile API error', error)
+    logger.error('Profile API error', _error)
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
@@ -304,7 +304,7 @@ export async function GET(request: NextRequest) {
     })
 
   } catch (_error) {
-    logger.error('Failed to retrieve profile data', error)
+    logger.error('Failed to retrieve profile data', _error)
     return NextResponse.json(
       { error: 'Failed to retrieve profile data' },
       { status: 500 }
