@@ -37,7 +37,7 @@ export function SupabaseSessionProvider({ children }: { children: ReactNode }) {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
-      logger.info('Auth state changed:', event)
+      logger.info('Auth state changed:', { event })
 
       if (session) {
         setSession(session)
@@ -47,7 +47,7 @@ export function SupabaseSessionProvider({ children }: { children: ReactNode }) {
         // Log auth events
         if (event === 'SIGNED_IN') {
           auditLogger.log({
-            eventType: AuditEventType.AUTH_LOGIN,
+            eventType: AuditEventType.AUTH_LOGIN_SUCCESS,
             action: 'User signed in via Supabase',
             metadata: { userId: session.user.id, email: session.user.email }
           })
@@ -101,14 +101,14 @@ export function SupabaseSessionProvider({ children }: { children: ReactNode }) {
         await syncUserWithPrisma(user)
 
         auditLogger.log({
-          eventType: AuditEventType.AUTH_LOGIN,
+          eventType: AuditEventType.AUTH_LOGIN_SUCCESS,
           action: 'User logged in successfully',
           metadata: { userId: user.id, email: user.email }
         })
       }
     } catch (error) {
       auditLogger.log({
-        eventType: AuditEventType.AUTH_LOGIN,
+        eventType: AuditEventType.AUTH_LOGIN_FAILURE,
         action: 'Login failed',
         metadata: {
           error: error instanceof Error ? error.message : 'Unknown error',
@@ -131,7 +131,7 @@ export function SupabaseSessionProvider({ children }: { children: ReactNode }) {
         await createUserInPrisma(user)
 
         auditLogger.log({
-          eventType: AuditEventType.USER_CREATE,
+          eventType: AuditEventType.AUTH_LOGIN_SUCCESS,
           action: 'User signed up successfully',
           metadata: { userId: user.id, email: user.email }
         })
@@ -141,7 +141,7 @@ export function SupabaseSessionProvider({ children }: { children: ReactNode }) {
       }
     } catch (error) {
       auditLogger.log({
-        eventType: AuditEventType.USER_CREATE,
+        eventType: AuditEventType.AUTH_LOGIN_FAILURE,
         action: 'Signup failed',
         metadata: {
           error: error instanceof Error ? error.message : 'Unknown error',

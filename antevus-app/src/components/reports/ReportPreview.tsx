@@ -234,7 +234,7 @@ export function ReportPreview({
                   outerRadius={100}
                   paddingAngle={2}
                   dataKey="value"
-                  label={({ percent }) => `${(percent * 100).toFixed(0)}%`}
+                  label={(props: any) => `${(props.percent * 100).toFixed(0)}%`}
                 >
                   <Cell fill={COLORS.passed} />
                   <Cell fill={COLORS.failed} />
@@ -328,7 +328,7 @@ export function ReportPreview({
                     <TableCell className="text-right">{run.durationMin}</TableCell>
                     <TableCell>
                       <Badge
-                        variant={run.status === 'passed' ? 'success' : 'destructive'}
+                        variant={run.status === 'passed' ? 'default' : 'destructive'}
                         className="text-xs"
                       >
                         {run.status}
@@ -336,7 +336,7 @@ export function ReportPreview({
                     </TableCell>
                     <TableCell>
                       {run.qc ? (
-                        <Badge variant="warning" className="text-xs">
+                        <Badge variant="outline" className="text-xs">
                           {run.qc.flag}
                         </Badge>
                       ) : (

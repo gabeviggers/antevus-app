@@ -99,6 +99,10 @@ export function ReportModal({ isOpen, onClose, reportPlan }: ReportModalProps) {
                 console.log('Opening schedule modal...');
                 // Implement schedule functionality
               }}
+              onEmail={(email) => {
+                console.log(`Emailing to ${email}...`);
+                // Implement email functionality
+              }}
             />
           ) : null}
         </div>

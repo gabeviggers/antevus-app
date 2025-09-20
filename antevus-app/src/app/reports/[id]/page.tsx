@@ -43,13 +43,13 @@ export default function ReportPage() {
     setTimeout(() => {
       const data = generateDemoReportData();
       setReportData({
+        ...data,
         id: params.id,
         title: 'Weekly Lab Performance Report',
         dateRange: { start: '2025-09-14', end: '2025-09-20' },
         generatedAt: new Date().toISOString(),
         requestedBy: 'gabeviggers@gmail.com',
-        instruments: ['HPLC-001', 'MS-002', 'PCR-003'],
-        ...data
+        instruments: ['HPLC-001', 'MS-002', 'PCR-003']
       });
       setIsLoading(false);
     }, 1000);

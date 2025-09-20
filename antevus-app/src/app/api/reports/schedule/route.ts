@@ -136,7 +136,7 @@ export async function GET(req: NextRequest) {
     }
 
     // Return mock scheduled reports
-    const mockScheduledReports = [
+    const mockScheduledReports: any[] = [
       {
         id: 'sched-001',
         name: 'Weekly Lab Report',
@@ -175,9 +175,15 @@ export async function GET(req: NextRequest) {
       mockScheduledReports.push({
         id: report.id,
         name: report.name,
-        query: report.query,
+        query: report.query as {
+          dateRange: { start: string; end: string };
+          instruments?: string[];
+          projects?: string[];
+          statuses?: string[];
+          metrics?: string[];
+        },
         rrule: report.rrule,
-        delivery: report.delivery,
+        delivery: report.delivery as { email?: string[]; slack?: string },
         lastRunAt: report.lastRunAt?.toISOString() || null,
         nextRunAt: report.nextRunAt.toISOString(),
         enabled: report.enabled,
