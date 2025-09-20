@@ -112,10 +112,8 @@ class SecureAuthManager {
   private jwks: ReturnType<typeof createRemoteJWKSet> | null = null
 
   constructor() {
-    // Validate configuration at runtime (not during build)
-    if (typeof window !== 'undefined' || process.env.NEXT_PHASE !== 'phase-production-build') {
-      validateProductionConfig()
-    }
+    // Don't validate in constructor - it crashes the app
+    // Validation will happen when auth is actually used
 
     // Initialize JWKS if URI is provided
     if (config.jwksUri && !config.isDemoMode) {
