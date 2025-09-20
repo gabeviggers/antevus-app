@@ -37,15 +37,18 @@ export function escapeHtml(text: string): string {
  */
 export function sanitizeInput(input: string | unknown): string {
   // Ensure input is a string
+  let stringInput: string;
   if (typeof input !== 'string') {
     if (input === null || input === undefined) {
       return '';
     }
-    input = String(input);
+    stringInput = String(input);
+  } else {
+    stringInput = input;
   }
 
   // Remove any script tags and their contents
-  let sanitized = input.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+  let sanitized = stringInput.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
 
   // Remove event handlers
   sanitized = sanitized.replace(/on\w+\s*=\s*["'][^"']*["']/gi, '')
