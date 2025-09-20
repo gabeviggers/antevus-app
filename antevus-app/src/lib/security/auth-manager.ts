@@ -38,8 +38,6 @@ interface VerifiedClaims {
 }
 
 // Configuration from environment variables
-const isProd = process.env.NODE_ENV === 'production'
-
 const config = {
   // Demo mode - only enable for development/testing, NEVER use NEXT_PUBLIC_* for server security
   isDemoMode: process.env.NODE_ENV === 'development' && process.env.DEMO_MODE === 'true',
@@ -53,16 +51,29 @@ const config = {
   jwtPublicKey: process.env.JWT_PUBLIC_KEY,
 }
 
-// Validate required config in production
-if (isProd) {
-  if (!config.jwksUri && !config.jwtPublicKey) {
-    throw new Error('PRODUCTION ERROR: Either JWKS_URI or JWT_PUBLIC_KEY must be configured')
+// Runtime validation function - only validates when actually used
+function validateProductionConfig(): void {
+  const isProd = process.env.NODE_ENV === 'production'
+
+  // Skip validation during build phase
+  if (typeof window === 'undefined' && process.env.NEXT_PHASE === 'phase-production-build') {
+    return
   }
-  if (!config.jwtIssuer) {
-    throw new Error('PRODUCTION ERROR: JWT_ISSUER is required in production')
-  }
-  if (!config.jwtAudience) {
-    throw new Error('PRODUCTION ERROR: JWT_AUDIENCE is required in production')
+
+  if (isProd && !config.isDemoMode) {
+    if (!config.jwksUri && !config.jwtPublicKey) {
+      logger.error('PRODUCTION ERROR: Either JWKS_URI or JWT_PUBLIC_KEY must be configured')
+      // Don't throw during build, but log the error
+      if (process.env.NEXT_PHASE !== 'phase-production-build') {
+        throw new Error('PRODUCTION ERROR: Either JWKS_URI or JWT_PUBLIC_KEY must be configured')
+      }
+    }
+    if (!config.jwtIssuer) {
+      logger.warn('JWT_ISSUER is not configured - using default')
+    }
+    if (!config.jwtAudience) {
+      logger.warn('JWT_AUDIENCE is not configured - using default')
+    }
   }
 }
 
@@ -74,6 +85,11 @@ class SecureAuthManager {
   private jwks: ReturnType<typeof createRemoteJWKSet> | null = null
 
   constructor() {
+    // Validate configuration at runtime (not during build)
+    if (typeof window !== 'undefined' || process.env.NEXT_PHASE !== 'phase-production-build') {
+      validateProductionConfig()
+    }
+
     // Initialize JWKS if URI is provided
     if (config.jwksUri && !config.isDemoMode) {
       try {

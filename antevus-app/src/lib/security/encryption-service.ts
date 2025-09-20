@@ -25,13 +25,19 @@ const TAG_LENGTH = 16
 const KEY_LENGTH = 32
 
 // Get encryption key from environment or generate for development
-const isProd = process.env.NODE_ENV === 'production'
-
 const getEncryptionKey = (): Buffer => {
+  const isProd = process.env.NODE_ENV === 'production'
+  const isBuildPhase = process.env.NEXT_PHASE === 'phase-production-build'
   const envKey = process.env.ENCRYPTION_KEY
 
-  // In production, key is absolutely required
-  if (!envKey && isProd) {
+  // Skip validation during build phase
+  if (isBuildPhase) {
+    // Return a dummy key for build phase
+    return Buffer.from('0'.repeat(64), 'hex')
+  }
+
+  // In production runtime, key is absolutely required
+  if (!envKey && isProd && !isBuildPhase) {
     throw new Error('ENCRYPTION_KEY is required in production')
   }
 

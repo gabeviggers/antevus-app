@@ -31,15 +31,28 @@ const chatStorage = new Map<string, {
 // Encryption key (in production, use KMS or Vault)
 const ENCRYPTION_KEY = process.env.CHAT_ENCRYPTION_KEY
 
-// Ensure encryption key is configured in production
-if (!ENCRYPTION_KEY && process.env.NODE_ENV === 'production') {
-  throw new Error('CHAT_ENCRYPTION_KEY is required in production')
+// Function to get encryption key with runtime validation
+function getActualEncryptionKey(): string {
+  const isBuildPhase = process.env.NEXT_PHASE === 'phase-production-build'
+  const isProd = process.env.NODE_ENV === 'production'
+
+  // During build phase, return a dummy key
+  if (isBuildPhase) {
+    return 'build-phase-dummy-key-32-chars-xx'
+  }
+
+  // In production runtime, key is required
+  if (!ENCRYPTION_KEY && isProd) {
+    logger.error('CHAT_ENCRYPTION_KEY is required in production')
+    throw new Error('CHAT_ENCRYPTION_KEY is required in production')
+  }
+
+  // Use actual key or development fallback
+  return ENCRYPTION_KEY || 'demo-key-32-chars-xxxxxxxxxxxxxxx'
 }
 
-// Use a development fallback only in non-production
-const ACTUAL_ENCRYPTION_KEY = ENCRYPTION_KEY || (
-  process.env.NODE_ENV !== 'production' ? 'demo-key-32-chars-xxxxxxxxxxxxxxx' : ''
-)
+// Get the actual key (will be validated at runtime)
+const ACTUAL_ENCRYPTION_KEY = getActualEncryptionKey()
 
 // Encrypt data
 function encrypt(text: string): string {
