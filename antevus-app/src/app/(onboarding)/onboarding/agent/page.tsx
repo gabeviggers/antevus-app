@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { Check, Copy, RefreshCw, ArrowLeft } from 'lucide-react'
+import { logger } from '@/lib/logger'
 
 type Platform = 'windows' | 'mac' | 'linux'
 
@@ -42,7 +43,9 @@ export default function AgentInstallPage() {
           }
         }
       } catch (error) {
-        console.error('Failed to fetch agent data:', error)
+        logger.error('Failed to fetch agent data', {
+          error: error instanceof Error ? error.message : String(error)
+        })
         // Generate a fallback token if fetch fails
         setJoinToken('ANT-' + Math.random().toString(36).substring(2, 6).toUpperCase() + '-' +
                      Math.random().toString(36).substring(2, 6).toUpperCase() + '-' +

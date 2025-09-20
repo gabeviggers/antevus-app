@@ -2,9 +2,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { logger } from '@/lib/logger'
 import { isDemoMode, shouldEnforceCSRF } from '@/lib/config/demo-mode'
-import { authManager } from '@/lib/security/auth-manager'
 import { auditLogger, AuditEventType, AuditSeverity } from '@/lib/security/audit-logger'
 import { validateCSRFToken } from '@/lib/security/csrf'
+import { createClient } from '@/lib/supabase/server'
+import { prisma } from '@/lib/prisma'
 
 const roleSchema = z.object({
   role: z.enum(['admin', 'developer', 'scientist'])
@@ -12,34 +13,20 @@ const roleSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
-    // In demo mode during onboarding, use a temporary user ID
-    let userId = 'onboarding-user'
+    // Check for Supabase authentication first
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
 
-    // Check for authentication (but allow bypass in demo mode for onboarding)
-    if (!isDemoMode()) {
-      const token = authManager.getTokenFromRequest(request)
-      const session = await authManager.validateToken(token)
-      if (!session?.userId) {
-        auditLogger.log({
-          eventType: AuditEventType.AUTH_LOGIN_FAILURE,
-          action: 'Unauthorized access attempt',
-          metadata: { endpoint: `${request.method} ${request.url}` },
-          severity: AuditSeverity.WARNING
-        })
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-      }
-      userId = session.userId
-    } else {
-      // In demo mode, check if there's an existing session
-      const token = authManager.getTokenFromRequest(request)
-      if (token) {
-        const session = await authManager.validateToken(token)
-        if (session?.userId) {
-          userId = session.userId
-        }
-      }
-      // If no session in demo mode, continue with onboarding-user ID
-      logger.debug('Demo mode: Using temporary onboarding user', { userId })
+    const userId = user?.id || 'onboarding-user'
+
+    if (!user && !isDemoMode()) {
+      auditLogger.log({
+        eventType: AuditEventType.AUTH_LOGIN_FAILURE,
+        action: 'Unauthorized access attempt',
+        metadata: { endpoint: `${request.method} ${request.url}` },
+        severity: AuditSeverity.WARNING
+      })
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     // CSRF validation for state-changing operations
@@ -79,7 +66,81 @@ export async function POST(request: NextRequest) {
 
     const { role } = validation.data
 
-    // For demo mode, store in cookie
+    // Save role for Supabase users
+    if (user) {
+      try {
+        // First, fetch existing onboarding progress to preserve profileData
+        const existingProgress = await prisma.onboardingProgress.findUnique({
+          where: { userId: user.id },
+          select: { profileData: true }
+        })
+
+        // Parse existing profile data, defaulting to empty object on error
+        let existingProfileData = {}
+        if (existingProgress?.profileData) {
+          try {
+            existingProfileData = JSON.parse(existingProgress.profileData)
+          } catch (parseError) {
+            logger.warn('Failed to parse existing profileData', {
+              userId: user.id,
+              error: parseError instanceof Error ? parseError.message : 'Unknown parse error'
+            })
+            // Continue with empty object as fallback
+          }
+        }
+
+        // Merge new role with existing profile data
+        const updatedProfileData = {
+          ...existingProfileData,
+          role // This overwrites only the role field
+        }
+
+        // Save or update role in database
+        await prisma.onboardingProgress.upsert({
+          where: { userId: user.id },
+          update: {
+            profileData: JSON.stringify(updatedProfileData),
+            currentStep: 'profile',
+            updatedAt: new Date()
+          },
+          create: {
+            userId: user.id,
+            profileData: JSON.stringify(updatedProfileData),
+            currentStep: 'profile',
+            completedSteps: [],
+            isCompleted: false
+          }
+        })
+
+        logger.info('Role saved for Supabase user', {
+          userId: user.id,
+          email: user.email,
+          role
+        })
+
+        return NextResponse.json({
+          success: true,
+          role,
+          nextStep: 'profile'
+        })
+      } catch (_dbError) {
+        logger.error('Failed to save role to database', {
+          error: _dbError instanceof Error ? _dbError.message : String(_dbError),
+          stack: _dbError instanceof Error ? _dbError.stack : undefined,
+          userId: user.id,
+          role
+        })
+        return NextResponse.json(
+          {
+            error: 'Failed to save role',
+            details: _dbError instanceof Error ? _dbError.message : 'Database error'
+          },
+          { status: 500 }
+        )
+      }
+    }
+
+    // Fallback to demo mode if enabled
     if (isDemoMode()) {
       logger.info('Demo role saved', { role })
 
@@ -92,7 +153,7 @@ export async function POST(request: NextRequest) {
       // Store role in cookie for demo
       response.cookies.set('demo-role', role, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production', // HTTPS in production, HTTP in dev
+        secure: process.env.NODE_ENV === 'production',
         sameSite: 'strict',
         maxAge: 60 * 60 * 24, // 24 hours
         path: '/'
@@ -101,12 +162,11 @@ export async function POST(request: NextRequest) {
       return response
     }
 
-    // In production, would store in database
-    return NextResponse.json({
-      success: true,
-      role,
-      nextStep: 'profile'
-    })
+    // Not in demo mode and no auth
+    return NextResponse.json(
+      { error: 'Authentication required' },
+      { status: 401 }
+    )
 
   } catch (error) {
     logger.error('Role API error', error)
@@ -119,7 +179,41 @@ export async function POST(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   try {
-    // For demo mode, retrieve from cookie without auth
+    // Check for Supabase session first
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+
+    if (user) {
+      // Fetch role from database
+      try {
+        const onboardingData = await prisma.onboardingProgress.findUnique({
+          where: { userId: user.id },
+        })
+
+        let role = null
+        if (onboardingData?.profileData) {
+          try {
+            const data = JSON.parse(onboardingData.profileData)
+            role = data.role
+          } catch {
+            // Ignore parse error
+          }
+        }
+
+        return NextResponse.json({
+          role,
+          success: !!role
+        })
+      } catch (_dbError) {
+        logger.debug('No role found for user', { userId: user.id })
+        return NextResponse.json({
+          role: null,
+          success: false
+        })
+      }
+    }
+
+    // Fallback to demo mode if enabled
     if (isDemoMode()) {
       const roleCookie = request.cookies.get('demo-role')
 
@@ -130,32 +224,14 @@ export async function GET(request: NextRequest) {
         })
       }
 
-      // Return null if no role cookie found
       return NextResponse.json({
         role: null,
         success: false
       })
     }
 
-    // In production, require authentication
-    const token = authManager.getTokenFromRequest(request)
-    const session = await authManager.validateToken(token)
-    if (!session?.userId) {
-      auditLogger.log({
-        eventType: AuditEventType.AUTH_LOGIN_FAILURE,
-        action: 'Unauthorized access attempt',
-        metadata: { endpoint: `${request.method} ${request.url}` },
-        severity: AuditSeverity.WARNING
-      })
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    // In production, would fetch from database
-    // For now, return empty
-    return NextResponse.json({
-      role: null,
-      success: false
-    })
+    // No auth and not in demo mode
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   } catch (error) {
     logger.error('Failed to retrieve role', error)

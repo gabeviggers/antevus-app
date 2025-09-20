@@ -3,6 +3,13 @@ import { logger } from '@/lib/logger'
 import { isDemoMode } from '@/lib/config/demo-mode'
 import { createDemoToken, getServerSession } from '@/lib/security/session-helper'
 
+// GET endpoint to check demo availability
+export async function GET() {
+  return NextResponse.json({
+    demoAvailable: isDemoMode()
+  })
+}
+
 // PUT endpoint to validate demo session
 export async function PUT(request: NextRequest) {
   try {

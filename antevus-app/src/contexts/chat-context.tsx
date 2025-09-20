@@ -37,10 +37,9 @@ class RateLimiter {
       const result = await operation()
       this.retryCount = 0 // Reset on success
       return result
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (error: any) {
+        } catch (error) {
       // Check if it's a rate limit error
-      if (error?.status === 429 || error?.message?.includes('rate')) {
+      if ((error as { status?: number })?.status === 429 || (error as { message?: string })?.message?.includes('rate')) {
         if (this.retryCount < RATE_LIMIT_CONFIG.maxRetries) {
           this.retryCount++
           const delay = Math.min(
@@ -100,6 +99,8 @@ export interface Message {
   containsPHI?: boolean
   containsPII?: boolean
   redactedContent?: string
+  // Metadata for special content like reports
+  metadata?: Record<string, unknown>
 }
 
 export interface ChatThread {
@@ -659,13 +660,11 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
       if (result && result.threads && result.threads.length > 0) {
         // Convert date strings back to Date objects
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const parsedThreads = result.threads.map((thread: any) => ({
+                const parsedThreads = result.threads.map((thread: { id: string; title: string; createdAt: string; updatedAt: string; messages: Array<{ id: string; timestamp: string }> }) => ({
           ...thread,
           createdAt: new Date(thread.createdAt),
           updatedAt: new Date(thread.updatedAt),
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          messages: thread.messages.map((msg: any) => ({
+                    messages: thread.messages.map((msg: { id: string; timestamp: string }) => ({
             ...msg,
             timestamp: new Date(msg.timestamp)
           }))

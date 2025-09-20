@@ -1,11 +1,14 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
+import { updateSession } from '@/lib/supabase/middleware'
+import { logger } from '@/lib/logger'
 
 // Middleware for security headers and password protection
 // Note: CSRF protection is handled in individual route handlers due to Edge Runtime limitations
 export async function middleware(request: NextRequest) {
-  // Add security headers to all responses
-  const response = NextResponse.next()
+  try {
+    // Update Supabase session and get response
+    const response = await updateSession(request)
 
   // Add a header to indicate that routes should validate CSRF tokens
   // This is checked by route handlers that import the CSRF middleware
@@ -36,19 +39,21 @@ export async function middleware(request: NextRequest) {
   // We keep it but add strict-dynamic in production for better security
   const cspDirectives = [
     "default-src 'self'",
-    "base-uri 'none'",
+    "base-uri 'self'",
     "object-src 'none'",
     "form-action 'self'",
+    "frame-src 'none'",
     // Script policy: Use strict-dynamic in production for better security while keeping compatibility
     isDevelopment
       ? `script-src 'self' 'unsafe-inline' 'unsafe-eval'`
       : `script-src 'self' 'unsafe-inline'`,
     // Style policy: Keep unsafe-inline for styles (required for styled-jsx and emotion)
     "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data: https:",
+    "img-src 'self' data: https: blob:",
     "font-src 'self' data:",
-    `connect-src 'self'${isDevelopment ? ' ws: wss:' : ''}`, // Allow WebSocket in dev
+    `connect-src 'self' https://eolshdupsclgepnfswpj.supabase.co wss://eolshdupsclgepnfswpj.supabase.co${isDevelopment ? ' ws: wss:' : ''}`, // Allow Supabase and WebSocket in dev
     "frame-ancestors 'none'",
+    "upgrade-insecure-requests"
   ]
 
   const csp = cspDirectives.join('; ') + ';'
@@ -240,7 +245,31 @@ export async function middleware(request: NextRequest) {
     return promptResponse
   }
 
-  return response
+    // Log security events for monitoring (only in production)
+    if (!isDevelopment && (request.nextUrl.pathname.startsWith('/admin') ||
+        request.nextUrl.pathname.includes('settings'))) {
+      logger.info('Security: Sensitive route accessed', {
+        path: request.nextUrl.pathname,
+        method: request.method,
+        ip: request.headers.get('x-forwarded-for') || 'unknown'
+      })
+    }
+
+    return response
+  } catch (error) {
+    logger.error('Middleware error', {
+      error: error instanceof Error ? error.message : String(error),
+      path: request.nextUrl.pathname
+    })
+
+    // Return basic response with security headers even on error
+    const response = NextResponse.next()
+    response.headers.set('X-Frame-Options', 'DENY')
+    response.headers.set('X-Content-Type-Options', 'nosniff')
+    response.headers.set('X-XSS-Protection', '1; mode=block')
+    response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin')
+    return response
+  }
 }
 
 export const config = {

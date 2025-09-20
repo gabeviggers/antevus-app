@@ -6,6 +6,8 @@ import { auditLogger, AuditEventType, AuditSeverity } from '@/lib/security/audit
 import { validateCSRFToken } from '@/lib/security/csrf'
 import { shouldEnforceCSRF, isDemoMode } from '@/lib/config/demo-mode'
 import { createDemoToken } from '@/lib/security/session-helper'
+import { createClient } from '@/lib/supabase/server'
+import { prisma } from '@/lib/prisma'
 
 const profileSchema = z.object({
   name: z.string()
@@ -27,34 +29,20 @@ const profileSchema = z.object({
 
 async function handlePost(request: NextRequest) {
   try {
-    // In demo mode during onboarding, use a temporary user ID
-    let userId = 'onboarding-user'
+    // Check for Supabase authentication first
+    const supabase = await createClient()
+    const { data: { user }, error } = await supabase.auth.getUser()
 
-    // Check for authentication (but allow bypass in demo mode for onboarding)
-    if (!isDemoMode()) {
-      const token = authManager.getTokenFromRequest(request)
-      const session = await authManager.validateToken(token)
-      if (!session?.userId) {
-        auditLogger.log({
-          eventType: AuditEventType.AUTH_LOGIN_FAILURE,
-          action: 'Unauthorized access attempt',
-          metadata: { endpoint: `${request.method} ${request.url}` },
-          severity: AuditSeverity.WARNING
-        })
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-      }
-      userId = session.userId
-    } else {
-      // In demo mode, check if there's an existing session
-      const token = authManager.getTokenFromRequest(request)
-      if (token) {
-        const session = await authManager.validateToken(token)
-        if (session?.userId) {
-          userId = session.userId
-        }
-      }
-      // If no session in demo mode, continue with onboarding-user ID
-      logger.debug('Demo mode: Using temporary onboarding user', { userId })
+    const userId = user?.id || 'onboarding-user'
+
+    if (!user && !isDemoMode()) {
+      auditLogger.log({
+        eventType: AuditEventType.AUTH_LOGIN_FAILURE,
+        action: 'Unauthorized access attempt',
+        metadata: { endpoint: `${request.method} ${request.url}` },
+        severity: AuditSeverity.WARNING
+      })
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     // CSRF Protection for state-changing operation
@@ -100,11 +88,77 @@ async function handlePost(request: NextRequest) {
 
     const profileData = validation.data
 
-    // For demo mode, check if this is the demo user
+    // Save profile data for Supabase users
+    if (user) {
+      try {
+        // Get existing role from database
+        const existingData = await prisma.onboardingProgress.findUnique({
+          where: { userId: user.id },
+        })
+
+        // Get existing role from profileData
+        let existingRole = null
+        if (existingData?.profileData) {
+          try {
+            const data = JSON.parse(existingData.profileData)
+            existingRole = data.role
+          } catch {
+            // Ignore parse error
+          }
+        }
+
+        // Merge role with new profile data
+        const dataToStore = {
+          ...profileData,
+          ...(existingRole ? { role: existingRole } : {})
+        }
+
+        // Save or update profile in database
+        await prisma.onboardingProgress.upsert({
+          where: { userId: user.id },
+          update: {
+            profileData: JSON.stringify(dataToStore),
+            currentStep: 'instruments',
+            completedSteps: existingData?.completedSteps
+              ? [...(existingData.completedSteps as string[]), 'profile']
+              : ['profile'],
+            updatedAt: new Date()
+          },
+          create: {
+            userId: user.id,
+            profileData: JSON.stringify(dataToStore),
+            currentStep: 'instruments',
+            completedSteps: ['profile'],
+            isCompleted: false
+          }
+        })
+
+        logger.info('Profile saved for Supabase user', {
+          userId: user.id,
+          email: user.email
+        })
+
+        return NextResponse.json({
+          success: true,
+          nextStep: 'instruments',
+          progress: {
+            completedSteps: 1,
+            totalSteps: 5,
+            percentComplete: 20
+          }
+        })
+      } catch (_dbError) {
+        logger.error('Failed to save profile to database', _dbError)
+        return NextResponse.json(
+          { error: 'Failed to save profile' },
+          { status: 500 }
+        )
+      }
+    }
+
+    // Fallback to demo mode if enabled
     if (isDemoMode()) {
       // Store profile data in session storage for demo
-      // In a real app, this would be stored in the database with proper authentication
-
       logger.info('Demo profile saved', {
         name: profileData.name,
         organization: profileData.organization,
@@ -145,27 +199,14 @@ async function handlePost(request: NextRequest) {
       return response
     }
 
-    // In production, this would require proper authentication
-    // For now, return an error if not in demo mode
-    if (!isDemoMode()) {
-      return NextResponse.json(
-        { error: 'Authentication required' },
-        { status: 401 }
-      )
-    }
+    // Not in demo mode and no auth
+    return NextResponse.json(
+      { error: 'Authentication required' },
+      { status: 401 }
+    )
 
-    return NextResponse.json({
-      success: true,
-      nextStep: 'instruments',
-      progress: {
-        completedSteps: 1,
-        totalSteps: 5,
-        percentComplete: 20
-      }
-    })
-
-  } catch (error) {
-    logger.error('Profile API error', error)
+  } catch (_error) {
+    logger.error('Profile API error', _error)
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
@@ -175,7 +216,45 @@ async function handlePost(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   try {
-    // Demo mode: check cookies first before requiring auth
+    // Check for Supabase session first
+    const supabase = await createClient()
+    const { data: { user }, error } = await supabase.auth.getUser()
+
+    if (user) {
+      // Fetch user's onboarding data from database
+      try {
+        const onboardingData = await prisma.onboardingProgress.findUnique({
+          where: { userId: user.id },
+        })
+
+        if (onboardingData?.profileData) {
+          const decryptedData = JSON.parse(onboardingData.profileData as string)
+          // Extract role from profileData if it exists
+          const role = decryptedData.role || null
+          // Remove role from profileData since it's returned separately
+          const { role: _, ...profileWithoutRole } = decryptedData
+
+          return NextResponse.json({
+            profileData: Object.keys(profileWithoutRole).length > 0 ? profileWithoutRole : null,
+            role,
+            currentStep: onboardingData.currentStep || 'profile',
+            completedSteps: onboardingData.completedSteps || []
+          })
+        }
+      } catch (_dbError) {
+        logger.debug('No onboarding data found for user', { userId: user.id })
+      }
+
+      // Return empty data for new Supabase user
+      return NextResponse.json({
+        profileData: null,
+        role: null,
+        currentStep: 'profile',
+        completedSteps: []
+      })
+    }
+
+    // Fallback to demo mode if enabled and no Supabase session
     if (isDemoMode()) {
       const profileCookie = request.cookies.get('demo-profile')
       const roleCookie = request.cookies.get('demo-role')
@@ -224,8 +303,8 @@ export async function GET(request: NextRequest) {
       completedSteps: []
     })
 
-  } catch (error) {
-    logger.error('Failed to retrieve profile data', error)
+  } catch (_error) {
+    logger.error('Failed to retrieve profile data', _error)
     return NextResponse.json(
       { error: 'Failed to retrieve profile data' },
       { status: 500 }
