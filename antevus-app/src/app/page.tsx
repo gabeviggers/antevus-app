@@ -228,12 +228,14 @@ export default function LoginPage() {
           <div className="hidden sm:block text-center">
             <p className="text-sm text-muted-foreground">
               Don&apos;t have an account?{' '}
-              <Link
-                href="/signup"
+              <a
+                href="https://calendly.com/antevus-demo/30min"
+                target="_blank"
+                rel="noopener noreferrer"
                 className="font-medium text-foreground hover:text-muted-foreground transition-colors"
               >
                 Request a demo
-              </Link>
+              </a>
             </p>
           </div>
         </div>
