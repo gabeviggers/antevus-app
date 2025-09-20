@@ -204,7 +204,7 @@ async function handlePOST(
   try {
 
     // Validate CSRF token for state-changing operations
-    const csrfValidation = validateCSRFToken(request, session.userId, createUserFromSession(session))
+    const csrfValidation = await validateCSRFToken(request, session.userId, createUserFromSession(session))
     if (!csrfValidation.valid) {
       return NextResponse.json(
         { error: csrfValidation.error || 'Invalid CSRF token' },
@@ -349,7 +349,7 @@ async function handleDELETE(
   try {
 
     // Validate CSRF token for state-changing operations
-    const csrfValidation = validateCSRFToken(request, session.userId, createUserFromSession(session))
+    const csrfValidation = await validateCSRFToken(request, session.userId, createUserFromSession(session))
     if (!csrfValidation.valid) {
       return NextResponse.json(
         { error: csrfValidation.error || 'Invalid CSRF token' },

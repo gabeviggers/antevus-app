@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
 
     // CSRF validation for state-changing operations
     if (shouldEnforceCSRF()) {
-      const csrfValidation = validateCSRFToken(request, userId)
+      const csrfValidation = await validateCSRFToken(request, userId)
       if (!csrfValidation.valid) {
         await auditLogger.log({
           eventType: AuditEventType.SECURITY_CSRF_DETECTED,
