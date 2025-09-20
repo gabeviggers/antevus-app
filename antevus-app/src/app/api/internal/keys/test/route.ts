@@ -10,7 +10,11 @@ import { logger } from '@/lib/logger'
 
 interface AuditUser {
   id: string
-  [key: string]: unknown
+  email?: string
+  name?: string
+  role?: string
+  organization?: string
+  createdAt?: string
 }
 
 interface AuthorizationParams {
@@ -21,6 +25,7 @@ interface AuthorizationParams {
 }
 
 // Simple fallbacks for missing services
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const validateAPIKey = async (_req: unknown) => ({
   authenticated: true,
   keyId: 'demo-key',
@@ -29,15 +34,17 @@ const validateAPIKey = async (_req: unknown) => ({
   rateLimitReset: Date.now() + 60000,
   error: null
 })
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const validateCSRFToken = async (_req: unknown, _userId: string, _sessionId: string, _user: unknown) => ({
   valid: true, error: null
 })
 const auditLogger = {
-  logEvent: (user: AuditUser, event: string, data: Record<string, unknown>) => {
+  logEvent: (user: AuditUser | User, event: string, data: Record<string, unknown>) => {
     logger.info('Audit event', { user: user.id, event, data })
   }
 }
 const authorizationService = {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   can: async (_params: AuthorizationParams) => true
 }
 import { type User } from '@/lib/auth/types'

@@ -7,12 +7,16 @@ import { logger } from '@/lib/logger'
 
 interface AuditUser {
   id: string
-  [key: string]: unknown
+  email?: string
+  name?: string
+  role?: string
+  organization?: string
+  createdAt?: string
 }
 
 // Simple audit logger fallback
 const auditLogger = {
-  logEvent: (user: AuditUser, event: string, data: Record<string, unknown>) => {
+  logEvent: (user: AuditUser | User, event: string, data: Record<string, unknown>) => {
     logger.info('Audit event', { user: user.id, event, data })
   }
 }

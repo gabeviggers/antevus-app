@@ -6,15 +6,21 @@ import { logger } from '@/lib/logger'
 // Simple audit logger and CSRF fallbacks
 interface AuditUser {
   id: string
-  [key: string]: unknown
+  email?: string
+  name?: string
+  role?: string
+  organization?: string
+  createdAt?: string
 }
 
 const auditLogger = {
-  logEvent: (user: AuditUser, event: string, data: Record<string, unknown>) => {
+  logEvent: (user: AuditUser | User, event: string, data: Record<string, unknown>) => {
     logger.info('Audit event', { user: user.id, event, data })
   }
 }
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const validateCSRFToken = (_req: unknown, _userId: string, _user: unknown) => ({ valid: true, error: null })
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const createCSRFTokenForUser = (_userId: string) => 'demo-csrf-token'
 import { type User } from '@/lib/auth/types'
 import { UserRole } from '@/lib/security/authorization'

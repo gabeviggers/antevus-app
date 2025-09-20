@@ -31,6 +31,7 @@ function generateApiKey(): string {
   return prefix + randomBytesValue
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 async function handleGET(_request: NextRequest, _session: AuthenticatedSession) {
   if (!IS_DEMO) {
     return NextResponse.json(
@@ -80,6 +81,7 @@ async function handleGET(_request: NextRequest, _session: AuthenticatedSession) 
   }
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 async function handlePOST(request: NextRequest, _session: AuthenticatedSession) {
   if (!IS_DEMO) {
     return NextResponse.json(
@@ -166,6 +168,7 @@ async function handlePOST(request: NextRequest, _session: AuthenticatedSession) 
   }
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 async function handleDELETE(request: NextRequest, _session: AuthenticatedSession) {
   if (!IS_DEMO) {
     return NextResponse.json(
@@ -239,6 +242,7 @@ async function handleDELETE(request: NextRequest, _session: AuthenticatedSession
 }
 
 // Endpoint to reveal key (demo mode only)
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 async function handlePUT(request: NextRequest, _session: AuthenticatedSession) {
   if (!IS_DEMO) {
     return NextResponse.json(

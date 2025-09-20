@@ -24,6 +24,7 @@ interface CodeExampleRequest {
   language: 'python' | 'javascript' | 'curl'
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 async function handlePOST(request: NextRequest, _session: AuthenticatedSession) {
   try {
 
